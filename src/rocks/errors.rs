@@ -1,0 +1,55 @@
+use std::num::{ParseFloatError, ParseIntError};
+use thiserror::Error;
+use rocksdb::Error as RocksError;
+
+#[derive(Error, Debug)]
+pub enum RError {
+    #[error("{0}")]
+    RocksClient(Box<RocksError>),
+    #[error("{0}")]
+    String(&'static str),
+    #[error("{0}")]
+    Owned(String),
+}
+
+impl RError {
+    pub fn owned_error<T>(s: T) -> Self
+        where T: Into<String>
+    {
+        RError::Owned(s.into())
+    }
+
+    pub fn is_not_integer_error<E>(_: E) -> RError {
+        REDIS_VALUE_IS_NOT_INTEGER_ERR
+    }
+}
+
+impl From<RocksError> for RError {
+    fn from(e: RocksError) -> Self {
+        RError::RocksClient(Box::new(e))
+    }
+}
+
+impl From<&'static str> for RError {
+    fn from(e: &'static str) -> Self {
+        RError::String(e)
+    }
+}
+
+impl From<ParseIntError> for RError {
+    fn from(_: ParseIntError) -> Self {
+        REDIS_VALUE_IS_NOT_INTEGER_ERR
+    }
+}
+
+impl From<ParseFloatError> for RError {
+    fn from(_: ParseFloatError) -> Self {
+        REDIS_VALUE_IS_NOT_VALID_FLOAT_ERR
+    }
+}
+
+pub const REDIS_VALUE_IS_NOT_INTEGER_ERR: RError =
+    RError::String("ERR value is not an integer or out of range");
+pub const REDIS_VALUE_IS_NOT_VALID_FLOAT_ERR: RError =
+    RError::String("ERR value is not a valid float");
+pub const REDIS_BACKEND_NOT_CONNECTED_ERR: RError = RError::String("ERR backend not connected");
