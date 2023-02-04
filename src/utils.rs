@@ -1,4 +1,6 @@
+use std::time::{SystemTime, UNIX_EPOCH};
 use crate::Frame;
+use crate::rocks::errors::RError;
 
 pub fn resp_ok() -> Frame {
     Frame::Simple("OK".to_string())
@@ -14,4 +16,38 @@ pub fn resp_invalid_arguments() -> Frame {
 
 pub fn resp_nil() -> Frame {
     Frame::Null
+}
+
+pub fn resp_err(e: RError) -> Frame {
+    e.into()
+}
+
+pub fn resp_bulk(val: Vec<u8>) -> Frame {
+    Frame::Bulk(val.into())
+}
+
+pub fn resp_int(val: i64) -> Frame {
+    Frame::Integer(val)
+}
+
+pub fn timestamp_from_ttl(ttl: i64) -> i64 {
+    ttl + now_timestamp_in_millis()
+}
+
+pub fn now_timestamp_in_millis() -> i64 {
+    let d = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    (d.as_secs() * 1000 + d.subsec_millis() as u64) as i64
+}
+
+pub fn key_is_expired(ttl: i64) -> bool {
+    if ttl < 0 {
+        return false;
+    }
+    let d = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    let ts = (d.as_secs() * 1000 + d.subsec_millis() as u64) as i64;
+    ttl > 0 && ttl < ts
 }

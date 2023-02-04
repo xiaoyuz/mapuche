@@ -47,8 +47,8 @@ impl KeyDecoder {
         }
     }
 
-    pub fn decode_key_ttl(value: &[u8]) -> u64 {
-        u64::from_be_bytes(value[1..9].try_into().unwrap())
+    pub fn decode_key_ttl(value: &[u8]) -> i64 {
+        i64::from_be_bytes(value[1..9].try_into().unwrap())
     }
 
     pub fn decode_key_string_value(value: &[u8]) -> Value {
@@ -67,7 +67,7 @@ impl KeyDecoder {
         u16::from_be_bytes(value[11..].try_into().unwrap())
     }
 
-    pub fn decode_key_meta(value: &[u8]) -> (u64, u16, u16) {
+    pub fn decode_key_meta(value: &[u8]) -> (i64, u16, u16) {
         (
             Self::decode_key_ttl(value),
             Self::decode_key_version(value),

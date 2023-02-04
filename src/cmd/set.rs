@@ -2,11 +2,10 @@ use crate::cmd::{Invalid, Parse, ParseError};
 use crate::{Connection, Frame};
 
 use bytes::Bytes;
-use std::time::Duration;
 use tracing::{debug, instrument};
 
 use crate::rocks::string::StringCommand;
-use crate::utils::resp_invalid_arguments;
+use crate::utils::{resp_invalid_arguments, timestamp_from_ttl};
 
 use crate::rocks::Result as RocksResult;
 
@@ -31,7 +30,7 @@ pub struct Set {
     value: Bytes,
 
     /// When to expire the key
-    expire: Option<Duration>,
+    expire: Option<i64>,
 
     /// Set if key is not present
     nx: Option<bool>,
@@ -44,7 +43,7 @@ impl Set {
     ///
     /// If `expire` is `Some`, the value should expire after the specified
     /// duration.
-    pub fn new(key: impl ToString, value: Bytes, expire: Option<Duration>) -> Set {
+    pub fn new(key: impl ToString, value: Bytes, expire: Option<i64>) -> Set {
         Set {
             key: key.to_string(),
             value,
@@ -65,7 +64,7 @@ impl Set {
     }
 
     /// Get the expire
-    pub fn expire(&self) -> Option<Duration> {
+    pub fn expire(&self) -> Option<i64> {
         self.expire
     }
 
@@ -109,13 +108,13 @@ impl Set {
                 // An expiration is specified in seconds. The next value is an
                 // integer.
                 let secs = parse.next_int()?;
-                expire = Some(Duration::from_secs(secs));
+                expire = Some(secs * 1000);
             }
             Ok(s) if s.to_uppercase() == "PX" => {
                 // An expiration is specified in milliseconds. The next value is
                 // an integer.
                 let ms = parse.next_int()?;
-                expire = Some(Duration::from_millis(ms));
+                expire = Some(ms);
             }
             Ok(s) if s.to_uppercase() == "NX" => {
                 // Only set if key not present
@@ -153,17 +152,17 @@ impl Set {
             let flag = String::from_utf8_lossy(&argv[idx]).to_uppercase();
             if flag == "EX" {
                 idx += 1;
-                let secs = String::from_utf8_lossy(&argv[idx]).parse::<u64>();
+                let secs = String::from_utf8_lossy(&argv[idx]).parse::<i64>();
                 if let Ok(v) = secs {
-                    expire = Some(Duration::from_secs(v));
+                    expire = Some(v * 1000);
                 } else {
                     return Ok(Set::new_invalid());
                 }
             } else if flag == "PX" {
                 idx += 1;
-                let ms = String::from_utf8_lossy(&argv[idx]).parse::<u64>();
+                let ms = String::from_utf8_lossy(&argv[idx]).parse::<i64>();
                 if let Ok(v) = ms {
-                    expire = Some(Duration::from_millis(v));
+                    expire = Some(v);
                 }
             } else if flag == "NX" {
                 nx = Some(true);
@@ -213,7 +212,8 @@ impl Set {
     }
 
     async fn put(&self) -> RocksResult<Frame> {
-        StringCommand.raw_kv_put(&self.key, &self.value).await
+        let ttl = self.expire.map_or(-1, |d| { timestamp_from_ttl(d) });
+        StringCommand.raw_kv_put(&self.key, &self.value, ttl).await
     }
 
     /// Converts the command into an equivalent `Frame`.
@@ -233,7 +233,7 @@ impl Set {
             // src/bin/cli.rs parses the expiration argument as milliseconds
             // in duration_from_ms_str()
             frame.push_bulk(Bytes::from("px".as_bytes()));
-            frame.push_int(ms.as_millis() as u64);
+            frame.push_int(ms);
         }
         frame
     }

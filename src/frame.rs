@@ -11,7 +11,7 @@ use crate::rocks::errors::RError;
 pub enum Frame {
     Simple(String),
     Error(String),
-    Integer(u64),
+    Integer(i64),
     Bulk(Bytes),
     Null,
     Array(Vec<Frame>),
@@ -51,7 +51,7 @@ impl Frame {
     /// # Panics
     ///
     /// panics if `self` is not an array
-    pub(crate) fn push_int(&mut self, value: u64) {
+    pub(crate) fn push_int(&mut self, value: i64) {
         match self {
             Frame::Array(vec) => {
                 vec.push(Frame::Integer(value));
@@ -122,7 +122,7 @@ impl Frame {
                 Ok(Frame::Error(string))
             }
             b':' => {
-                let len = get_decimal(src)?;
+                let len = get_decimal(src)? as i64;
                 Ok(Frame::Integer(len))
             }
             b'$' => {

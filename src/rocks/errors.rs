@@ -48,6 +48,8 @@ impl From<ParseFloatError> for RError {
     }
 }
 
+pub const REDIS_WRONG_TYPE_ERR: RError =
+    RError::String("WRONGTYPE Operation against a key holding the wrong kind of value");
 pub const REDIS_VALUE_IS_NOT_INTEGER_ERR: RError =
     RError::String("ERR value is not an integer or out of range");
 pub const REDIS_VALUE_IS_NOT_VALID_FLOAT_ERR: RError =

@@ -1,8 +1,5 @@
 use std::sync::Arc;
 use rocksdb::{DB, WriteBatch};
-
-
-
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
@@ -53,9 +50,11 @@ impl RocksRawClient {
                 match results.get(i).unwrap() {
                     Ok(opt) => {
                         let key = keys.get(i).unwrap().clone();
-                        let value = opt.clone().unwrap_or_default();
-                        let kvpair = KvPair::from((key, value));
-                        kvpairs.push(kvpair);
+                        let value = opt.clone();
+                        if let Some(val) = value {
+                            let kvpair = KvPair::from((key, val));
+                            kvpairs.push(kvpair);
+                        }
                     }
                     Err(_) => {}
                 }

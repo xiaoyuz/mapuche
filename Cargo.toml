@@ -10,10 +10,6 @@ larger example of an idiomatic Tokio application.
 """
 
 [[bin]]
-name = "mapuche-cli"
-path = "src/bin/cli.rs"
-
-[[bin]]
 name = "mapuche-server"
 path = "src/bin/server.rs"
 
