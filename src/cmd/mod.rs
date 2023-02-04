@@ -16,6 +16,9 @@ pub use ping::Ping;
 mod unknown;
 pub use unknown::Unknown;
 
+mod mget;
+pub use mget::Mget;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -24,6 +27,7 @@ use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 #[derive(Debug)]
 pub enum Command {
     Get(Get),
+    Mget(Mget),
     Publish(Publish),
     Set(Set),
     Subscribe(Subscribe),
@@ -58,6 +62,7 @@ impl Command {
         // specific command.
         let command = match &command_name[..] {
             "get" => Command::Get(Get::parse_frames(&mut parse)?),
+            "mget" => Command::Mget(transform_parse(Mget::parse_frames(&mut parse), &mut parse)),
             "publish" => Command::Publish(Publish::parse_frames(&mut parse)?),
             "set" => Command::Set(Set::parse_frames(&mut parse)?),
             "subscribe" => Command::Subscribe(Subscribe::parse_frames(&mut parse)?),
@@ -96,9 +101,10 @@ impl Command {
         use Command::*;
 
         match self {
-            Get(cmd) => cmd.apply(db, dst).await,
+            Get(cmd) => cmd.apply(dst).await,
+            Mget(cmd) => cmd.apply(dst).await,
             Publish(cmd) => cmd.apply(db, dst).await,
-            Set(cmd) => cmd.apply(db, dst).await,
+            Set(cmd) => cmd.apply(dst).await,
             Subscribe(cmd) => cmd.apply(db, dst, shutdown).await,
             Ping(cmd) => cmd.apply(dst).await,
             Unknown(cmd) => cmd.apply(dst).await,
@@ -112,6 +118,7 @@ impl Command {
     pub(crate) fn get_name(&self) -> &str {
         match self {
             Command::Get(_) => "get",
+            Command::Mget(_) => "mget",
             Command::Publish(_) => "pub",
             Command::Set(_) => "set",
             Command::Subscribe(_) => "subscribe",
@@ -125,4 +132,17 @@ impl Command {
 /// All commands should be implement new_invalid() for invalid check
 pub trait Invalid {
     fn new_invalid() -> Self;
+}
+
+fn transform_parse<T: Invalid>(parse_res: crate::Result<T>, parse: &mut Parse) -> T {
+    match parse_res {
+        Ok(cmd) => {
+            if parse.check_finish() {
+                cmd
+            } else {
+                T::new_invalid()
+            }
+        }
+        Err(_) => T::new_invalid(),
+    }
 }

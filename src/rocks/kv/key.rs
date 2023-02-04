@@ -79,6 +79,12 @@ impl AsRef<Key> for Key {
     }
 }
 
+impl AsRef<[u8]> for Key {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 impl AsRef<Key> for Vec<u8> {
     fn as_ref(&self) -> &Key {
         unsafe { &*(self as *const Vec<u8> as *const Key) }

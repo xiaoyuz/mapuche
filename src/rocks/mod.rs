@@ -1,5 +1,7 @@
+use std::sync::Arc;
 use lazy_static::lazy_static;
-use crate::rocks::client::RocksClientWrapper;
+use rocksdb::DB;
+use crate::rocks::client::RocksRawClient;
 use crate::rocks::errors::{REDIS_BACKEND_NOT_CONNECTED_ERR, RError};
 use crate::rocks::encoding::KeyEncoder;
 
@@ -15,7 +17,7 @@ pub static mut INSTANCE_ID: u64 = 0;
 
 lazy_static! {
     pub static ref KEY_ENCODER: KeyEncoder = KeyEncoder::new();
-    pub static ref ROCKS_RAW_CLIENT: Option<RocksClientWrapper> = RocksClientWrapper::new().ok();
+    pub static ref ROCKS_DB: Arc<DB> = Arc::new(DB::open_default(".rocksdb_store").unwrap());
 }
 
 pub fn set_instance_id(id: u64) {
@@ -28,13 +30,14 @@ pub fn get_instance_id() -> u64 {
     unsafe { INSTANCE_ID }
 }
 
-pub fn get_client<'a>() -> Result<&'a RocksClientWrapper> {
-    ROCKS_RAW_CLIENT.as_ref().ok_or_else(|| REDIS_BACKEND_NOT_CONNECTED_ERR)
+pub fn get_client() -> RocksRawClient {
+    let db = ROCKS_DB.clone();
+    RocksRawClient::new(db)
 }
 
 #[cfg(test)]
 mod tests {
-    use rocksdb::DB;
+    use rocksdb::{DB, Direction, IteratorMode, WriteBatch};
 
     #[test]
     fn test_rocksdb() {
@@ -46,5 +49,18 @@ mod tests {
             Err(e) => println!("operational problem encountered: {}", e),
         }
         db.delete(b"my key").unwrap();
+
+        let mut batch = WriteBatch::default();
+        batch.put(b"test000001", b"t1");
+        batch.put(b"test000002", b"t2");
+        batch.put(b"test000010", b"t3");
+        batch.put(b"test001111", b"t3");
+        batch.put(b"zzzzz", b"a1");
+        db.write(batch).unwrap();
+
+        let mut it = db.prefix_iterator(b"test000010");
+        while let Some(inner) = it.next() {
+            println!("{:?}", inner.unwrap());
+        }
     }
 }

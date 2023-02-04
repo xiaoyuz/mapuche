@@ -115,6 +115,10 @@ impl Parse {
         }
     }
 
+    pub(crate) fn check_finish(&mut self) -> bool {
+        self.parts.next().is_none()
+    }
+
     /// Ensure there are no more entries in the array
     pub(crate) fn finish(&mut self) -> Result<(), ParseError> {
         if self.parts.next().is_none() {

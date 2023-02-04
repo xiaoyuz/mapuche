@@ -1,19 +1,22 @@
 use std::sync::Arc;
-use rocksdb::DB;
+use rocksdb::{DB, WriteBatch};
+use tokio::sync::Mutex;
+use tokio::time::Instant;
+use crate::rocks::errors::RError;
 use crate::rocks::kv::key::Key;
+use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::Result as RocksResult;
 
-pub struct RocksClientWrapper {
+pub struct RocksRawClient {
     client: Arc<DB>,
 }
 
-impl RocksClientWrapper {
-    pub fn new() -> RocksResult<Self> {
-        let db = DB::open_default(".rocksdb_store")?;
-        Ok(Self {
-            client: Arc::new(db),
-        })
+impl RocksRawClient {
+    pub fn new(client: Arc<DB>) -> Self {
+        Self {
+            client,
+        }
     }
 
     pub async fn get(&self, key: Key) -> RocksResult<Option<Value>> {
@@ -39,5 +42,26 @@ impl RocksClientWrapper {
         tokio::spawn(async move {
             client.delete(key)
         }).await.unwrap().map_err(|e| e.into())
+    }
+
+    pub async fn batch_get(&self, keys: Vec<Key>) -> RocksResult<Vec<KvPair>> {
+        let client = self.client.clone();
+        let pairs = tokio::spawn(async move {
+            let results = client.multi_get(&keys);
+            let mut kvpairs = Vec::new();
+            for i in 0..results.len() {
+                match results.get(i).unwrap() {
+                    Ok(opt) => {
+                        let key = keys.get(i).unwrap().clone();
+                        let value: Value = opt.clone().unwrap_or_else(|| Vec::new()).into();
+                        let kvpair = KvPair::new(key, value);
+                        kvpairs.push(kvpair);
+                    }
+                    Err(_) => {}
+                }
+            }
+            kvpairs
+        }).await.unwrap();
+        Ok(pairs)
     }
 }
