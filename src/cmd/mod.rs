@@ -19,6 +19,9 @@ pub use unknown::Unknown;
 mod mget;
 pub use mget::Mget;
 
+mod mset;
+pub use mset::Mset;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -28,6 +31,7 @@ use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 pub enum Command {
     Get(Get),
     Mget(Mget),
+    Mset(Mset),
     Publish(Publish),
     Set(Set),
     Subscribe(Subscribe),
@@ -63,6 +67,7 @@ impl Command {
         let command = match &command_name[..] {
             "get" => Command::Get(Get::parse_frames(&mut parse)?),
             "mget" => Command::Mget(transform_parse(Mget::parse_frames(&mut parse), &mut parse)),
+            "mset" => Command::Mset(transform_parse(Mset::parse_frames(&mut parse), &mut parse)),
             "publish" => Command::Publish(Publish::parse_frames(&mut parse)?),
             "set" => Command::Set(Set::parse_frames(&mut parse)?),
             "subscribe" => Command::Subscribe(Subscribe::parse_frames(&mut parse)?),
@@ -103,6 +108,7 @@ impl Command {
         match self {
             Get(cmd) => cmd.apply(dst).await,
             Mget(cmd) => cmd.apply(dst).await,
+            Mset(cmd) => cmd.apply(dst).await,
             Publish(cmd) => cmd.apply(db, dst).await,
             Set(cmd) => cmd.apply(dst).await,
             Subscribe(cmd) => cmd.apply(db, dst, shutdown).await,
@@ -119,6 +125,7 @@ impl Command {
         match self {
             Command::Get(_) => "get",
             Command::Mget(_) => "mget",
+            Command::Mset(_) => "mset",
             Command::Publish(_) => "pub",
             Command::Set(_) => "set",
             Command::Subscribe(_) => "subscribe",

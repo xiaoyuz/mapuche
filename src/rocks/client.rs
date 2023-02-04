@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use rocksdb::{DB};
+use rocksdb::{DB, WriteBatch};
 
 
 
@@ -53,8 +53,8 @@ impl RocksRawClient {
                 match results.get(i).unwrap() {
                     Ok(opt) => {
                         let key = keys.get(i).unwrap().clone();
-                        let value: Value = opt.clone().unwrap_or_default();
-                        let kvpair = KvPair::new(key, value);
+                        let value = opt.clone().unwrap_or_default();
+                        let kvpair = KvPair::from((key, value));
                         kvpairs.push(kvpair);
                     }
                     Err(_) => {}
@@ -63,5 +63,16 @@ impl RocksRawClient {
             kvpairs
         }).await.unwrap();
         Ok(pairs)
+    }
+
+    pub async fn batch_put(&self, kvs: Vec<KvPair>) -> RocksResult<()> {
+        let client = self.client.clone();
+        tokio::spawn(async move {
+            let mut write_batch = WriteBatch::default();
+            for kv in kvs {
+                write_batch.put(kv.0, kv.1);
+            }
+            client.write(write_batch)
+        }).await.unwrap().map_err(|e| e.into())
     }
 }

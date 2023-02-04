@@ -4,6 +4,7 @@ use crate::Frame;
 use crate::rocks::{get_client, KEY_ENCODER};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::kv::key::Key;
+use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::Result as RocksResult;
 use crate::utils::{resp_ok, resp_str};
@@ -67,5 +68,11 @@ impl StringCommand {
             })
             .collect();
         Ok(Frame::Array(values))
+    }
+
+    pub async fn raw_kv_batch_put(self, kvs: Vec<KvPair>) -> RocksResult<Frame> {
+        let client = get_client();
+        client.batch_put(kvs).await?;
+        Ok(resp_ok())
     }
 }
