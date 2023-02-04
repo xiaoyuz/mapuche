@@ -4,7 +4,7 @@ use crate::{Connection, Frame};
 use bytes::Bytes;
 use std::time::Duration;
 use tracing::{debug, instrument};
-use crate::rocks::errors::REDIS_VALUE_IS_NOT_VALID_FLOAT_ERR;
+
 use crate::rocks::string::StringCommand;
 use crate::utils::resp_invalid_arguments;
 
@@ -207,8 +207,9 @@ impl Set {
     }
 
     async fn put_not_exists(&self) -> RocksResult<Frame> {
-        // TODO
-        Err(REDIS_VALUE_IS_NOT_VALID_FLOAT_ERR)
+        StringCommand
+            .raw_kv_put_not_exists(&self.key, &self.value)
+            .await
     }
 
     async fn put(&self) -> RocksResult<Frame> {

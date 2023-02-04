@@ -7,7 +7,7 @@ use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::Result as RocksResult;
-use crate::utils::{resp_ok, resp_str};
+use crate::utils::{resp_nil, resp_ok, resp_str};
 
 pub struct StringCommand;
 
@@ -74,5 +74,16 @@ impl StringCommand {
         let client = get_client();
         client.batch_put(kvs).await?;
         Ok(resp_ok())
+    }
+
+    pub async fn raw_kv_put_not_exists(self, key: &str, value: &Bytes, ) -> RocksResult<Frame> {
+        let client = get_client();
+        let ekey = KEY_ENCODER.encode_raw_kv_string(key);
+        let (_, swapped) = client.compare_and_swap(ekey, None, value.to_vec()).await?;
+        if swapped {
+            Ok(resp_ok())
+        } else {
+            Ok(resp_nil())
+        }
     }
 }

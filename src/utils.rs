@@ -11,3 +11,7 @@ pub fn resp_str(val: &str) -> Frame {
 pub fn resp_invalid_arguments() -> Frame {
     Frame::Error("Invalid arguments".to_string())
 }
+
+pub fn resp_nil() -> Frame {
+    Frame::Null
+}
