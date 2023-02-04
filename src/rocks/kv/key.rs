@@ -94,7 +94,7 @@ impl AsRef<Key> for Vec<u8> {
 impl fmt::Debug for Key {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for byte in &self.0 {
-            write!(f, "{:02X}", byte)?;
+            write!(f, "{byte:02X}")?;
         }
         Ok(())
     }

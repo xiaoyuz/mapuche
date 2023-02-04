@@ -329,7 +329,7 @@ impl Client {
     /// The core `SUBSCRIBE` logic, used by misc subscribe fns
     async fn subscribe_cmd(&mut self, channels: &[String]) -> crate::Result<()> {
         // Convert the `Subscribe` command into a frame
-        let frame = Subscribe::new(&channels).into_frame();
+        let frame = Subscribe::new(channels).into_frame();
 
         debug!(request = ?frame);
 
@@ -455,7 +455,7 @@ impl Subscriber {
     /// Unsubscribe to a list of new channels
     #[instrument(skip(self))]
     pub async fn unsubscribe(&mut self, channels: &[String]) -> crate::Result<()> {
-        let frame = Unsubscribe::new(&channels).into_frame();
+        let frame = Unsubscribe::new(channels).into_frame();
 
         debug!(request = ?frame);
 

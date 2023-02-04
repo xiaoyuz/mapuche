@@ -1,8 +1,8 @@
 use std::sync::Arc;
-use rocksdb::{DB, WriteBatch};
-use tokio::sync::Mutex;
-use tokio::time::Instant;
-use crate::rocks::errors::RError;
+use rocksdb::{DB};
+
+
+
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
@@ -30,7 +30,7 @@ impl RocksRawClient {
     pub async fn put(&self, key: Key, value: Value) -> RocksResult<()> {
         let client = self.client.clone();
         let key: Vec<u8> = key.into();
-        let value: Vec<u8> = value.into();
+        let value: Vec<u8> = value;
         tokio::spawn(async move {
             client.put(key, value)
         }).await.unwrap().map_err(|e| e.into())
@@ -53,7 +53,7 @@ impl RocksRawClient {
                 match results.get(i).unwrap() {
                     Ok(opt) => {
                         let key = keys.get(i).unwrap().clone();
-                        let value: Value = opt.clone().unwrap_or_else(|| Vec::new()).into();
+                        let value: Value = opt.clone().unwrap_or_default();
                         let kvpair = KvPair::new(key, value);
                         kvpairs.push(kvpair);
                     }

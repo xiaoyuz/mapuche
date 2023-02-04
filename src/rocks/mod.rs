@@ -2,7 +2,7 @@ use std::sync::Arc;
 use lazy_static::lazy_static;
 use rocksdb::DB;
 use crate::rocks::client::RocksRawClient;
-use crate::rocks::errors::{REDIS_BACKEND_NOT_CONNECTED_ERR, RError};
+use crate::rocks::errors::{RError};
 use crate::rocks::encoding::KeyEncoder;
 
 pub mod client;
@@ -37,7 +37,7 @@ pub fn get_client() -> RocksRawClient {
 
 #[cfg(test)]
 mod tests {
-    use rocksdb::{DB, Direction, IteratorMode, WriteBatch};
+    use rocksdb::{DB, WriteBatch};
 
     #[test]
     fn test_rocksdb() {
@@ -46,7 +46,7 @@ mod tests {
         match db.get(b"my key") {
             Ok(Some(value)) => println!("retrieved value {}", String::from_utf8(value).unwrap()),
             Ok(None) => println!("value not found"),
-            Err(e) => println!("operational problem encountered: {}", e),
+            Err(e) => println!("operational problem encountered: {e}"),
         }
         db.delete(b"my key").unwrap();
 
@@ -58,8 +58,8 @@ mod tests {
         batch.put(b"zzzzz", b"a1");
         db.write(batch).unwrap();
 
-        let mut it = db.prefix_iterator(b"test000010");
-        while let Some(inner) = it.next() {
+        let it = db.prefix_iterator(b"test000010");
+        for inner in it {
             println!("{:?}", inner.unwrap());
         }
     }

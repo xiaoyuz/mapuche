@@ -92,17 +92,17 @@ async fn main() -> mapuche::Result<()> {
         Command::Ping { msg } => {
             let value = client.ping(msg).await?;
             if let Ok(string) = str::from_utf8(&value) {
-                println!("\"{}\"", string);
+                println!("\"{string}\"");
             } else {
-                println!("{:?}", value);
+                println!("{value:?}");
             }
         }
         Command::Get { key } => {
             if let Some(value) = client.get(&key).await? {
                 if let Ok(string) = str::from_utf8(&value) {
-                    println!("\"{}\"", string);
+                    println!("\"{string}\"");
                 } else {
-                    println!("{:?}", value);
+                    println!("{value:?}");
                 }
             } else {
                 println!("(nil)");
@@ -125,7 +125,7 @@ async fn main() -> mapuche::Result<()> {
             println!("OK");
         }
         Command::Publish { channel, message } => {
-            client.publish(&channel, message.into()).await?;
+            client.publish(&channel, message).await?;
             println!("Publish OK");
         }
         Command::Subscribe { channels } => {
