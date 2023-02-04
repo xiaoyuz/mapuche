@@ -22,6 +22,12 @@ pub use mget::Mget;
 mod mset;
 pub use mset::Mset;
 
+mod strlen;
+pub use strlen::Strlen;
+
+mod cmdtype;
+pub use cmdtype::Type;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -37,6 +43,9 @@ pub enum Command {
     Subscribe(Subscribe),
     Unsubscribe(Unsubscribe),
     Ping(Ping),
+    Strlen(Strlen),
+    Type(Type),
+
     Unknown(Unknown),
 }
 
@@ -73,6 +82,12 @@ impl Command {
             "subscribe" => Command::Subscribe(Subscribe::parse_frames(&mut parse)?),
             "unsubscribe" => Command::Unsubscribe(Unsubscribe::parse_frames(&mut parse)?),
             "ping" => Command::Ping(Ping::parse_frames(&mut parse)?),
+            "strlen" => Command::Strlen(transform_parse(
+                Strlen::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "type" => Command::Type(transform_parse(Type::parse_frames(&mut parse), &mut parse)),
+
             _ => {
                 // The command is not recognized and an Unknown command is
                 // returned.
@@ -113,6 +128,9 @@ impl Command {
             Set(cmd) => cmd.apply(dst).await,
             Subscribe(cmd) => cmd.apply(db, dst, shutdown).await,
             Ping(cmd) => cmd.apply(dst).await,
+            Strlen(cmd) => cmd.apply(dst).await,
+            Type(cmd) => cmd.apply(dst).await,
+
             Unknown(cmd) => cmd.apply(dst).await,
             // `Unsubscribe` cannot be applied. It may only be received from the
             // context of a `Subscribe` command.
@@ -131,6 +149,8 @@ impl Command {
             Command::Subscribe(_) => "subscribe",
             Command::Unsubscribe(_) => "unsubscribe",
             Command::Ping(_) => "ping",
+            Command::Strlen(_) => "strlen",
+            Command::Type(_) => "type",
             Command::Unknown(cmd) => cmd.get_name(),
         }
     }
