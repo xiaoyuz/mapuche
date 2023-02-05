@@ -55,3 +55,6 @@ pub const REDIS_VALUE_IS_NOT_INTEGER_ERR: RError =
 pub const REDIS_VALUE_IS_NOT_VALID_FLOAT_ERR: RError =
     RError::String("ERR value is not a valid float");
 pub const REDIS_BACKEND_NOT_CONNECTED_ERR: RError = RError::String("ERR backend not connected");
+pub const REDIS_COMPARE_AND_SWAP_EXHAUSTED_ERR: RError =
+    RError::String("ERR compare-and-swap exhausted");
+pub const DECREMENT_OVERFLOW: RError = RError::String("Decrement would overflow");

@@ -76,21 +76,21 @@ impl RocksRawClient {
     }
 
     // TODO: Do it atomic
-    pub async fn compare_and_swap(
-        &self,
-        key: Key,
-        prev_val: Option<Value>,
-        val: Value,
-    ) -> RocksResult<(Option<Value>, bool)> {
-        let client = self.client.clone();
-        tokio::spawn(async move {
-            let current = client.get(key.clone())?;
-            if current == prev_val {
-                client.put(key, val.clone())?;
-                Ok((Some(val), true))
-            } else {
-                Ok((None, false))
-            }
-        }).await.unwrap()
-    }
+    // pub async fn compare_and_swap(
+    //     &self,
+    //     key: Key,
+    //     prev_val: Option<Value>,
+    //     val: Value,
+    // ) -> RocksResult<(Option<Value>, bool)> {
+    //     let client = self.client.clone();
+    //     tokio::spawn(async move {
+    //         let current = client.get(key.clone())?;
+    //         if current == prev_val {
+    //             client.put(key, val.clone())?;
+    //             Ok((Some(val), true))
+    //         } else {
+    //             Ok((None, false))
+    //         }
+    //     }).await.unwrap()
+    // }
 }

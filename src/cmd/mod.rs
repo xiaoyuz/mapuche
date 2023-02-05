@@ -28,6 +28,12 @@ pub use strlen::Strlen;
 mod cmdtype;
 pub use cmdtype::Type;
 
+mod exists;
+pub use exists::Exists;
+
+mod incrdecr;
+pub use incrdecr::IncrDecr;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -45,6 +51,9 @@ pub enum Command {
     Ping(Ping),
     Strlen(Strlen),
     Type(Type),
+    Exists(Exists),
+    Incr(IncrDecr),
+    Decr(IncrDecr),
 
     Unknown(Unknown),
 }
@@ -87,6 +96,18 @@ impl Command {
                 &mut parse,
             )),
             "type" => Command::Type(transform_parse(Type::parse_frames(&mut parse), &mut parse)),
+            "exists" => Command::Exists(transform_parse(
+                Exists::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "incr" => Command::Incr(transform_parse(
+                IncrDecr::parse_frames(&mut parse, true),
+                &mut parse,
+            )),
+            "decr" => Command::Decr(transform_parse(
+                IncrDecr::parse_frames(&mut parse, true),
+                &mut parse,
+            )),
 
             _ => {
                 // The command is not recognized and an Unknown command is
@@ -130,6 +151,9 @@ impl Command {
             Ping(cmd) => cmd.apply(dst).await,
             Strlen(cmd) => cmd.apply(dst).await,
             Type(cmd) => cmd.apply(dst).await,
+            Exists(cmd) => cmd.apply(dst).await,
+            Incr(cmd) => cmd.apply(dst, true).await,
+            Decr(cmd) => cmd.apply(dst, false).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
             // `Unsubscribe` cannot be applied. It may only be received from the
@@ -151,6 +175,9 @@ impl Command {
             Command::Ping(_) => "ping",
             Command::Strlen(_) => "strlen",
             Command::Type(_) => "type",
+            Command::Exists(_) => "exists",
+            Command::Incr(_) => "incr",
+            Command::Decr(_) => "decr",
             Command::Unknown(cmd) => cmd.get_name(),
         }
     }

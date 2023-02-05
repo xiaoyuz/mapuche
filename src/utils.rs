@@ -1,4 +1,4 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::Frame;
 use crate::rocks::errors::RError;
 
@@ -50,4 +50,8 @@ pub fn key_is_expired(ttl: i64) -> bool {
         .expect("Time went backwards");
     let ts = (d.as_secs() * 1000 + d.subsec_millis() as u64) as i64;
     ttl > 0 && ttl < ts
+}
+
+pub async fn sleep(ms: u32) {
+    tokio::time::sleep(Duration::from_millis(ms as u64)).await;
 }
