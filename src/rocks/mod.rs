@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use lazy_static::lazy_static;
-use rocksdb::DB;
+use rocksdb::{TransactionDB};
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::errors::{RError};
 use crate::rocks::encoding::KeyEncoder;
@@ -17,7 +17,7 @@ pub static mut INSTANCE_ID: u64 = 0;
 
 lazy_static! {
     pub static ref KEY_ENCODER: KeyEncoder = KeyEncoder::new();
-    pub static ref ROCKS_DB: Arc<DB> = Arc::new(DB::open_default(".rocksdb_store").unwrap());
+    pub static ref ROCKS_DB: Arc<TransactionDB> = Arc::new(TransactionDB::open_default(".rocksdb_store").unwrap());
 }
 
 pub fn set_instance_id(id: u64) {

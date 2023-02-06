@@ -1,16 +1,18 @@
 use std::sync::Arc;
-use rocksdb::{DB, WriteBatch};
+use rocksdb::{Transaction, TransactionDB, WriteBatchWithTransaction};
+
+use crate::rocks::errors::TXN_ERROR;
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::Result as RocksResult;
 
 pub struct RocksRawClient {
-    client: Arc<DB>,
+    client: Arc<TransactionDB>,
 }
 
 impl RocksRawClient {
-    pub fn new(client: Arc<DB>) -> Self {
+    pub fn new(client: Arc<TransactionDB>) -> Self {
         Self {
             client,
         }
@@ -67,7 +69,7 @@ impl RocksRawClient {
     pub async fn batch_put(&self, kvs: Vec<KvPair>) -> RocksResult<()> {
         let client = self.client.clone();
         tokio::spawn(async move {
-            let mut write_batch = WriteBatch::default();
+            let mut write_batch = WriteBatchWithTransaction::default();
             for kv in kvs {
                 write_batch.put(kv.0, kv.1);
             }
@@ -75,22 +77,21 @@ impl RocksRawClient {
         }).await.unwrap().map_err(|e| e.into())
     }
 
-    // TODO: Do it atomic
-    // pub async fn compare_and_swap(
-    //     &self,
-    //     key: Key,
-    //     prev_val: Option<Value>,
-    //     val: Value,
-    // ) -> RocksResult<(Option<Value>, bool)> {
-    //     let client = self.client.clone();
-    //     tokio::spawn(async move {
-    //         let current = client.get(key.clone())?;
-    //         if current == prev_val {
-    //             client.put(key, val.clone())?;
-    //             Ok((Some(val), true))
-    //         } else {
-    //             Ok((None, false))
-    //         }
-    //     }).await.unwrap()
-    // }
+    pub async fn exec_txn<T, F>(
+        &self,
+        f: F,
+    ) -> RocksResult<T>
+    where
+        T: Send + Sync + 'static,
+        F: FnOnce(&Transaction<TransactionDB>) -> RocksResult<T> + Send + 'static {
+        let client = self.client.clone();
+        tokio::spawn(async move {
+            let txn = client.transaction();
+            let res = f(&txn)?;
+            if txn.commit().is_err() {
+                return Err(TXN_ERROR);
+            }
+            Ok(res)
+        }).await.unwrap()
+    }
 }

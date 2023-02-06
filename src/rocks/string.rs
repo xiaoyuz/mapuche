@@ -132,22 +132,24 @@ impl StringCommand {
         let ekey = KEY_ENCODER.encode_raw_kv_string(key);
         let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut value.to_vec(), -1);
 
-        let resp = match client.get(ekey.clone()).await? {
-            Some(ref v) => {
-                let ttl = KeyDecoder::decode_key_ttl(v);
-                if key_is_expired(ttl) {
-                    // no need to delete, just overwrite
-                    client.put(ekey, eval).await?;
+        let resp = client.exec_txn(|txn| {
+            match txn.get(ekey.clone())? {
+                Some(ref v) => {
+                    let ttl = KeyDecoder::decode_key_ttl(v);
+                    if key_is_expired(ttl) {
+                        // no need to delete, just overwrite
+                        txn.put(ekey, eval)?;
+                        Ok(1)
+                    } else {
+                        Ok(0)
+                    }
+                }
+                None => {
+                    txn.put(ekey, eval)?;
                     Ok(1)
-                } else {
-                    Ok(0)
                 }
             }
-            None => {
-                client.put(ekey, eval).await?;
-                Ok(1)
-            }
-        };
+        }).await;
 
         match resp {
             Ok(n) => {
