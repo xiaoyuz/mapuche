@@ -189,35 +189,36 @@ impl StringCommand {
         let client = get_client();
         let ekey = KEY_ENCODER.encode_raw_kv_string(key);
         let the_key = ekey.clone();
-        let prev: Option<Vec<u8>>;
-        let prev_int: i64;
 
-        match client.get(the_key.clone()).await? {
-            Some(val) => {
-                let dt = KeyDecoder::decode_key_type(&val);
-                if !matches!(dt, DataType::String) {
-                    return Ok(resp_err(REDIS_WRONG_TYPE_ERR));
+        let resp = client.exec_txn(|txn| {
+            match txn.get(the_key.clone())? {
+                Some(val) => {
+                    let dt = KeyDecoder::decode_key_type(&val);
+                    if !matches!(dt, DataType::String) {
+                        return Err(REDIS_WRONG_TYPE_ERR);
+                    }
+                    // ttl saved in milliseconds
+                    let ttl = KeyDecoder::decode_key_ttl(&val);
+                    if key_is_expired(ttl) {
+                        // delete key
+                        txn.delete(the_key)?;
+                        Ok((0, None))
+                    } else {
+                        let current_value = KeyDecoder::decode_key_string_slice(&val);
+                        let prev_int = str::from_utf8(current_value)
+                            .map_err(RError::is_not_integer_error)?
+                            .parse::<i64>()?;
+                        let prev = Some(val.clone());
+                        Ok((prev_int, prev))
+                    }
                 }
-                // ttl saved in milliseconds
-                let ttl = KeyDecoder::decode_key_ttl(&val);
-                if key_is_expired(ttl) {
-                    // delete key
-                    client.del(the_key);
-                    prev_int = 0;
-                    prev = None;
-                } else {
-                    let current_value = KeyDecoder::decode_key_string_slice(&val);
-                    prev_int = str::from_utf8(current_value)
-                        .map_err(RError::is_not_integer_error)?
-                        .parse::<i64>()?;
-                    prev = Some(val.clone());
+                None => {
+                    Ok((0, None))
                 }
             }
-            None => {
-                prev = None;
-                prev_int = 0;
-            }
-        }
+        }).await?;
+
+        let (prev_int, _) = resp;
 
         let new_int = prev_int + step;
         let new_val = new_int.to_string();
