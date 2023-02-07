@@ -52,6 +52,15 @@ pub fn key_is_expired(ttl: i64) -> bool {
     ttl > 0 && ttl < ts
 }
 
+pub fn ttl_from_timestamp(timestamp: i64) -> i64 {
+    let now = now_timestamp_in_millis();
+    if now > timestamp {
+        0
+    } else {
+        timestamp - now
+    }
+}
+
 pub async fn sleep(ms: u32) {
     tokio::time::sleep(Duration::from_millis(ms as u64)).await;
 }

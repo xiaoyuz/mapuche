@@ -55,7 +55,7 @@ impl Type {
             return Ok(resp_invalid_arguments());
         }
         StringCommand
-            .raw_kv_type(&self.key)
+            .get_type(&self.key)
             .await
     }
 }

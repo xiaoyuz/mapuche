@@ -65,7 +65,7 @@ impl Exists {
             return Ok(resp_invalid_arguments());
         }
         StringCommand
-            .raw_kv_exists(&self.keys)
+            .exists(&self.keys)
             .await
     }
 }

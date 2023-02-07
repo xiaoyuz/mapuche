@@ -65,7 +65,7 @@ impl Mget {
             return Ok(resp_invalid_arguments());
         }
         StringCommand
-            .raw_kv_batch_get(&self.keys)
+            .batch_get(&self.keys)
             .await
     }
 }

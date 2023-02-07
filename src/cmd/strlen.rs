@@ -55,7 +55,7 @@ impl Strlen {
             return Ok(resp_invalid_arguments());
         }
         StringCommand
-            .raw_kv_strlen(&self.key)
+            .strlen(&self.key)
             .await
     }
 }

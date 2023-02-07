@@ -85,7 +85,7 @@ impl Mset {
             kvs.push(kvpair);
         }
         StringCommand
-            .raw_kv_batch_put(kvs)
+            .batch_put(kvs)
             .await
     }
 }

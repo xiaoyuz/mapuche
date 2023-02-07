@@ -79,7 +79,7 @@ impl IncrDecr {
         }
 
         StringCommand
-            .raw_kv_incr(&self.key, self.step)
+            .incr(&self.key, self.step)
             .await
     }
 }

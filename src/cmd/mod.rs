@@ -34,6 +34,12 @@ pub use exists::Exists;
 mod incrdecr;
 pub use incrdecr::IncrDecr;
 
+mod expire;
+pub use expire::Expire;
+
+mod ttl;
+pub use ttl::TTL;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -54,6 +60,12 @@ pub enum Command {
     Exists(Exists),
     Incr(IncrDecr),
     Decr(IncrDecr),
+    Expire(Expire),
+    ExpireAt(Expire),
+    Pexpire(Expire),
+    PexpireAt(Expire),
+    TTL(TTL),
+    PTTL(TTL),
 
     Unknown(Unknown),
 }
@@ -108,6 +120,24 @@ impl Command {
                 IncrDecr::parse_frames(&mut parse, true),
                 &mut parse,
             )),
+            "expire" => Command::Expire(transform_parse(
+                Expire::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "expireat" => Command::ExpireAt(transform_parse(
+                Expire::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "pexpire" => Command::Pexpire(transform_parse(
+                Expire::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "pexpireat" => Command::PexpireAt(transform_parse(
+                Expire::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "ttl" => Command::TTL(transform_parse(TTL::parse_frames(&mut parse), &mut parse)),
+            "pttl" => Command::PTTL(transform_parse(TTL::parse_frames(&mut parse), &mut parse)),
 
             _ => {
                 // The command is not recognized and an Unknown command is
@@ -154,6 +184,12 @@ impl Command {
             Exists(cmd) => cmd.apply(dst).await,
             Incr(cmd) => cmd.apply(dst, true).await,
             Decr(cmd) => cmd.apply(dst, false).await,
+            Expire(cmd) => cmd.apply(dst, false, false).await,
+            ExpireAt(cmd) => cmd.apply(dst, false, true).await,
+            Pexpire(cmd) => cmd.apply(dst, true, false).await,
+            PexpireAt(cmd) => cmd.apply(dst, true, true).await,
+            TTL(cmd) => cmd.apply(dst, false).await,
+            PTTL(cmd) => cmd.apply(dst, true).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
             // `Unsubscribe` cannot be applied. It may only be received from the
@@ -178,6 +214,12 @@ impl Command {
             Command::Exists(_) => "exists",
             Command::Incr(_) => "incr",
             Command::Decr(_) => "decr",
+            Command::Expire(_) => "expire",
+            Command::ExpireAt(_) => "expireat",
+            Command::Pexpire(_) => "pexpire",
+            Command::PexpireAt(_) => "pexpireat",
+            Command::TTL(_) => "ttl",
+            Command::PTTL(_) => "pttl",
             Command::Unknown(cmd) => cmd.get_name(),
         }
     }

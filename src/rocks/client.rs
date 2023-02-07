@@ -26,6 +26,12 @@ impl RocksRawClient {
         }).await.unwrap().map_err(|e| e.into())
     }
 
+    pub fn blocking_get(&self, key: Key) -> RocksResult<Option<Value>> {
+        let client = self.client.clone();
+        let key: Vec<u8> = key.into();
+        client.get(key).map_err(|e| e.into())
+    }
+
     pub async fn put(&self, key: Key, value: Value) -> RocksResult<()> {
         let client = self.client.clone();
         let key: Vec<u8> = key.into();
@@ -35,12 +41,25 @@ impl RocksRawClient {
         }).await.unwrap().map_err(|e| e.into())
     }
 
+    pub fn blocking_put(&self, key: Key, value: Value) -> RocksResult<()> {
+        let client = self.client.clone();
+        let key: Vec<u8> = key.into();
+        let value: Vec<u8> = value;
+        client.put(key, value).map_err(|e| e.into())
+    }
+
     pub async fn del(&self, key: Key) -> RocksResult<()> {
         let client = self.client.clone();
         let key: Vec<u8> = key.into();
         tokio::spawn(async move {
             client.delete(key)
         }).await.unwrap().map_err(|e| e.into())
+    }
+
+    pub fn blocking_del(&self, key: Key) -> RocksResult<()> {
+        let client = self.client.clone();
+        let key: Vec<u8> = key.into();
+        client.delete(key).map_err(|e| e.into())
     }
 
     pub async fn batch_get(&self, keys: Vec<Key>) -> RocksResult<Vec<KvPair>> {
