@@ -40,6 +40,9 @@ pub use expire::Expire;
 mod ttl;
 pub use ttl::TTL;
 
+mod del;
+pub use del::Del;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -54,6 +57,7 @@ pub enum Command {
     Set(Set),
     Subscribe(Subscribe),
     Unsubscribe(Unsubscribe),
+    Del(Del),
     Ping(Ping),
     Strlen(Strlen),
     Type(Type),
@@ -102,6 +106,7 @@ impl Command {
             "set" => Command::Set(Set::parse_frames(&mut parse)?),
             "subscribe" => Command::Subscribe(Subscribe::parse_frames(&mut parse)?),
             "unsubscribe" => Command::Unsubscribe(Unsubscribe::parse_frames(&mut parse)?),
+            "del" => Command::Del(transform_parse(Del::parse_frames(&mut parse), &mut parse)),
             "ping" => Command::Ping(Ping::parse_frames(&mut parse)?),
             "strlen" => Command::Strlen(transform_parse(
                 Strlen::parse_frames(&mut parse),
@@ -178,6 +183,7 @@ impl Command {
             Publish(cmd) => cmd.apply(db, dst).await,
             Set(cmd) => cmd.apply(dst).await,
             Subscribe(cmd) => cmd.apply(db, dst, shutdown).await,
+            Del(cmd) => cmd.apply(dst).await,
             Ping(cmd) => cmd.apply(dst).await,
             Strlen(cmd) => cmd.apply(dst).await,
             Type(cmd) => cmd.apply(dst).await,
@@ -208,6 +214,7 @@ impl Command {
             Command::Set(_) => "set",
             Command::Subscribe(_) => "subscribe",
             Command::Unsubscribe(_) => "unsubscribe",
+            Command::Del(_) => "del",
             Command::Ping(_) => "ping",
             Command::Strlen(_) => "strlen",
             Command::Type(_) => "type",

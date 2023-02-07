@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::str;
 use bytes::Bytes;
-use futures::TryFutureExt;
 use crate::Frame;
 use crate::rocks::{get_client, KEY_ENCODER};
 use crate::rocks::encoding::{DataType, KeyDecoder};
@@ -12,6 +11,7 @@ use crate::rocks::kv::value::Value;
 use crate::rocks::Result as RocksResult;
 use crate::utils::{key_is_expired, resp_bulk, resp_err, resp_int, resp_nil, resp_ok, resp_str, ttl_from_timestamp};
 
+#[derive(Clone)]
 pub struct StringCommand;
 
 impl StringCommand {
@@ -107,7 +107,7 @@ impl StringCommand {
                         let ttl = KeyDecoder::decode_key_ttl(val);
                         if key_is_expired(ttl) {
                             // delete key
-                            client.blocking_del(k)?;
+                            client.blocking_del(k).expect("remove outdated data failed");
                             Frame::Null
                         } else {
                             let data = KeyDecoder::decode_key_string_value(val);
@@ -233,6 +233,12 @@ impl StringCommand {
         client.del(ekey).await
     }
 
+    pub fn blocking_string_del(self, key: &str) -> RocksResult<()> {
+        let client = get_client();
+        let ekey = KEY_ENCODER.encode_raw_kv_string(key);
+        client.blocking_del(ekey)
+    }
+
     pub fn blocking_expire_if_needed(self, key: &str) -> RocksResult<()> {
         let client = get_client();
         let ekey = KEY_ENCODER.encode_raw_kv_string(key);
@@ -323,4 +329,50 @@ impl StringCommand {
             }
         }).await
     }
+
+    pub async fn del(self, keys: &Vec<String>) -> RocksResult<Frame> {
+        let client = get_client();
+        let keys = keys.to_owned();
+        let keys_len = keys.len();
+        let resp = client.exec_txn(move |txn| {
+            let mut dts = Vec::with_capacity(keys_len);
+            let ekeys = KEY_ENCODER.encode_raw_kv_strings(&keys);
+
+            let values = txn.multi_get(&ekeys);
+            for i in 0..ekeys.len() {
+                match values.get(i) {
+                    Some(Ok(Some(v))) => dts.push(KeyDecoder::decode_key_type(v)),
+                    _ => dts.push(DataType::Null),
+                }
+            }
+
+            let mut resp = 0;
+            for idx in 0..keys_len {
+                match dts[idx] {
+                    DataType::String => {
+                        self.clone().blocking_string_del(&keys[idx])?;
+                        resp += 1;
+                    }
+                    _ => {
+                        // TODO add all types
+                    }
+                }
+            }
+            Ok(resp)
+        }).await;
+        match resp {
+            Ok(v) => Ok(resp_int(v)),
+            Err(e) => Ok(resp_err(e)),
+        }
+    }
+
+    // TODO: scan
+    // pub async fn scan(
+    //     mut self,
+    //     start: &str,
+    //     count: u32,
+    //     regex: &str,
+    // ) -> RocksResult<Frame> {
+    //
+    // }
 }
