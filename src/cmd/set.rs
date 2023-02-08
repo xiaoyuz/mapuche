@@ -206,12 +206,14 @@ impl Set {
     }
 
     async fn put_not_exists(&self) -> RocksResult<Frame> {
-        StringCommand.put_not_exists(&self.key, &self.value)
+        StringCommand
+            .put_not_exists(&self.key, &self.value)
+            .await
     }
 
     async fn put(&self) -> RocksResult<Frame> {
         let ttl = self.expire.map_or(-1, |d| { timestamp_from_ttl(d) });
-        StringCommand.put(&self.key, &self.value, ttl)
+        StringCommand.put(&self.key, &self.value, ttl).await
     }
 
     /// Converts the command into an equivalent `Frame`.

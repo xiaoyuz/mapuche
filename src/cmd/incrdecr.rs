@@ -78,7 +78,9 @@ impl IncrDecr {
             self.step = -self.step;
         }
 
-        StringCommand.incr(&self.key, self.step)
+        StringCommand
+            .incr(&self.key, self.step)
+            .await
     }
 }
 

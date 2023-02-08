@@ -54,7 +54,9 @@ impl Strlen {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand.strlen(&self.key)
+        StringCommand
+            .strlen(&self.key)
+            .await
     }
 }
 

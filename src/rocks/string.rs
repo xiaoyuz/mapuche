@@ -17,10 +17,10 @@ pub struct StringCommand;
 
 impl StringCommand {
 
-    pub fn get(self, key: &str) -> RocksResult<Frame> {
+    pub async fn get(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
         let ekey = KEY_ENCODER.encode_raw_kv_string(key);
-        match client.get(ekey.clone())? {
+        match client.get(ekey.clone()).await? {
             Some(val) => {
                 let dt = KeyDecoder::decode_key_type(&val);
                 if !matches!(dt, DataType::String) {
@@ -30,7 +30,7 @@ impl StringCommand {
                 let ttl = KeyDecoder::decode_key_ttl(&val);
                 if key_is_expired(ttl) {
                     // delete key
-                    client.del(ekey)?;
+                    client.del(ekey).await?;
                     return Ok(resp_nil());
                 }
                 let data = KeyDecoder::decode_key_string_value(&val);
@@ -40,16 +40,16 @@ impl StringCommand {
         }
     }
 
-    pub fn get_type(self, key: &str) -> RocksResult<Frame> {
+    pub async fn get_type(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
         let ekey = KEY_ENCODER.encode_raw_kv_string(key);
-        match client.get(ekey.clone())? {
+        match client.get(ekey.clone()).await? {
             Some(val) => {
                 // ttl saved in milliseconds
                 let ttl = KeyDecoder::decode_key_ttl(&val);
                 if key_is_expired(ttl) {
                     // delete key
-                    client.del(ekey)?;
+                    client.del(ekey).await?;
                     return Ok(resp_str(&DataType::Null.to_string()));
                 }
                 Ok(resp_str(&KeyDecoder::decode_key_type(&val).to_string()))
@@ -58,10 +58,10 @@ impl StringCommand {
         }
     }
 
-    pub fn strlen(self, key: &str) -> RocksResult<Frame> {
+    pub async fn strlen(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
         let ekey = KEY_ENCODER.encode_raw_kv_string(key);
-        match client.get(ekey.clone())? {
+        match client.get(ekey.clone()).await? {
             Some(val) => {
                 let dt = KeyDecoder::decode_key_type(&val);
                 if !matches!(dt, DataType::String) {
@@ -71,7 +71,7 @@ impl StringCommand {
                 let ttl = KeyDecoder::decode_key_ttl(&val);
                 if key_is_expired(ttl) {
                     // delete key
-                    client.del(ekey)?;
+                    client.del(ekey).await?;
                     return Ok(resp_int(0));
                 }
                 let data = KeyDecoder::decode_key_string_value(&val);
@@ -81,18 +81,18 @@ impl StringCommand {
         }
     }
 
-    pub fn put(self, key: &str, val: &Bytes, timestamp: i64) -> RocksResult<Frame> {
+    pub async fn put(self, key: &str, val: &Bytes, timestamp: i64) -> RocksResult<Frame> {
         let client = get_client();
         let ekey = KEY_ENCODER.encode_raw_kv_string(key);
         let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut val.to_vec(), timestamp);
-        client.put(ekey, eval)?;
+        client.put(ekey, eval).await?;
         Ok(resp_ok())
     }
 
-    pub fn batch_get(self, keys: &[String]) -> RocksResult<Frame> {
+    pub async fn batch_get(self, keys: &[String]) -> RocksResult<Frame> {
         let client = get_client();
         let ekeys = KEY_ENCODER.encode_raw_kv_strings(keys);
-        let result = client.batch_get(ekeys.clone())?;
+        let result = client.batch_get(ekeys.clone()).await?;
         let ret: HashMap<Key, Value> = result.into_iter().map(|pair| (pair.0, pair.1)).collect();
 
         let values: Vec<Frame> = ekeys
@@ -105,7 +105,7 @@ impl StringCommand {
                         let ttl = KeyDecoder::decode_key_ttl(val);
                         if key_is_expired(ttl) {
                             // delete key
-                            client.del(k).expect("remove outdated data failed");
+                            client.blocking_del(k).expect("remove outdated data failed");
                             Frame::Null
                         } else {
                             let data = KeyDecoder::decode_key_string_value(val);
@@ -119,13 +119,13 @@ impl StringCommand {
         Ok(Frame::Array(values))
     }
 
-    pub fn batch_put(self, kvs: Vec<KvPair>) -> RocksResult<Frame> {
+    pub async fn batch_put(self, kvs: Vec<KvPair>) -> RocksResult<Frame> {
         let client = get_client();
-        client.batch_put(kvs)?;
+        client.batch_put(kvs).await?;
         Ok(resp_ok())
     }
 
-    pub fn put_not_exists(self, key: &str, value: &Bytes) -> RocksResult<Frame> {
+    pub async fn put_not_exists(self, key: &str, value: &Bytes) -> RocksResult<Frame> {
         let client = get_client();
         let ekey = KEY_ENCODER.encode_raw_kv_string(key);
         let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut value.to_vec(), -1);
@@ -147,7 +147,7 @@ impl StringCommand {
                     Ok(1)
                 }
             }
-        });
+        }).await;
 
         match resp {
             Ok(n) => {
@@ -161,10 +161,10 @@ impl StringCommand {
         }
     }
 
-    pub fn exists(self, keys: &[String]) -> RocksResult<Frame> {
+    pub async fn exists(self, keys: &[String]) -> RocksResult<Frame> {
         let client = get_client();
         let ekeys = KEY_ENCODER.encode_raw_kv_strings(keys);
-        let result = client.batch_get(ekeys.clone())?;
+        let result = client.batch_get(ekeys.clone()).await?;
         let ret: HashMap<Key, Value> = result.into_iter().map(|pair| (pair.0, pair.1)).collect();
         let mut nums = 0;
         for k in ekeys {
@@ -174,7 +174,7 @@ impl StringCommand {
                 let ttl = KeyDecoder::decode_key_ttl(val);
                 if key_is_expired(ttl) {
                     // delete key
-                    client.del(k)?;
+                    client.del(k).await?;
                 } else {
                     nums += 1;
                 }
@@ -183,7 +183,7 @@ impl StringCommand {
         Ok(resp_int(nums as i64))
     }
 
-    pub fn incr(self, key: &str, step: i64) -> RocksResult<Frame> {
+    pub async fn incr(self, key: &str, step: i64) -> RocksResult<Frame> {
         let client = get_client();
         let ekey = KEY_ENCODER.encode_raw_kv_string(key);
         let the_key = ekey.clone();
@@ -214,36 +214,42 @@ impl StringCommand {
                     Ok((0, None))
                 }
             }
-        })?;
+        }).await?;
 
         let (prev_int, _) = resp;
 
         let new_int = prev_int + step;
         let new_val = new_int.to_string();
         let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut new_val.as_bytes().to_vec(), 0);
-        client.put(ekey, eval)?;
+        client.put(ekey, eval).await?;
         Ok(resp_int(new_int))
     }
 
-    pub fn string_del(self, key: &str) -> RocksResult<()> {
+    pub async fn string_del(self, key: &str) -> RocksResult<()> {
         let client = get_client();
         let ekey = KEY_ENCODER.encode_raw_kv_string(key);
-        client.del(ekey)
+        client.del(ekey).await
     }
 
-    pub fn expire_if_needed(self, key: &str) -> RocksResult<()> {
+    pub fn blocking_string_del(self, key: &str) -> RocksResult<()> {
         let client = get_client();
         let ekey = KEY_ENCODER.encode_raw_kv_string(key);
-        if let Some(v) = client.get(ekey.clone())? {
+        client.blocking_del(ekey)
+    }
+
+    pub fn blocking_expire_if_needed(self, key: &str) -> RocksResult<()> {
+        let client = get_client();
+        let ekey = KEY_ENCODER.encode_raw_kv_string(key);
+        if let Some(v) = client.blocking_get(ekey.clone())? {
             let ttl = KeyDecoder::decode_key_ttl(&v);
             if key_is_expired(ttl) {
-                client.del(ekey)?;
+                client.blocking_del(ekey)?;
             }
         }
         Ok(())
     }
 
-    pub fn expire(self, key: &str, timestamp: i64) -> RocksResult<Frame> {
+    pub async fn expire(self, key: &str, timestamp: i64) -> RocksResult<Frame> {
         let client = get_client();
         let key = key.to_owned();
         let timestamp = timestamp;
@@ -263,7 +269,7 @@ impl StringCommand {
                         DataType::String => {
                             // check key expired
                             if key_is_expired(ttl) {
-                                self.expire_if_needed(&key)?;
+                                self.blocking_expire_if_needed(&key)?;
                                 return Ok(0);
                             }
                             let value = KeyDecoder::decode_key_string_slice(&meta_value);
@@ -280,14 +286,14 @@ impl StringCommand {
                 }
                 None => Ok(0)
             }
-        });
+        }).await;
         match resp {
             Ok(v) => Ok(resp_int(v)),
             Err(e) => Ok(resp_err(e)),
         }
     }
 
-    pub fn ttl(self, key: &str, is_millis: bool) -> RocksResult<Frame> {
+    pub async fn ttl(self, key: &str, is_millis: bool) -> RocksResult<Frame> {
         let client = get_client();
         let key = key.to_owned();
         let ekey = KEY_ENCODER.encode_raw_kv_string(&key);
@@ -299,7 +305,7 @@ impl StringCommand {
                     if key_is_expired(ttl) {
                         match dt {
                             DataType::String => {
-                                self.expire_if_needed(&key)?;
+                                self.blocking_expire_if_needed(&key)?;
                             }
                             _ => {
                                 // TODO: add all types
@@ -319,10 +325,10 @@ impl StringCommand {
                 }
                 None => Ok(resp_int(-2)),
             }
-        })
+        }).await
     }
 
-    pub fn del(self, keys: &Vec<String>) -> RocksResult<Frame> {
+    pub async fn del(self, keys: &Vec<String>) -> RocksResult<Frame> {
         let client = get_client();
         let keys = keys.to_owned();
         let keys_len = keys.len();
@@ -342,7 +348,7 @@ impl StringCommand {
             for idx in 0..keys_len {
                 match dts[idx] {
                     DataType::String => {
-                        self.clone().string_del(&keys[idx])?;
+                        self.clone().blocking_string_del(&keys[idx])?;
                         resp += 1;
                     }
                     _ => {
@@ -351,7 +357,7 @@ impl StringCommand {
                 }
             }
             Ok(resp)
-        });
+        }).await;
         match resp {
             Ok(v) => Ok(resp_int(v)),
             Err(e) => Ok(resp_err(e)),
@@ -408,8 +414,14 @@ impl StringCommand {
     //                 let ttl = KeyDecoder::decode_key_ttl(&kv.1);
     //                 // delete it if it is expired
     //                 if key_is_expired(ttl) {
+    //                     txn.delete()
+    //                     client.blocking_del(k).expect("remove outdated data failed");
     //                     self.clone()
-    //                         .del(&vec![String::from_utf8_lossy(&userkey).to_string()])?;
+    //                         .do_async_txnkv_del(&vec![
+    //                             String::from_utf8_lossy(&userkey).to_string()
+    //                         ])
+    //                         .await?;
+    //                     txn = txn_rc.lock().await;
     //                 }
     //             }
     //         }

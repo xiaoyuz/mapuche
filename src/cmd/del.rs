@@ -62,7 +62,9 @@ impl Del {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand.del(&self.keys)
+        StringCommand
+            .del(&self.keys)
+            .await
     }
 }
 

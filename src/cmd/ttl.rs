@@ -60,7 +60,9 @@ impl TTL {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand.ttl(&self.key, is_millis)
+        StringCommand
+            .ttl(&self.key, is_millis)
+            .await
     }
 }
 

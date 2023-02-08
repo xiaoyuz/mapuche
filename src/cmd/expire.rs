@@ -87,7 +87,9 @@ impl Expire {
         if !expire_at {
             ttl = timestamp_from_ttl(ttl);
         }
-        StringCommand.expire(&self.key, ttl)
+        StringCommand
+            .expire(&self.key, ttl)
+            .await
     }
 }
 
