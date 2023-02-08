@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::str;
 use bytes::Bytes;
 use crate::Frame;
-use crate::rocks::{get_client, KEY_ENCODER};
+use crate::rocks::{blocking_tx_scan, get_client, KEY_ENCODER};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{REDIS_WRONG_TYPE_ERR, RError};
+use crate::rocks::kv::bound_range::BoundRange;
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
@@ -15,9 +16,6 @@ use crate::utils::{key_is_expired, resp_bulk, resp_err, resp_int, resp_nil, resp
 pub struct StringCommand;
 
 impl StringCommand {
-    fn new() -> Self {
-        Self
-    }
 
     pub async fn get(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
@@ -366,13 +364,70 @@ impl StringCommand {
         }
     }
 
-    // TODO: scan
     // pub async fn scan(
     //     mut self,
     //     start: &str,
     //     count: u32,
     //     regex: &str,
     // ) -> RocksResult<Frame> {
+    //     let client = get_client();
+    //     let ekey = KEY_ENCODER.encode_raw_kv_string(&key);
+    //     let re = Regex::new(regex).unwrap();
+    //     let resp = client.exec_txn(|txn| {
+    //         let mut keys = vec![];
+    //         let mut retrieved_key_count = 0;
+    //         let mut next_key = vec![];
+    //         let mut left_bound = ekey.clone();
     //
+    //         // set to a non-zore value before loop
+    //         let mut last_round_iter_count = 1;
+    //         while retrieved_key_count < count as usize {
+    //             if last_round_iter_count == 0 {
+    //                 next_key = vec![];
+    //                 break;
+    //             }
+    //
+    //             let range = left_bound.clone()..KEY_ENCODER.encode_txn_kv_keyspace_end();
+    //             let bound_range: BoundRange = range.into();
+    //
+    //             // the iterator will scan all keyspace include sub metakey and datakey
+    //             let iter = blocking_tx_scan(&txn, bound_range, 100)?;
+    //
+    //             // reset count to zero
+    //             last_round_iter_count = 0;
+    //             for kv in iter {
+    //                 // skip the left bound key, this should be exclusive
+    //                 if kv.0 == left_bound {
+    //                     continue;
+    //                 }
+    //                 left_bound = kv.0.clone();
+    //                 // left bound key is exclusive
+    //                 last_round_iter_count += 1;
+    //                 let (userkey, is_meta_key) =
+    //                     KeyDecoder::decode_key_userkey_from_metakey(&kv.0);
+    //
+    //                 // skip it if it is not a meta key
+    //                 if !is_meta_key {
+    //                     continue;
+    //                 }
+    //
+    //                 let ttl = KeyDecoder::decode_key_ttl(&kv.1);
+    //                 // delete it if it is expired
+    //                 if key_is_expired(ttl) {
+    //                     txn.delete()
+    //                     client.blocking_del(k).expect("remove outdated data failed");
+    //                     self.clone()
+    //                         .do_async_txnkv_del(&vec![
+    //                             String::from_utf8_lossy(&userkey).to_string()
+    //                         ])
+    //                         .await?;
+    //                     txn = txn_rc.lock().await;
+    //                 }
+    //             }
+    //         }
+    //
+    //
+    //         Ok(())
+    //     }).await;
     // }
 }
