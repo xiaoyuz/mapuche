@@ -52,22 +52,21 @@ pub fn blocking_tx_scan(
         IteratorMode::From(&start, Direction::Forward)
     );
     let end_it_key = end
-        .and_then(|e| {
+        .map(|e| {
             let e_vec: Vec<u8> = e.into();
-            Some(txn.iterator(
+            txn.iterator(
                 IteratorMode::From(&e_vec, Direction::Forward)
-            ))
+            )
         })
         .and_then(|mut it| it.next())
-        .and_then(|res| res.ok())
-        .and_then(|kv| Some(kv.0));
+        .and_then(|res| res.ok()).map(|kv| kv.0);
 
     let mut kv_pairs: Vec<KvPair> = Vec::new();
     for inner in it {
         if let Ok(kv_bytes) = inner {
             let pair: (Key, Value) = (kv_bytes.0.to_vec().into(), kv_bytes.1.to_vec());
             kv_pairs.push(pair.into());
-            if &Some(kv_bytes.0) == &end_it_key {
+            if Some(kv_bytes.0) == end_it_key {
                 break;
             }
         }
@@ -80,7 +79,7 @@ pub fn blocking_tx_scan(
 
 #[cfg(test)]
 mod tests {
-    use rocksdb::{DB, Direction, IteratorMode, TransactionDB, WriteBatch, WriteBatchWithTransaction};
+    use rocksdb::{Direction, IteratorMode, TransactionDB, WriteBatchWithTransaction};
     use crate::rocks::kv::bound_range::BoundRange;
     use crate::rocks::kv::key::Key;
     use crate::rocks::blocking_tx_scan;
@@ -114,7 +113,7 @@ mod tests {
             if inner_res == stop {
                 break;
             }
-            println!("{:?}", inner_res);
+            println!("{inner_res:?}");
         }
     }
 
@@ -136,7 +135,7 @@ mod tests {
 
         let it = blocking_tx_scan(&txn, bound_range, 2).unwrap();
         for inner in it {
-            println!("{:?}", inner);
+            println!("{inner:?}");
         }
     }
 }
