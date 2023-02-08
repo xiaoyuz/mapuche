@@ -64,9 +64,7 @@ impl Exists {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand
-            .exists(&self.keys)
-            .await
+        StringCommand.exists(&self.keys)
     }
 }
 

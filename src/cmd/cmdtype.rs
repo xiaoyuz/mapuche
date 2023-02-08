@@ -54,9 +54,7 @@ impl Type {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand
-            .get_type(&self.key)
-            .await
+        StringCommand.get_type(&self.key)
     }
 }
 

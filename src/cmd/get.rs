@@ -104,7 +104,7 @@ impl Get {
         if !self.valid {
             return Ok(resp_invalid_arguments())
         }
-        StringCommand.get(&self.key).await
+        StringCommand.get(&self.key)
     }
 }
 

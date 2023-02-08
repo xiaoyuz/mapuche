@@ -84,9 +84,7 @@ impl Mset {
             let kvpair = KvPair::from((ekey, eval));
             kvs.push(kvpair);
         }
-        StringCommand
-            .batch_put(kvs)
-            .await
+        StringCommand.batch_put(kvs)
     }
 }
 

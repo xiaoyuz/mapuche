@@ -64,9 +64,7 @@ impl Mget {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand
-            .batch_get(&self.keys)
-            .await
+        StringCommand.batch_get(&self.keys)
     }
 }
 
