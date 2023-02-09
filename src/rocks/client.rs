@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use rocksdb::{Transaction, TransactionDB, WriteBatchWithTransaction};
+use rocksdb::{BoundColumnFamily, Transaction, TransactionDB, WriteBatchWithTransaction};
 use crate::config::async_deletion_enabled_or_default;
 
 use crate::rocks::errors::{KEY_VERSION_EXHUSTED_ERR, TXN_ERROR};
@@ -65,6 +65,10 @@ impl RocksRawClient {
             write_batch.put(kv.0, kv.1);
         }
         client.write(write_batch).map_err(|e| e.into())
+    }
+
+    pub fn cf_handle(&self, name: &str) -> Option<Arc<BoundColumnFamily>> {
+        self.client.cf_handle(name)
     }
 
     pub fn exec_txn<T, F>(

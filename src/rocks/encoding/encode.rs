@@ -70,12 +70,15 @@ impl KeyEncoder {
         }
     }
 
-    pub fn encode_raw_kv_string(&self, ukey: &str) -> Key {
-        let mut key = Vec::with_capacity(4 + ukey.len());
-        key.push(RAW_KEY_PREFIX);
+    pub fn encode_txn_kv_string(&self, ukey: &str) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(5 + enc_ukey.len());
+
+        key.push(TXN_KEY_PREFIX);
         key.extend_from_slice(self.instance_id.as_slice());
+        key.push(DATA_TYPE_USER);
+        key.extend_from_slice(&enc_ukey);
         key.push(DATA_TYPE_META);
-        key.extend_from_slice(ukey.as_bytes());
         key.into()
     }
 
@@ -102,7 +105,7 @@ impl KeyEncoder {
 
     pub fn encode_raw_kv_strings(&self, keys: &[String]) -> Vec<Key> {
         keys.iter()
-            .map(|ukey| self.encode_raw_kv_string(ukey))
+            .map(|ukey| self.encode_txn_kv_string(ukey))
             .collect()
     }
 

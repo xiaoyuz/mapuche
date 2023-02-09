@@ -22,7 +22,7 @@ impl StringCommand {
 
     pub async fn get(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
-        let ekey = KEY_ENCODER.encode_raw_kv_string(key);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         match client.get(ekey.clone())? {
             Some(val) => {
                 let dt = KeyDecoder::decode_key_type(&val);
@@ -45,7 +45,7 @@ impl StringCommand {
 
     pub async fn get_type(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
-        let ekey = KEY_ENCODER.encode_raw_kv_string(key);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         match client.get(ekey.clone())? {
             Some(val) => {
                 // ttl saved in milliseconds
@@ -63,7 +63,7 @@ impl StringCommand {
 
     pub async fn strlen(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
-        let ekey = KEY_ENCODER.encode_raw_kv_string(key);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         match client.get(ekey.clone())? {
             Some(val) => {
                 let dt = KeyDecoder::decode_key_type(&val);
@@ -86,7 +86,7 @@ impl StringCommand {
 
     pub async fn put(self, key: &str, val: &Bytes, timestamp: i64) -> RocksResult<Frame> {
         let client = get_client();
-        let ekey = KEY_ENCODER.encode_raw_kv_string(key);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut val.to_vec(), timestamp);
         client.put(ekey, eval)?;
         Ok(resp_ok())
@@ -130,7 +130,7 @@ impl StringCommand {
 
     pub async fn put_not_exists(self, key: &str, value: &Bytes) -> RocksResult<Frame> {
         let client = get_client();
-        let ekey = KEY_ENCODER.encode_raw_kv_string(key);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut value.to_vec(), -1);
 
         let resp = client.exec_txn(|txn| {
@@ -188,7 +188,7 @@ impl StringCommand {
 
     pub async fn incr(self, key: &str, step: i64) -> RocksResult<Frame> {
         let client = get_client();
-        let ekey = KEY_ENCODER.encode_raw_kv_string(key);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         let the_key = ekey.clone();
 
         let resp = client.exec_txn(|txn| {
@@ -230,17 +230,17 @@ impl StringCommand {
 
     pub async fn string_del(self, key: &str) -> RocksResult<()> {
         let client = get_client();
-        let ekey = KEY_ENCODER.encode_raw_kv_string(key);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         client.del(ekey)
     }
 
     pub fn txn_string_del(&self, txn: &Transaction<TransactionDB>, key: &str) -> RocksResult<()> {
-        let ekey = KEY_ENCODER.encode_raw_kv_string(key);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         txn.delete(ekey).map_err(|e| e.into())
     }
 
     pub fn txn_expire_if_needed(self, txn: &Transaction<TransactionDB>, key: &str) -> RocksResult<()> {
-        let ekey = KEY_ENCODER.encode_raw_kv_string(key);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         if let Some(v) = txn.get(ekey.clone())? {
             let ttl = KeyDecoder::decode_key_ttl(&v);
             if key_is_expired(ttl) {
@@ -254,7 +254,7 @@ impl StringCommand {
         let client = get_client();
         let key = key.to_owned();
         let timestamp = timestamp;
-        let ekey = KEY_ENCODER.encode_raw_kv_string(&key);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(&key);
         let resp = client.exec_txn(move |txn| {
             match txn.get(ekey.clone())? {
                 Some(meta_value) => {
@@ -297,7 +297,7 @@ impl StringCommand {
     pub async fn ttl(self, key: &str, is_millis: bool) -> RocksResult<Frame> {
         let client = get_client();
         let key = key.to_owned();
-        let ekey = KEY_ENCODER.encode_raw_kv_string(&key);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(&key);
         client.exec_txn(move |txn| {
             match txn.get(ekey.clone())? {
                 Some(meta_value) => {
@@ -373,7 +373,7 @@ impl StringCommand {
         regex: &str,
     ) -> RocksResult<Frame> {
         let client = get_client();
-        let ekey = KEY_ENCODER.encode_raw_kv_string(start);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(start);
         let re = Regex::new(regex).unwrap();
         client.exec_txn(move |txn| {
             let mut keys = vec![];
