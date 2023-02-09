@@ -46,6 +46,12 @@ pub use del::Del;
 mod scan;
 pub use scan::Scan;
 
+mod sadd;
+pub use sadd::Sadd;
+
+mod scard;
+pub use scard::Scard;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -74,6 +80,10 @@ pub enum Command {
     TTL(TTL),
     PTTL(TTL),
     Scan(Scan),
+
+    // set
+    Sadd(Sadd),
+    Scard(Scard),
 
     Unknown(Unknown),
 }
@@ -148,6 +158,8 @@ impl Command {
             "ttl" => Command::TTL(transform_parse(TTL::parse_frames(&mut parse), &mut parse)),
             "pttl" => Command::PTTL(transform_parse(TTL::parse_frames(&mut parse), &mut parse)),
             "scan" => Command::Scan(transform_parse(Scan::parse_frames(&mut parse), &mut parse)),
+            "sadd" => Command::Sadd(transform_parse(Sadd::parse_frames(&mut parse), &mut parse)),
+            "scard" => Command::Scard(transform_parse(Scard::parse_frames(&mut parse), &mut parse)),
 
             _ => {
                 // The command is not recognized and an Unknown command is
@@ -202,6 +214,8 @@ impl Command {
             TTL(cmd) => cmd.apply(dst, false).await,
             PTTL(cmd) => cmd.apply(dst, true).await,
             Scan(cmd) => cmd.apply(dst).await,
+            Sadd(cmd) => cmd.apply(dst).await,
+            Scard(cmd) => cmd.apply(dst).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
             // `Unsubscribe` cannot be applied. It may only be received from the
@@ -234,6 +248,8 @@ impl Command {
             Command::TTL(_) => "ttl",
             Command::PTTL(_) => "pttl",
             Command::Scan(_) => "scan",
+            Command::Sadd(_) => "sadd",
+            Command::Scard(_) => "scard",
             Command::Unknown(cmd) => cmd.get_name(),
         }
     }

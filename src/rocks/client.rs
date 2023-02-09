@@ -1,11 +1,12 @@
 use std::sync::Arc;
 use rocksdb::{Transaction, TransactionDB, WriteBatchWithTransaction};
+use crate::config::async_deletion_enabled_or_default;
 
-use crate::rocks::errors::TXN_ERROR;
+use crate::rocks::errors::{KEY_VERSION_EXHUSTED_ERR, TXN_ERROR};
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{KEY_ENCODER, Result as RocksResult};
 
 pub struct RocksRawClient {
     client: Arc<TransactionDB>,
@@ -81,4 +82,29 @@ impl RocksRawClient {
         }
         Ok(res)
     }
+}
+
+// get_version_for_new must be called outside of a MutexGuard, otherwise it will deadlock.
+pub fn get_version_for_new(txn: &Transaction<TransactionDB>, key: &str) -> RocksResult<u16> {
+    // check if async deletion is enabled, return ASAP if not
+    if !async_deletion_enabled_or_default() {
+        return Ok(0);
+    }
+
+    let gc_key = KEY_ENCODER.encode_txn_kv_gc_key(key);
+    let next_version = txn.get(gc_key)?.map_or_else(
+        || 0,
+        |v| {
+            let version = u16::from_be_bytes(v[..].try_into().unwrap());
+            if version == u16::MAX {
+                0
+            } else {
+                version + 1
+            }
+        },
+    );
+    // check next version available
+    let gc_version_key = KEY_ENCODER.encode_txn_kv_gc_version_key(key, next_version);
+    txn.get(gc_version_key)?
+        .map_or_else(|| Ok(next_version), |_| Err(KEY_VERSION_EXHUSTED_ERR))
 }

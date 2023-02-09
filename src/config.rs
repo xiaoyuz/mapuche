@@ -95,3 +95,30 @@ pub fn config_meta_key_number_or_default() -> u16 {
     // default metakey split number
     100
 }
+
+pub fn async_expire_set_threshold_or_default() -> u32 {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.async_expire_set_threshold {
+                return b;
+            }
+        }
+    }
+    if async_deletion_enabled_or_default() {
+        1000
+    } else {
+        u32::MAX
+    }
+}
+
+pub fn async_deletion_enabled_or_default() -> bool {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.async_deletion_enabled {
+                return b;
+            }
+        }
+    }
+    // default async deletion enabled
+    true
+}

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::Frame;
 use crate::rocks::errors::RError;
@@ -67,4 +68,8 @@ pub fn ttl_from_timestamp(timestamp: i64) -> i64 {
 
 pub async fn sleep(ms: u32) {
     tokio::time::sleep(Duration::from_millis(ms as u64)).await;
+}
+
+pub fn count_unique_keys<T: std::hash::Hash + Eq>(keys: &[T]) -> usize {
+    keys.iter().collect::<HashSet<&T>>().len()
 }

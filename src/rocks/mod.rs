@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use lazy_static::lazy_static;
 use rocksdb::{Direction, IteratorMode, Transaction, TransactionDB};
+use crate::config::config_meta_key_number_or_default;
+use crate::fetch_idx_and_add;
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::errors::{RError};
 use crate::rocks::encoding::KeyEncoder;
@@ -48,15 +50,11 @@ pub fn tx_scan(
     let bound_range = range.into();
     let (start, end) = bound_range.into_keys();
     let start: Vec<u8> = start.into();
-    let it = txn.iterator(
-        IteratorMode::From(&start, Direction::Forward)
-    );
+    let it = txn.prefix_iterator(&start);
     let end_it_key = end
         .map(|e| {
             let e_vec: Vec<u8> = e.into();
-            txn.iterator(
-                IteratorMode::From(&e_vec, Direction::Forward)
-            )
+            txn.prefix_iterator(&e_vec)
         })
         .and_then(|mut it| it.next())
         .and_then(|res| res.ok()).map(|kv| kv.0);
@@ -75,6 +73,46 @@ pub fn tx_scan(
         }
     }
     Ok(kv_pairs.into_iter())
+}
+
+pub fn tx_scan_keys(
+    txn: &Transaction<TransactionDB>,
+    range: impl Into<BoundRange>,
+    limit: u32,
+) -> Result<impl Iterator<Item=Key>> {
+    let bound_range = range.into();
+    let (start, end) = bound_range.into_keys();
+    let start: Vec<u8> = start.into();
+    let it = txn.iterator(
+        IteratorMode::From(&start, Direction::Forward)
+    );
+    let end_it_key = end
+        .map(|e| {
+            let e_vec: Vec<u8> = e.into();
+            txn.iterator(
+                IteratorMode::From(&e_vec, Direction::Forward)
+            )
+        })
+        .and_then(|mut it| it.next())
+        .and_then(|res| res.ok()).map(|kv| kv.0);
+
+    let mut keys: Vec<Key> = Vec::new();
+    for inner in it {
+        if let Ok(kv_bytes) = inner {
+            keys.push(kv_bytes.0.to_vec().into());
+            if Some(kv_bytes.0) == end_it_key {
+                break;
+            }
+        }
+        if keys.len() >= limit as usize {
+            break;
+        }
+    }
+    Ok(keys.into_iter())
+}
+
+pub fn gen_next_meta_index() -> u16 {
+    fetch_idx_and_add() % config_meta_key_number_or_default()
 }
 
 #[cfg(test)]
@@ -121,19 +159,18 @@ mod tests {
     fn test_scan() {
         let db = TransactionDB::open_default(".rocksdb_store").unwrap();
         let mut batch = WriteBatchWithTransaction::default();
-        batch.put(b"test000001", b"t1");
-        batch.put(b"test000002", b"t2");
-        batch.put(b"test000010", b"t3");
-        batch.put(b"test001111", b"t4");
-        batch.put(b"yyyyy", b"a1");
+        batch.put(b"aaa0", b"t1");
+        batch.put(b"aaa1", b"t2");
+        batch.put(b"aaa0123", b"t3");
         db.write(batch).unwrap();
 
         let txn = db.transaction();
-        let start_key: Key = Key::from("test000001".to_owned());
-        let end_key: Key = Key::from("test001111".to_owned());
+
+        let start_key: Key = Key::from("aaa0".to_owned());
+        let end_key: Key = Key::from("aaa1".to_owned());
         let bound_range: BoundRange = (start_key..end_key).into();
 
-        let it = tx_scan(&txn, bound_range, 2).unwrap();
+        let it = tx_scan(&txn, bound_range, 100).unwrap();
         for inner in it {
             println!("{inner:?}");
         }

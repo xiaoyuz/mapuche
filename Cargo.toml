@@ -17,7 +17,6 @@ path = "src/bin/server.rs"
 async-stream = "0.3.0"
 atoi = "2.0.0"
 bytes = "1"
-rand = "0.8.5"
 clap = { version = "3.1.18", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
@@ -38,6 +37,7 @@ serde = { version = "1.0", features = ["derive"] }
 lazy_static = "1.4.0"
 futures = { version = "0.3" }
 regex = "1"
+rand = {version = "0.8.5", features = ["small_rng"] }
 
 [dev-dependencies]
 # Enable test-utilities in dev mode only. This is mostly for tests.

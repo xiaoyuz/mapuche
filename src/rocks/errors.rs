@@ -59,3 +59,4 @@ pub const REDIS_COMPARE_AND_SWAP_EXHAUSTED_ERR: RError =
     RError::String("ERR compare-and-swap exhausted");
 pub const DECREMENT_OVERFLOW: RError = RError::String("Decrement would overflow");
 pub const TXN_ERROR: RError = RError::String("Txn commit failed");
+pub const KEY_VERSION_EXHUSTED_ERR: RError = RError::String("ERR key version exhausted");
