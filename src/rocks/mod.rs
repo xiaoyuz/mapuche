@@ -132,6 +132,39 @@ pub fn tx_scan_cf(
     Ok(kv_pairs.into_iter())
 }
 
+pub fn tx_scan_keys_cf(
+    txn: &Transaction<TransactionDB>,
+    cf_handle: &impl AsColumnFamilyRef,
+    range: impl Into<BoundRange>,
+    limit: u32,
+) -> Result<impl Iterator<Item=Key>> {
+    let bound_range = range.into();
+    let (start, end) = bound_range.into_keys();
+    let start: Vec<u8> = start.into();
+    let it = txn.prefix_iterator_cf(cf_handle, &start);
+    let end_it_key = end
+        .map(|e| {
+            let e_vec: Vec<u8> = e.into();
+            txn.prefix_iterator_cf(cf_handle, &e_vec)
+        })
+        .and_then(|mut it| it.next())
+        .and_then(|res| res.ok()).map(|kv| kv.0);
+
+    let mut keys: Vec<Key> = Vec::new();
+    for inner in it {
+        if let Ok(kv_bytes) = inner {
+            keys.push(kv_bytes.0.to_vec().into());
+            if Some(kv_bytes.0) == end_it_key {
+                break;
+            }
+        }
+        if keys.len() >= limit as usize {
+            break;
+        }
+    }
+    Ok(keys.into_iter())
+}
+
 pub fn tx_scan_keys(
     txn: &Transaction<TransactionDB>,
     range: impl Into<BoundRange>,

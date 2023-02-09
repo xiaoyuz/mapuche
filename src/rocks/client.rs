@@ -2,7 +2,7 @@ use std::sync::Arc;
 use rocksdb::{BoundColumnFamily, Transaction, TransactionDB, WriteBatchWithTransaction};
 use crate::config::async_deletion_enabled_or_default;
 
-use crate::rocks::errors::{KEY_VERSION_EXHUSTED_ERR, TXN_ERROR};
+use crate::rocks::errors::{CF_NOT_EXISTS_ERR, KEY_VERSION_EXHUSTED_ERR, TXN_ERROR};
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
@@ -19,28 +19,36 @@ impl RocksRawClient {
         }
     }
 
-    pub fn get(&self, key: Key) -> RocksResult<Option<Value>> {
+    pub fn get(&self, cf: &str, key: Key) -> RocksResult<Option<Value>> {
         let client = self.client.clone();
+        let cf = self.cf_handle(cf)?;
         let key: Vec<u8> = key.into();
-        client.get(key).map_err(|e| e.into())
+        client.get_cf(&cf, key).map_err(|e| e.into())
     }
 
-    pub fn put(&self, key: Key, value: Value) -> RocksResult<()> {
+    pub fn put(&self, cf: &str, key: Key, value: Value) -> RocksResult<()> {
         let client = self.client.clone();
+        let cf = self.cf_handle(cf)?;
         let key: Vec<u8> = key.into();
         let value: Vec<u8> = value;
-        client.put(key, value).map_err(|e| e.into())
+        client.put_cf(&cf, key, value).map_err(|e| e.into())
     }
 
-    pub fn del(&self, key: Key) -> RocksResult<()> {
+    pub fn del(&self, cf: &str, key: Key) -> RocksResult<()> {
         let client = self.client.clone();
+        let cf = self.cf_handle(cf)?;
         let key: Vec<u8> = key.into();
-        client.delete(key).map_err(|e| e.into())
+        client.delete_cf(&cf, key).map_err(|e| e.into())
     }
 
-    pub fn batch_get(&self, keys: Vec<Key>) -> RocksResult<Vec<KvPair>> {
+    pub fn batch_get(&self, cf: &str, keys: Vec<Key>) -> RocksResult<Vec<KvPair>> {
         let client = self.client.clone();
-        let results = client.multi_get(&keys);
+        let cf = self.cf_handle(cf)?;
+
+        let cf_key_pairs = keys.clone().into_iter().map(|k| (&cf, k))
+            .collect::<Vec<(&Arc<BoundColumnFamily>, Key)>>();
+
+        let results = client.multi_get_cf(cf_key_pairs);
         let mut kvpairs = Vec::new();
         for i in 0..results.len() {
             match results.get(i).unwrap() {
@@ -58,17 +66,19 @@ impl RocksRawClient {
         Ok(kvpairs)
     }
 
-    pub fn batch_put(&self, kvs: Vec<KvPair>) -> RocksResult<()> {
+    pub fn batch_put(&self, cf: &str, kvs: Vec<KvPair>) -> RocksResult<()> {
         let client = self.client.clone();
+        let cf = self.cf_handle(cf)?;
+
         let mut write_batch = WriteBatchWithTransaction::default();
         for kv in kvs {
-            write_batch.put(kv.0, kv.1);
+            write_batch.put_cf(&cf, kv.0, kv.1);
         }
         client.write(write_batch).map_err(|e| e.into())
     }
 
-    pub fn cf_handle(&self, name: &str) -> Option<Arc<BoundColumnFamily>> {
-        self.client.cf_handle(name)
+    pub fn cf_handle(&self, name: &str) -> RocksResult<Arc<BoundColumnFamily>> {
+        self.client.cf_handle(name).ok_or_else(|| CF_NOT_EXISTS_ERR)
     }
 
     pub fn exec_txn<T, F>(
@@ -77,7 +87,7 @@ impl RocksRawClient {
     ) -> RocksResult<T>
     where
         T: Send + Sync + 'static,
-        F: FnOnce(&Transaction<TransactionDB>) -> RocksResult<T> + Send + 'static {
+        F: FnOnce(&Transaction<TransactionDB>) -> RocksResult<T> {
         let client = self.client.clone();
         let txn = client.transaction();
         let res = f(&txn)?;
