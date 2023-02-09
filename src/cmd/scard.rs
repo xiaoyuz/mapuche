@@ -1,7 +1,7 @@
 use crate::{Connection, Frame, Parse};
 
 use bytes::Bytes;
-use tracing::{debug, instrument};
+use tracing::{debug};
 use crate::cmd::Invalid;
 
 use crate::rocks::Result as RocksResult;

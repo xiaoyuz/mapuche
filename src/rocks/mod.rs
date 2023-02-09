@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+
 use std::sync::Arc;
 use lazy_static::lazy_static;
-use rocksdb::{AsColumnFamilyRef, BoundColumnFamily, Direction, IteratorMode, MultiThreaded, Options, Transaction, TransactionDB, TransactionDBOptions};
+use rocksdb::{AsColumnFamilyRef, Direction, IteratorMode, MultiThreaded, Options, Transaction, TransactionDB, TransactionDBOptions};
 use crate::config::config_meta_key_number_or_default;
 use crate::fetch_idx_and_add;
 use crate::rocks::client::RocksRawClient;
@@ -36,7 +36,7 @@ lazy_static! {
 
 fn new_db() -> Result<TransactionDB<MultiThreaded>> {
     let mut opts = Options::default();
-    let mut transaction_opts = TransactionDBOptions::default();
+    let transaction_opts = TransactionDBOptions::default();
     opts.create_if_missing(true);
     opts.create_missing_column_families(true);
 
@@ -77,7 +77,7 @@ pub fn tx_scan(
     let end_it_key = end
         .map(|e| {
             let e_vec: Vec<u8> = e.into();
-            txn.prefix_iterator(&e_vec)
+            txn.prefix_iterator(e_vec)
         })
         .and_then(|mut it| it.next())
         .and_then(|res| res.ok()).map(|kv| kv.0);
@@ -111,7 +111,7 @@ pub fn tx_scan_cf(
     let end_it_key = end
         .map(|e| {
             let e_vec: Vec<u8> = e.into();
-            txn.prefix_iterator_cf(cf_handle, &e_vec)
+            txn.prefix_iterator_cf(cf_handle, e_vec)
         })
         .and_then(|mut it| it.next())
         .and_then(|res| res.ok()).map(|kv| kv.0);
@@ -145,7 +145,7 @@ pub fn tx_scan_keys_cf(
     let end_it_key = end
         .map(|e| {
             let e_vec: Vec<u8> = e.into();
-            txn.prefix_iterator_cf(cf_handle, &e_vec)
+            txn.prefix_iterator_cf(cf_handle, e_vec)
         })
         .and_then(|mut it| it.next())
         .and_then(|res| res.ok()).map(|kv| kv.0);
@@ -210,7 +210,7 @@ mod tests {
     use rocksdb::{Direction, IteratorMode, MultiThreaded, Options, TransactionDB, TransactionDBOptions, WriteBatchWithTransaction};
     use crate::rocks::kv::bound_range::BoundRange;
     use crate::rocks::kv::key::Key;
-    use crate::rocks::{tx_scan, tx_scan_cf};
+    use crate::rocks::{tx_scan_cf};
 
     #[test]
     fn test_rocksdb() {
@@ -251,7 +251,7 @@ mod tests {
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
 
-        let mut transaction_opts = TransactionDBOptions::default();
+        let transaction_opts = TransactionDBOptions::default();
 
         let db: TransactionDB<MultiThreaded> = TransactionDB::open_cf(&opts, &transaction_opts, ".rocksdb_store", ["cf1", "cf2"]).unwrap();
 
