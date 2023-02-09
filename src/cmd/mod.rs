@@ -43,6 +43,9 @@ pub use ttl::TTL;
 mod del;
 pub use del::Del;
 
+mod scan;
+pub use scan::Scan;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -70,6 +73,7 @@ pub enum Command {
     PexpireAt(Expire),
     TTL(TTL),
     PTTL(TTL),
+    Scan(Scan),
 
     Unknown(Unknown),
 }
@@ -143,6 +147,7 @@ impl Command {
             )),
             "ttl" => Command::TTL(transform_parse(TTL::parse_frames(&mut parse), &mut parse)),
             "pttl" => Command::PTTL(transform_parse(TTL::parse_frames(&mut parse), &mut parse)),
+            "scan" => Command::Scan(transform_parse(Scan::parse_frames(&mut parse), &mut parse)),
 
             _ => {
                 // The command is not recognized and an Unknown command is
@@ -196,6 +201,7 @@ impl Command {
             PexpireAt(cmd) => cmd.apply(dst, true, true).await,
             TTL(cmd) => cmd.apply(dst, false).await,
             PTTL(cmd) => cmd.apply(dst, true).await,
+            Scan(cmd) => cmd.apply(dst).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
             // `Unsubscribe` cannot be applied. It may only be received from the
@@ -227,6 +233,7 @@ impl Command {
             Command::PexpireAt(_) => "pexpireat",
             Command::TTL(_) => "ttl",
             Command::PTTL(_) => "pttl",
+            Command::Scan(_) => "scan",
             Command::Unknown(cmd) => cmd.get_name(),
         }
     }

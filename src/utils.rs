@@ -26,6 +26,10 @@ pub fn resp_bulk(val: Vec<u8>) -> Frame {
     Frame::Bulk(val.into())
 }
 
+pub fn resp_array(val: Vec<Frame>) -> Frame {
+    Frame::Array(val)
+}
+
 pub fn resp_int(val: i64) -> Frame {
     Frame::Integer(val)
 }

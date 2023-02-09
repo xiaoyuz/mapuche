@@ -40,7 +40,7 @@ pub fn get_client() -> RocksRawClient {
     RocksRawClient::new(db)
 }
 
-pub fn blocking_tx_scan(
+pub fn tx_scan(
     txn: &Transaction<TransactionDB>,
     range: impl Into<BoundRange>,
     limit: u32,
@@ -82,7 +82,7 @@ mod tests {
     use rocksdb::{Direction, IteratorMode, TransactionDB, WriteBatchWithTransaction};
     use crate::rocks::kv::bound_range::BoundRange;
     use crate::rocks::kv::key::Key;
-    use crate::rocks::blocking_tx_scan;
+    use crate::rocks::tx_scan;
 
     #[test]
     fn test_rocksdb() {
@@ -133,7 +133,7 @@ mod tests {
         let end_key: Key = Key::from("test001111".to_owned());
         let bound_range: BoundRange = (start_key..end_key).into();
 
-        let it = blocking_tx_scan(&txn, bound_range, 2).unwrap();
+        let it = tx_scan(&txn, bound_range, 2).unwrap();
         for inner in it {
             println!("{inner:?}");
         }
