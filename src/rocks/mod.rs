@@ -19,10 +19,10 @@ pub mod kv;
 pub mod encoding;
 pub mod set;
 
+pub const CF_NAME_GC: &str = "gc";
 pub const CF_NAME_STRING_DATA: &str = "string_data";
 pub const CF_NAME_SET_META: &str = "set_meta";
 pub const CF_NAME_SET_SUB_META: &str = "set_sub_meta";
-pub const CF_NAME_SET_GC: &str = "set_gc";
 pub const CF_NAME_SET_DATA: &str = "set_data";
 
 pub type Result<T> = std::result::Result<T, RError>;
@@ -42,7 +42,7 @@ fn new_db() -> Result<TransactionDB<MultiThreaded>> {
 
     let cf_names = vec![
         CF_NAME_STRING_DATA,
-        CF_NAME_SET_META, CF_NAME_SET_SUB_META, CF_NAME_SET_GC, CF_NAME_SET_DATA,
+        CF_NAME_SET_META, CF_NAME_SET_SUB_META, CF_NAME_GC, CF_NAME_SET_DATA,
     ];
 
     TransactionDB::open_cf(
@@ -146,42 +146,6 @@ pub fn tx_scan_keys_cf(
         .map(|e| {
             let e_vec: Vec<u8> = e.into();
             txn.prefix_iterator_cf(cf_handle, e_vec)
-        })
-        .and_then(|mut it| it.next())
-        .and_then(|res| res.ok()).map(|kv| kv.0);
-
-    let mut keys: Vec<Key> = Vec::new();
-    for inner in it {
-        if let Ok(kv_bytes) = inner {
-            keys.push(kv_bytes.0.to_vec().into());
-            if Some(kv_bytes.0) == end_it_key {
-                break;
-            }
-        }
-        if keys.len() >= limit as usize {
-            break;
-        }
-    }
-    Ok(keys.into_iter())
-}
-
-pub fn tx_scan_keys(
-    txn: &Transaction<TransactionDB>,
-    range: impl Into<BoundRange>,
-    limit: u32,
-) -> Result<impl Iterator<Item=Key>> {
-    let bound_range = range.into();
-    let (start, end) = bound_range.into_keys();
-    let start: Vec<u8> = start.into();
-    let it = txn.iterator(
-        IteratorMode::From(&start, Direction::Forward)
-    );
-    let end_it_key = end
-        .map(|e| {
-            let e_vec: Vec<u8> = e.into();
-            txn.iterator(
-                IteratorMode::From(&e_vec, Direction::Forward)
-            )
         })
         .and_then(|mut it| it.next())
         .and_then(|res| res.ok()).map(|kv| kv.0);

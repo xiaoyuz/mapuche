@@ -99,14 +99,18 @@ impl RocksRawClient {
 }
 
 // get_version_for_new must be called outside of a MutexGuard, otherwise it will deadlock.
-pub fn get_version_for_new(txn: &Transaction<TransactionDB>, key: &str) -> RocksResult<u16> {
+pub fn get_version_for_new(
+    txn: &Transaction<TransactionDB>,
+    gc_cf: &Arc<BoundColumnFamily>,
+    key: &str
+) -> RocksResult<u16> {
     // check if async deletion is enabled, return ASAP if not
     if !async_deletion_enabled_or_default() {
         return Ok(0);
     }
 
     let gc_key = KEY_ENCODER.encode_txn_kv_gc_key(key);
-    let next_version = txn.get(gc_key)?.map_or_else(
+    let next_version = txn.get_cf(gc_cf, gc_key)?.map_or_else(
         || 0,
         |v| {
             let version = u16::from_be_bytes(v[..].try_into().unwrap());
@@ -119,6 +123,6 @@ pub fn get_version_for_new(txn: &Transaction<TransactionDB>, key: &str) -> Rocks
     );
     // check next version available
     let gc_version_key = KEY_ENCODER.encode_txn_kv_gc_version_key(key, next_version);
-    txn.get(gc_version_key)?
+    txn.get_cf(gc_cf, gc_version_key)?
         .map_or_else(|| Ok(next_version), |_| Err(KEY_VERSION_EXHUSTED_ERR))
 }

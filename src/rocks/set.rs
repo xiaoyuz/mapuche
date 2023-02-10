@@ -2,7 +2,7 @@ use std::sync::Arc;
 use rocksdb::{BoundColumnFamily, Transaction, TransactionDB};
 use crate::config::async_expire_set_threshold_or_default;
 use crate::Frame;
-use crate::rocks::{CF_NAME_SET_DATA, CF_NAME_SET_GC, CF_NAME_SET_META, CF_NAME_SET_SUB_META, gen_next_meta_index, get_client, KEY_ENCODER, Result as RocksResult, tx_scan_cf, tx_scan_keys_cf};
+use crate::rocks::{CF_NAME_SET_DATA, CF_NAME_GC, CF_NAME_SET_META, CF_NAME_SET_SUB_META, gen_next_meta_index, get_client, KEY_ENCODER, Result as RocksResult, tx_scan_cf, tx_scan_keys_cf};
 use crate::rocks::client::{get_version_for_new, RocksRawClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::REDIS_WRONG_TYPE_ERR;
@@ -21,7 +21,7 @@ impl<'a> SetCF<'a> {
         SetCF {
             meta_cf: client.cf_handle(CF_NAME_SET_META).unwrap(),
             sub_meta_cf: client.cf_handle(CF_NAME_SET_SUB_META).unwrap(),
-            gc_cf: client.cf_handle(CF_NAME_SET_GC).unwrap(),
+            gc_cf: client.cf_handle(CF_NAME_GC).unwrap(),
             data_cf: client.cf_handle(CF_NAME_SET_DATA).unwrap(),
         }
     }
@@ -83,7 +83,7 @@ impl SetCommand {
                         self.clone()
                             .txn_expire_if_needed(txn, &cfs, &key)?;
                         expired = true;
-                        version = get_version_for_new(txn, &key)?;
+                        version = get_version_for_new(txn, &cfs.gc_cf, &key)?;
                     }
                     let mut member_data_keys = Vec::with_capacity(members.len());
                     for m in &members {
@@ -133,7 +133,7 @@ impl SetCommand {
                     Ok(added)
                 }
                 None => {
-                    let version = get_version_for_new(txn, &key)?;
+                    let version = get_version_for_new(txn, &cfs.gc_cf, &key)?;
                     // create new meta key and meta value
                     for m in &members {
                         // check member already exists
