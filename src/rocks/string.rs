@@ -6,6 +6,7 @@ use regex::bytes::Regex;
 use rocksdb::{ColumnFamilyRef, Transaction, TransactionDB};
 use crate::Frame;
 use crate::rocks::{tx_scan, get_client, KEY_ENCODER, CF_NAME_STRING_DATA};
+use crate::rocks::client::RocksRawClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{REDIS_WRONG_TYPE_ERR, RError};
 use crate::rocks::kv::bound_range::BoundRange;
@@ -16,6 +17,18 @@ use crate::rocks::kv::value::Value;
 use crate::rocks::Result as RocksResult;
 use crate::utils::{key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil, resp_ok, resp_str, ttl_from_timestamp};
 
+pub struct StringCF<'a> {
+    data_cf: ColumnFamilyRef<'a>,
+}
+
+impl<'a> StringCF<'a> {
+    pub fn new(client: &'a RocksRawClient) -> Self {
+        StringCF {
+            data_cf: client.cf_handle(CF_NAME_STRING_DATA).unwrap(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct StringCommand;
 
@@ -23,8 +36,9 @@ impl StringCommand {
 
     pub async fn get(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
+        let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        match client.get(CF_NAME_STRING_DATA, ekey.clone())? {
+        match client.get(cfs.data_cf.clone(), ekey.clone())? {
             Some(val) => {
                 let dt = KeyDecoder::decode_key_type(&val);
                 if !matches!(dt, DataType::String) {
@@ -34,7 +48,7 @@ impl StringCommand {
                 let ttl = KeyDecoder::decode_key_ttl(&val);
                 if key_is_expired(ttl) {
                     // delete key
-                    client.del(CF_NAME_STRING_DATA, ekey)?;
+                    client.del(cfs.data_cf, ekey)?;
                     return Ok(resp_nil());
                 }
                 let data = KeyDecoder::decode_key_string_value(&val);
@@ -46,14 +60,15 @@ impl StringCommand {
 
     pub async fn get_type(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
+        let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        match client.get(CF_NAME_STRING_DATA, ekey.clone())? {
+        match client.get(cfs.data_cf.clone(), ekey.clone())? {
             Some(val) => {
                 // ttl saved in milliseconds
                 let ttl = KeyDecoder::decode_key_ttl(&val);
                 if key_is_expired(ttl) {
                     // delete key
-                    client.del(CF_NAME_STRING_DATA, ekey)?;
+                    client.del(cfs.data_cf.clone(), ekey)?;
                     return Ok(resp_str(&DataType::Null.to_string()));
                 }
                 Ok(resp_str(&KeyDecoder::decode_key_type(&val).to_string()))
@@ -64,8 +79,9 @@ impl StringCommand {
 
     pub async fn strlen(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
+        let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        match client.get(CF_NAME_STRING_DATA, ekey.clone())? {
+        match client.get(cfs.data_cf.clone(), ekey.clone())? {
             Some(val) => {
                 let dt = KeyDecoder::decode_key_type(&val);
                 if !matches!(dt, DataType::String) {
@@ -75,7 +91,7 @@ impl StringCommand {
                 let ttl = KeyDecoder::decode_key_ttl(&val);
                 if key_is_expired(ttl) {
                     // delete key
-                    client.del(CF_NAME_STRING_DATA, ekey)?;
+                    client.del(cfs.data_cf, ekey)?;
                     return Ok(resp_int(0));
                 }
                 let data = KeyDecoder::decode_key_string_value(&val);
@@ -87,16 +103,18 @@ impl StringCommand {
 
     pub async fn put(self, key: &str, val: &Bytes, timestamp: i64) -> RocksResult<Frame> {
         let client = get_client();
+        let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut val.to_vec(), timestamp);
-        client.put(CF_NAME_STRING_DATA, ekey, eval)?;
+        client.put(cfs.data_cf, ekey, eval)?;
         Ok(resp_ok())
     }
 
     pub async fn batch_get(self, keys: &[String]) -> RocksResult<Frame> {
         let client = get_client();
+        let cfs = StringCF::new(&client);
         let ekeys = KEY_ENCODER.encode_raw_kv_strings(keys);
-        let result = client.batch_get(CF_NAME_STRING_DATA, ekeys.clone())?;
+        let result = client.batch_get(cfs.data_cf.clone(), ekeys.clone())?;
         let ret: HashMap<Key, Value> = result.into_iter().map(|pair| (pair.0, pair.1)).collect();
 
         let values: Vec<Frame> = ekeys
@@ -109,7 +127,7 @@ impl StringCommand {
                         let ttl = KeyDecoder::decode_key_ttl(val);
                         if key_is_expired(ttl) {
                             // delete key
-                            client.del(CF_NAME_STRING_DATA, k).expect("remove outdated data failed");
+                            client.del(cfs.data_cf.clone(), k).expect("remove outdated data failed");
                             Frame::Null
                         } else {
                             let data = KeyDecoder::decode_key_string_value(val);
@@ -125,30 +143,31 @@ impl StringCommand {
 
     pub async fn batch_put(self, kvs: Vec<KvPair>) -> RocksResult<Frame> {
         let client = get_client();
-        client.batch_put(CF_NAME_STRING_DATA, kvs)?;
+        let cfs = StringCF::new(&client);
+        client.batch_put(cfs.data_cf, kvs)?;
         Ok(resp_ok())
     }
 
     pub async fn put_not_exists(self, key: &str, value: &Bytes) -> RocksResult<Frame> {
         let client = get_client();
-        let cf = client.cf_handle(CF_NAME_STRING_DATA)?;
+        let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut value.to_vec(), -1);
 
         let resp = client.exec_txn(|txn| {
-            match txn.get_cf(&cf, ekey.clone())? {
+            match txn.get_cf(&cfs.data_cf.clone(), ekey.clone())? {
                 Some(ref v) => {
                     let ttl = KeyDecoder::decode_key_ttl(v);
                     if key_is_expired(ttl) {
                         // no need to delete, just overwrite
-                        txn.put_cf(&cf, ekey, eval)?;
+                        txn.put_cf(&cfs.data_cf, ekey, eval)?;
                         Ok(1)
                     } else {
                         Ok(0)
                     }
                 }
                 None => {
-                    txn.put_cf(&cf, ekey, eval)?;
+                    txn.put_cf(&cfs.data_cf, ekey, eval)?;
                     Ok(1)
                 }
             }
@@ -168,8 +187,9 @@ impl StringCommand {
 
     pub async fn exists(self, keys: &[String]) -> RocksResult<Frame> {
         let client = get_client();
+        let cfs = StringCF::new(&client);
         let ekeys = KEY_ENCODER.encode_raw_kv_strings(keys);
-        let result = client.batch_get(CF_NAME_STRING_DATA, ekeys.clone())?;
+        let result = client.batch_get(cfs.data_cf.clone(), ekeys.clone())?;
         let ret: HashMap<Key, Value> = result.into_iter().map(|pair| (pair.0, pair.1)).collect();
         let mut nums = 0;
         for k in ekeys {
@@ -179,7 +199,7 @@ impl StringCommand {
                 let ttl = KeyDecoder::decode_key_ttl(val);
                 if key_is_expired(ttl) {
                     // delete key
-                    client.del(CF_NAME_STRING_DATA, k)?;
+                    client.del(cfs.data_cf.clone(), k)?;
                 } else {
                     nums += 1;
                 }
@@ -191,12 +211,12 @@ impl StringCommand {
     // TODO: All actions should in txn
     pub async fn incr(self, key: &str, step: i64) -> RocksResult<Frame> {
         let client = get_client();
-        let cf = client.cf_handle(CF_NAME_STRING_DATA)?;
+        let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         let the_key = ekey.clone();
 
         let resp = client.exec_txn(|txn| {
-            match txn.get_cf(&cf, the_key.clone())? {
+            match txn.get_cf(&cfs.data_cf.clone(), the_key.clone())? {
                 Some(val) => {
                     let dt = KeyDecoder::decode_key_type(&val);
                     if !matches!(dt, DataType::String) {
@@ -206,7 +226,7 @@ impl StringCommand {
                     let ttl = KeyDecoder::decode_key_ttl(&val);
                     if key_is_expired(ttl) {
                         // delete key
-                        txn.delete_cf(&cf, the_key)?;
+                        txn.delete_cf(&cfs.data_cf.clone(), the_key)?;
                         Ok((0, None))
                     } else {
                         let current_value = KeyDecoder::decode_key_string_slice(&val);
@@ -228,14 +248,15 @@ impl StringCommand {
         let new_int = prev_int + step;
         let new_val = new_int.to_string();
         let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut new_val.as_bytes().to_vec(), 0);
-        client.put(CF_NAME_STRING_DATA, ekey, eval)?;
+        client.put(cfs.data_cf, ekey, eval)?;
         Ok(resp_int(new_int))
     }
 
     pub async fn string_del(self, key: &str) -> RocksResult<()> {
         let client = get_client();
+        let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        client.del(CF_NAME_STRING_DATA, ekey)
+        client.del(cfs.data_cf, ekey)
     }
 
     pub fn txn_string_del(&self, txn: &Transaction<TransactionDB>, cf: ColumnFamilyRef, key: &str) -> RocksResult<()> {
@@ -261,12 +282,12 @@ impl StringCommand {
 
     pub async fn expire(self, key: &str, timestamp: i64) -> RocksResult<Frame> {
         let client = get_client();
-        let cf = client.cf_handle(CF_NAME_STRING_DATA)?;
+        let cfs = StringCF::new(&client);
         let key = key.to_owned();
         let timestamp = timestamp;
         let ekey = KEY_ENCODER.encode_txn_kv_string(&key);
         let resp = client.exec_txn(move |txn| {
-            match txn.get_cf(&cf, ekey.clone())? {
+            match txn.get_cf(&cfs.data_cf.clone(), ekey.clone())? {
                 Some(meta_value) => {
                     let ttl = KeyDecoder::decode_key_ttl(&meta_value);
                     if timestamp == 0 && ttl == 0 {
@@ -280,13 +301,13 @@ impl StringCommand {
                         DataType::String => {
                             // check key expired
                             if key_is_expired(ttl) {
-                                self.txn_expire_if_needed(txn, cf, &key)?;
+                                self.txn_expire_if_needed(txn, cfs.data_cf.clone(), &key)?;
                                 return Ok(0);
                             }
                             let value = KeyDecoder::decode_key_string_slice(&meta_value);
                             let new_meta_value =
                                 KEY_ENCODER.encode_txn_kv_string_slice(value, timestamp);
-                            txn.put_cf(&cf, ekey, new_meta_value)?;
+                            txn.put_cf(&cfs.data_cf.clone(), ekey, new_meta_value)?;
                             Ok(1)
                         }
                         _ => {
@@ -306,18 +327,18 @@ impl StringCommand {
 
     pub async fn ttl(self, key: &str, is_millis: bool) -> RocksResult<Frame> {
         let client = get_client();
-        let cf = client.cf_handle(CF_NAME_STRING_DATA)?;
+        let cfs = StringCF::new(&client);
         let key = key.to_owned();
         let ekey = KEY_ENCODER.encode_txn_kv_string(&key);
         client.exec_txn(move |txn| {
-            match txn.get_cf(&cf, ekey.clone())? {
+            match txn.get_cf(&cfs.data_cf.clone(), ekey.clone())? {
                 Some(meta_value) => {
                     let dt = KeyDecoder::decode_key_type(&meta_value);
                     let ttl = KeyDecoder::decode_key_ttl(&meta_value);
                     if key_is_expired(ttl) {
                         match dt {
                             DataType::String => {
-                                self.txn_expire_if_needed(txn, cf, &key)?;
+                                self.txn_expire_if_needed(txn, cfs.data_cf.clone(), &key)?;
                             }
                             _ => {
                                 // TODO: add all types
@@ -342,13 +363,14 @@ impl StringCommand {
 
     pub async fn del(self, keys: &Vec<String>) -> RocksResult<Frame> {
         let client = get_client();
-        let cf = client.cf_handle(CF_NAME_STRING_DATA)?;
+        let cfs = StringCF::new(&client);
         let keys = keys.to_owned();
         let keys_len = keys.len();
         let resp = client.exec_txn(move |txn| {
             let mut dts = Vec::with_capacity(keys_len);
             let ekeys = KEY_ENCODER.encode_raw_kv_strings(&keys);
 
+            let cf = cfs.data_cf.clone();
             let cf_key_pairs = ekeys.clone().into_iter().map(|k| (&cf, k))
                 .collect::<Vec<(&ColumnFamilyRef, Key)>>();
 
@@ -364,7 +386,7 @@ impl StringCommand {
             for idx in 0..keys_len {
                 match dts[idx] {
                     DataType::String => {
-                        self.clone().txn_string_del(txn, cf.clone(), &keys[idx])?;
+                        self.clone().txn_string_del(txn, cfs.data_cf.clone(), &keys[idx])?;
                         resp += 1;
                     }
                     _ => {

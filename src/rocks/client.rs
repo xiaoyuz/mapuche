@@ -19,31 +19,27 @@ impl RocksRawClient {
         }
     }
 
-    pub fn get(&self, cf: &str, key: Key) -> RocksResult<Option<Value>> {
+    pub fn get(&self, cf: ColumnFamilyRef, key: Key) -> RocksResult<Option<Value>> {
         let client = self.client.clone();
-        let cf = self.cf_handle(cf)?;
         let key: Vec<u8> = key.into();
         client.get_cf(&cf, key).map_err(|e| e.into())
     }
 
-    pub fn put(&self, cf: &str, key: Key, value: Value) -> RocksResult<()> {
+    pub fn put(&self, cf: ColumnFamilyRef, key: Key, value: Value) -> RocksResult<()> {
         let client = self.client.clone();
-        let cf = self.cf_handle(cf)?;
         let key: Vec<u8> = key.into();
         let value: Vec<u8> = value;
         client.put_cf(&cf, key, value).map_err(|e| e.into())
     }
 
-    pub fn del(&self, cf: &str, key: Key) -> RocksResult<()> {
+    pub fn del(&self, cf: ColumnFamilyRef, key: Key) -> RocksResult<()> {
         let client = self.client.clone();
-        let cf = self.cf_handle(cf)?;
         let key: Vec<u8> = key.into();
         client.delete_cf(&cf, key).map_err(|e| e.into())
     }
 
-    pub fn batch_get(&self, cf: &str, keys: Vec<Key>) -> RocksResult<Vec<KvPair>> {
+    pub fn batch_get(&self, cf: ColumnFamilyRef, keys: Vec<Key>) -> RocksResult<Vec<KvPair>> {
         let client = self.client.clone();
-        let cf = self.cf_handle(cf)?;
 
         let cf_key_pairs = keys.clone().into_iter().map(|k| (&cf, k))
             .collect::<Vec<(&ColumnFamilyRef, Key)>>();
@@ -66,9 +62,8 @@ impl RocksRawClient {
         Ok(kvpairs)
     }
 
-    pub fn batch_put(&self, cf: &str, kvs: Vec<KvPair>) -> RocksResult<()> {
+    pub fn batch_put(&self, cf: ColumnFamilyRef, kvs: Vec<KvPair>) -> RocksResult<()> {
         let client = self.client.clone();
-        let cf = self.cf_handle(cf)?;
 
         let mut write_batch = WriteBatchWithTransaction::default();
         for kv in kvs {
