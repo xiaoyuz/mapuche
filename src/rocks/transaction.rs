@@ -83,11 +83,11 @@ impl<'a> RocksTransaction<'a> {
         let mut kv_pairs: Vec<KvPair> = Vec::new();
         for inner in it {
             if let Ok(kv_bytes) = inner {
-                let pair: (Key, Value) = (kv_bytes.0.to_vec().into(), kv_bytes.1.to_vec());
-                kv_pairs.push(pair.into());
-                if Some(kv_bytes.0) == end_it_key {
+                if Some(&kv_bytes.0) == end_it_key.as_ref() {
                     break;
                 }
+                let pair: (Key, Value) = (kv_bytes.0.to_vec().into(), kv_bytes.1.to_vec());
+                kv_pairs.push(pair.into());
             }
             if kv_pairs.len() >= limit as usize {
                 break;
@@ -117,10 +117,10 @@ impl<'a> RocksTransaction<'a> {
         let mut keys: Vec<Key> = Vec::new();
         for inner in it {
             if let Ok(kv_bytes) = inner {
-                keys.push(kv_bytes.0.to_vec().into());
-                if Some(kv_bytes.0) == end_it_key {
+                if Some(&kv_bytes.0) == end_it_key.as_ref() {
                     break;
                 }
+                keys.push(kv_bytes.0.to_vec().into());
             }
             if keys.len() >= limit as usize {
                 break;

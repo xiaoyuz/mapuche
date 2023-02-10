@@ -68,8 +68,6 @@ pub fn gen_next_meta_index() -> u16 {
 #[cfg(test)]
 mod tests {
     use rocksdb::{Direction, IteratorMode, TransactionDB, WriteBatchWithTransaction};
-    
-    
 
     #[test]
     fn test_rocksdb() {
