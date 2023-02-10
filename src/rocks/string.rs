@@ -15,6 +15,7 @@ use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::Result as RocksResult;
+use crate::rocks::set::SetCommand;
 use crate::rocks::transaction::RocksTransaction;
 use crate::utils::{key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil, resp_ok, resp_str, ttl_from_timestamp};
 
@@ -253,9 +254,10 @@ impl StringCommand {
         Ok(resp_int(new_int))
     }
 
-    pub fn txn_string_del(&self, txn: &RocksTransaction, cf: ColumnFamilyRef, key: &str) -> RocksResult<()> {
+    pub fn txn_string_del(&self, txn: &RocksTransaction, client: &RocksRawClient, key: &str) -> RocksResult<()> {
+        let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        txn.del(cf, ekey)
+        txn.del(cfs.data_cf, ekey)
     }
 
     pub fn txn_expire_if_needed(
@@ -359,7 +361,7 @@ impl StringCommand {
         let client = get_client();
         let cfs = StringCF::new(&client);
         let keys = keys.to_owned();
-        let resp = client.exec_txn(move |txn| {
+        let resp = client.exec_txn(|txn| {
             let ekeys = KEY_ENCODER.encode_raw_kv_strings(&keys);
             let ekey_map: HashMap<Key, String> = ekeys.clone().into_iter().zip(keys).collect();
             let cf = cfs.data_cf.clone();
@@ -373,7 +375,11 @@ impl StringCommand {
             for ekey in ekeys {
                 match dts.get(&ekey) {
                     Some(DataType::String) => {
-                        self.clone().txn_string_del(txn, cfs.data_cf.clone(), &ekey_map[&ekey])?;
+                        self.clone().txn_string_del(txn, &client, &ekey_map[&ekey])?;
+                        resp += 1;
+                    }
+                    Some(DataType::Set) => {
+                        SetCommand.txn_set_del(txn, &client, &ekey_map[&ekey])?;
                         resp += 1;
                     }
                     _ => {

@@ -122,3 +122,18 @@ pub fn async_deletion_enabled_or_default() -> bool {
     // default async deletion enabled
     true
 }
+
+pub fn async_del_set_threshold_or_default() -> u32 {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.async_del_set_threshold {
+                return b;
+            }
+        }
+    }
+    if async_deletion_enabled_or_default() {
+        1000
+    } else {
+        u32::MAX
+    }
+}

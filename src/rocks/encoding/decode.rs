@@ -1,5 +1,6 @@
 use crate::rocks::encoding::{DataType, ENC_GROUP_SIZE, ENC_MARKER, SIGN_MASK};
 use crate::rocks::encoding::encode::DATA_TYPE_META;
+use crate::rocks::KEY_ENCODER;
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
 
@@ -107,5 +108,12 @@ impl KeyDecoder {
         let idx = 4 + Self::encoded_bytes_len(&key[enc_key_start..]);
         let ukey = Self::decode_bytes(&key[enc_key_start..]);
         (ukey, key[idx] == DATA_TYPE_META && idx + 1 == key.len())
+    }
+
+    pub fn decode_key_set_member_from_datakey(ukey: &str, key: Key) -> Vec<u8> {
+        let key: Vec<u8> = key.into();
+        let enc_ukey = KEY_ENCODER.encode_bytes(ukey.as_bytes());
+        let idx = 8 + enc_ukey.len();
+        key[idx..].to_vec()
     }
 }

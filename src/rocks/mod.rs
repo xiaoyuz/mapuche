@@ -1,4 +1,3 @@
-
 use std::sync::Arc;
 use lazy_static::lazy_static;
 use rocksdb::{MultiThreaded, Options, TransactionDB, TransactionDBOptions};
@@ -7,11 +6,6 @@ use crate::fetch_idx_and_add;
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::errors::RError;
 use crate::rocks::encoding::KeyEncoder;
-
-
-
-
-
 
 pub mod client;
 pub mod errors;

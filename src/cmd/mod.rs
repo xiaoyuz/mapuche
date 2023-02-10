@@ -52,6 +52,12 @@ pub use sadd::Sadd;
 mod scard;
 pub use scard::Scard;
 
+mod sismember;
+pub use sismember::Sismember;
+
+mod smismember;
+pub use smismember:: Smismember;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -84,6 +90,8 @@ pub enum Command {
     // set
     Sadd(Sadd),
     Scard(Scard),
+    Sismember(Sismember),
+    Smismember(Smismember),
 
     Unknown(Unknown),
 }
@@ -160,6 +168,14 @@ impl Command {
             "scan" => Command::Scan(transform_parse(Scan::parse_frames(&mut parse), &mut parse)),
             "sadd" => Command::Sadd(transform_parse(Sadd::parse_frames(&mut parse), &mut parse)),
             "scard" => Command::Scard(transform_parse(Scard::parse_frames(&mut parse), &mut parse)),
+            "sismember" => Command::Sismember(transform_parse(
+                Sismember::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "smismember" => Command::Smismember(transform_parse(
+                Smismember::parse_frames(&mut parse),
+                &mut parse,
+            )),
 
             _ => {
                 // The command is not recognized and an Unknown command is
@@ -216,6 +232,8 @@ impl Command {
             Scan(cmd) => cmd.apply(dst).await,
             Sadd(cmd) => cmd.apply(dst).await,
             Scard(cmd) => cmd.apply(dst).await,
+            Sismember(cmd) => cmd.apply(dst).await,
+            Smismember(cmd) => cmd.apply(dst).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
             // `Unsubscribe` cannot be applied. It may only be received from the
@@ -250,6 +268,8 @@ impl Command {
             Command::Scan(_) => "scan",
             Command::Sadd(_) => "sadd",
             Command::Scard(_) => "scard",
+            Command::Sismember(_) => "sismember",
+            Command::Smismember(_) => "smismember",
             Command::Unknown(cmd) => cmd.get_name(),
         }
     }
