@@ -2,19 +2,20 @@ use std::collections::HashMap;
 use std::str;
 
 use bytes::Bytes;
-use regex::bytes::Regex;
-use rocksdb::{ColumnFamilyRef, Transaction, TransactionDB};
+
+use rocksdb::{ColumnFamilyRef};
 use crate::Frame;
-use crate::rocks::{tx_scan, get_client, KEY_ENCODER, CF_NAME_STRING_DATA};
+use crate::rocks::{get_client, KEY_ENCODER, CF_NAME_STRING_DATA};
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{REDIS_WRONG_TYPE_ERR, RError};
-use crate::rocks::kv::bound_range::BoundRange;
+
 
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::Result as RocksResult;
+use crate::rocks::transaction::RocksTransaction;
 use crate::utils::{key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil, resp_ok, resp_str, ttl_from_timestamp};
 
 pub struct StringCF<'a> {
@@ -155,19 +156,19 @@ impl StringCommand {
         let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut value.to_vec(), -1);
 
         let resp = client.exec_txn(|txn| {
-            match txn.get_cf(&cfs.data_cf.clone(), ekey.clone())? {
+            match txn.get(cfs.data_cf.clone(), ekey.clone())? {
                 Some(ref v) => {
                     let ttl = KeyDecoder::decode_key_ttl(v);
                     if key_is_expired(ttl) {
                         // no need to delete, just overwrite
-                        txn.put_cf(&cfs.data_cf, ekey, eval)?;
+                        txn.put(cfs.data_cf, ekey, eval)?;
                         Ok(1)
                     } else {
                         Ok(0)
                     }
                 }
                 None => {
-                    txn.put_cf(&cfs.data_cf, ekey, eval)?;
+                    txn.put(cfs.data_cf, ekey, eval)?;
                     Ok(1)
                 }
             }
@@ -216,7 +217,7 @@ impl StringCommand {
         let the_key = ekey.clone();
 
         let resp = client.exec_txn(|txn| {
-            match txn.get_cf(&cfs.data_cf.clone(), the_key.clone())? {
+            match txn.get(cfs.data_cf.clone(), the_key.clone())? {
                 Some(val) => {
                     let dt = KeyDecoder::decode_key_type(&val);
                     if !matches!(dt, DataType::String) {
@@ -226,7 +227,7 @@ impl StringCommand {
                     let ttl = KeyDecoder::decode_key_ttl(&val);
                     if key_is_expired(ttl) {
                         // delete key
-                        txn.delete_cf(&cfs.data_cf.clone(), the_key)?;
+                        txn.del(cfs.data_cf.clone(), the_key)?;
                         Ok((0, None))
                     } else {
                         let current_value = KeyDecoder::decode_key_string_slice(&val);
@@ -252,29 +253,22 @@ impl StringCommand {
         Ok(resp_int(new_int))
     }
 
-    pub async fn string_del(self, key: &str) -> RocksResult<()> {
-        let client = get_client();
-        let cfs = StringCF::new(&client);
+    pub fn txn_string_del(&self, txn: &RocksTransaction, cf: ColumnFamilyRef, key: &str) -> RocksResult<()> {
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        client.del(cfs.data_cf, ekey)
-    }
-
-    pub fn txn_string_del(&self, txn: &Transaction<TransactionDB>, cf: ColumnFamilyRef, key: &str) -> RocksResult<()> {
-        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        txn.delete_cf(&cf, ekey).map_err(|e| e.into())
+        txn.del(cf, ekey)
     }
 
     pub fn txn_expire_if_needed(
         self,
-        txn: &Transaction<TransactionDB>,
+        txn: &RocksTransaction,
         cf: ColumnFamilyRef,
         key: &str
     ) -> RocksResult<()> {
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        if let Some(v) = txn.get_cf(&cf, ekey.clone())? {
+        if let Some(v) = txn.get(cf.clone(), ekey.clone())? {
             let ttl = KeyDecoder::decode_key_ttl(&v);
             if key_is_expired(ttl) {
-                txn.delete_cf(&cf, ekey)?;
+                txn.del(cf.clone(), ekey)?;
             }
         }
         Ok(())
@@ -287,7 +281,7 @@ impl StringCommand {
         let timestamp = timestamp;
         let ekey = KEY_ENCODER.encode_txn_kv_string(&key);
         let resp = client.exec_txn(move |txn| {
-            match txn.get_cf(&cfs.data_cf.clone(), ekey.clone())? {
+            match txn.get(cfs.data_cf.clone(), ekey.clone())? {
                 Some(meta_value) => {
                     let ttl = KeyDecoder::decode_key_ttl(&meta_value);
                     if timestamp == 0 && ttl == 0 {
@@ -307,7 +301,7 @@ impl StringCommand {
                             let value = KeyDecoder::decode_key_string_slice(&meta_value);
                             let new_meta_value =
                                 KEY_ENCODER.encode_txn_kv_string_slice(value, timestamp);
-                            txn.put_cf(&cfs.data_cf.clone(), ekey, new_meta_value)?;
+                            txn.put(cfs.data_cf.clone(), ekey, new_meta_value)?;
                             Ok(1)
                         }
                         _ => {
@@ -331,7 +325,7 @@ impl StringCommand {
         let key = key.to_owned();
         let ekey = KEY_ENCODER.encode_txn_kv_string(&key);
         client.exec_txn(move |txn| {
-            match txn.get_cf(&cfs.data_cf.clone(), ekey.clone())? {
+            match txn.get(cfs.data_cf.clone(), ekey.clone())? {
                 Some(meta_value) => {
                     let dt = KeyDecoder::decode_key_type(&meta_value);
                     let ttl = KeyDecoder::decode_key_ttl(&meta_value);
@@ -365,28 +359,21 @@ impl StringCommand {
         let client = get_client();
         let cfs = StringCF::new(&client);
         let keys = keys.to_owned();
-        let keys_len = keys.len();
         let resp = client.exec_txn(move |txn| {
-            let mut dts = Vec::with_capacity(keys_len);
             let ekeys = KEY_ENCODER.encode_raw_kv_strings(&keys);
-
+            let ekey_map: HashMap<Key, String> = ekeys.clone().into_iter().zip(keys).collect();
             let cf = cfs.data_cf.clone();
-            let cf_key_pairs = ekeys.clone().into_iter().map(|k| (&cf, k))
-                .collect::<Vec<(&ColumnFamilyRef, Key)>>();
-
-            let values = txn.multi_get_cf(cf_key_pairs);
-            for i in 0..ekeys.len() {
-                match values.get(i) {
-                    Some(Ok(Some(v))) => dts.push(KeyDecoder::decode_key_type(v)),
-                    _ => dts.push(DataType::Null),
-                }
-            }
+            let pairs = txn.batch_get(cf, ekeys.clone())?;
+            let dts: HashMap<Key, DataType> = pairs
+                .into_iter()
+                .map(|pair| (pair.0, KeyDecoder::decode_key_type(pair.1.as_slice())))
+                .collect();
 
             let mut resp = 0;
-            for idx in 0..keys_len {
-                match dts[idx] {
-                    DataType::String => {
-                        self.clone().txn_string_del(txn, cfs.data_cf.clone(), &keys[idx])?;
+            for ekey in ekeys {
+                match dts.get(&ekey) {
+                    Some(DataType::String) => {
+                        self.clone().txn_string_del(txn, cfs.data_cf.clone(), &ekey_map[&ekey])?;
                         resp += 1;
                     }
                     _ => {
@@ -405,70 +392,71 @@ impl StringCommand {
     // TODO
     pub async fn scan(
         self,
-        start: &str,
-        count: u32,
-        regex: &str,
+        _start: &str,
+        _count: u32,
+        _regex: &str,
     ) -> RocksResult<Frame> {
-        let client = get_client();
-        let ekey = KEY_ENCODER.encode_txn_kv_string(start);
-        let re = Regex::new(regex).unwrap();
-        client.exec_txn(move |txn| {
-            let mut keys = vec![];
-            let mut retrieved_key_count = 0;
-            let mut next_key = vec![];
-            let mut left_bound = ekey.clone();
-
-            // set to a non-zore value before loop
-            let mut last_round_iter_count = 1;
-            while retrieved_key_count < count as usize {
-                if last_round_iter_count == 0 {
-                    next_key = vec![];
-                    break;
-                }
-
-                let range = left_bound.clone()..KEY_ENCODER.encode_txn_kv_keyspace_end();
-                let bound_range: BoundRange = range.into();
-
-                // the iterator will scan all keyspace include sub metakey and datakey
-                let iter = tx_scan(txn, bound_range, 100)?;
-
-                // reset count to zero
-                last_round_iter_count = 0;
-                for kv in iter {
-                    // skip the left bound key, this should be exclusive
-                    if kv.0 == left_bound {
-                        continue;
-                    }
-                    left_bound = kv.0.clone();
-                    // left bound key is exclusive
-                    last_round_iter_count += 1;
-                    let (userkey, is_meta_key) =
-                        KeyDecoder::decode_key_userkey_from_metakey(&kv.0);
-
-                    // skip it if it is not a meta key
-                    if !is_meta_key {
-                        continue;
-                    }
-
-                    let ttl = KeyDecoder::decode_key_ttl(&kv.1);
-                    if retrieved_key_count == (count - 1) as usize {
-                        next_key = userkey.clone();
-                        retrieved_key_count += 1;
-                        if re.is_match(&userkey) && !key_is_expired(ttl) {
-                            keys.push(resp_bulk(userkey));
-                        }
-                        break;
-                    }
-                    retrieved_key_count += 1;
-                    if re.is_match(&userkey) {
-                        keys.push(resp_bulk(userkey));
-                    }
-                }
-            }
-            let resp_next_key = resp_bulk(next_key);
-            let resp_keys = resp_array(keys);
-
-            Ok(resp_array(vec![resp_next_key, resp_keys]))
-        })
+        // let client = get_client();
+        // let ekey = KEY_ENCODER.encode_txn_kv_string(start);
+        // let re = Regex::new(regex).unwrap();
+        // client.exec_txn(move |txn| {
+        //     let mut keys = vec![];
+        //     let mut retrieved_key_count = 0;
+        //     let mut next_key = vec![];
+        //     let mut left_bound = ekey.clone();
+        //
+        //     // set to a non-zore value before loop
+        //     let mut last_round_iter_count = 1;
+        //     while retrieved_key_count < count as usize {
+        //         if last_round_iter_count == 0 {
+        //             next_key = vec![];
+        //             break;
+        //         }
+        //
+        //         let range = left_bound.clone()..KEY_ENCODER.encode_txn_kv_keyspace_end();
+        //         let bound_range: BoundRange = range.into();
+        //
+        //         // the iterator will scan all keyspace include sub metakey and datakey
+        //         let iter = tx_scan(txn, bound_range, 100)?;
+        //
+        //         // reset count to zero
+        //         last_round_iter_count = 0;
+        //         for kv in iter {
+        //             // skip the left bound key, this should be exclusive
+        //             if kv.0 == left_bound {
+        //                 continue;
+        //             }
+        //             left_bound = kv.0.clone();
+        //             // left bound key is exclusive
+        //             last_round_iter_count += 1;
+        //             let (userkey, is_meta_key) =
+        //                 KeyDecoder::decode_key_userkey_from_metakey(&kv.0);
+        //
+        //             // skip it if it is not a meta key
+        //             if !is_meta_key {
+        //                 continue;
+        //             }
+        //
+        //             let ttl = KeyDecoder::decode_key_ttl(&kv.1);
+        //             if retrieved_key_count == (count - 1) as usize {
+        //                 next_key = userkey.clone();
+        //                 retrieved_key_count += 1;
+        //                 if re.is_match(&userkey) && !key_is_expired(ttl) {
+        //                     keys.push(resp_bulk(userkey));
+        //                 }
+        //                 break;
+        //             }
+        //             retrieved_key_count += 1;
+        //             if re.is_match(&userkey) {
+        //                 keys.push(resp_bulk(userkey));
+        //             }
+        //         }
+        //     }
+        //     let resp_next_key = resp_bulk(next_key);
+        //     let resp_keys = resp_array(keys);
+        //
+        //     Ok(resp_array(vec![resp_next_key, resp_keys]))
+        // })
+        Ok(resp_array(vec![]))
     }
 }

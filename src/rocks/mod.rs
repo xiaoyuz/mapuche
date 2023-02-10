@@ -1,16 +1,17 @@
 
 use std::sync::Arc;
 use lazy_static::lazy_static;
-use rocksdb::{ColumnFamilyRef, MultiThreaded, Options, Transaction, TransactionDB, TransactionDBOptions};
+use rocksdb::{MultiThreaded, Options, TransactionDB, TransactionDBOptions};
 use crate::config::config_meta_key_number_or_default;
 use crate::fetch_idx_and_add;
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::errors::RError;
 use crate::rocks::encoding::KeyEncoder;
-use crate::rocks::kv::bound_range::BoundRange;
-use crate::rocks::kv::key::Key;
-use crate::rocks::kv::kvpair::KvPair;
-use crate::rocks::kv::value::Value;
+
+
+
+
+
 
 pub mod client;
 pub mod errors;
@@ -18,6 +19,7 @@ pub mod string;
 pub mod kv;
 pub mod encoding;
 pub mod set;
+pub mod transaction;
 
 pub const CF_NAME_GC: &str = "gc";
 pub const CF_NAME_STRING_DATA: &str = "string_data";
@@ -63,106 +65,6 @@ pub fn get_instance_id() -> u64 {
 pub fn get_client() -> RocksRawClient {
     let db = ROCKS_DB.clone();
     RocksRawClient::new(db)
-}
-
-pub fn tx_scan(
-    txn: &Transaction<TransactionDB>,
-    range: impl Into<BoundRange>,
-    limit: u32,
-) -> Result<impl Iterator<Item=KvPair>> {
-    let bound_range = range.into();
-    let (start, end) = bound_range.into_keys();
-    let start: Vec<u8> = start.into();
-    let it = txn.prefix_iterator(&start);
-    let end_it_key = end
-        .map(|e| {
-            let e_vec: Vec<u8> = e.into();
-            txn.prefix_iterator(e_vec)
-        })
-        .and_then(|mut it| it.next())
-        .and_then(|res| res.ok()).map(|kv| kv.0);
-
-    let mut kv_pairs: Vec<KvPair> = Vec::new();
-    for inner in it {
-        if let Ok(kv_bytes) = inner {
-            let pair: (Key, Value) = (kv_bytes.0.to_vec().into(), kv_bytes.1.to_vec());
-            kv_pairs.push(pair.into());
-            if Some(kv_bytes.0) == end_it_key {
-                break;
-            }
-        }
-        if kv_pairs.len() >= limit as usize {
-            break;
-        }
-    }
-    Ok(kv_pairs.into_iter())
-}
-
-pub fn tx_scan_cf(
-    txn: &Transaction<TransactionDB>,
-    cf_handle: ColumnFamilyRef,
-    range: impl Into<BoundRange>,
-    limit: u32,
-) -> Result<impl Iterator<Item=KvPair>> {
-    let bound_range = range.into();
-    let (start, end) = bound_range.into_keys();
-    let start: Vec<u8> = start.into();
-    let it = txn.prefix_iterator_cf(&cf_handle, &start);
-    let end_it_key = end
-        .map(|e| {
-            let e_vec: Vec<u8> = e.into();
-            txn.prefix_iterator_cf(&cf_handle, e_vec)
-        })
-        .and_then(|mut it| it.next())
-        .and_then(|res| res.ok()).map(|kv| kv.0);
-
-    let mut kv_pairs: Vec<KvPair> = Vec::new();
-    for inner in it {
-        if let Ok(kv_bytes) = inner {
-            let pair: (Key, Value) = (kv_bytes.0.to_vec().into(), kv_bytes.1.to_vec());
-            kv_pairs.push(pair.into());
-            if Some(kv_bytes.0) == end_it_key {
-                break;
-            }
-        }
-        if kv_pairs.len() >= limit as usize {
-            break;
-        }
-    }
-    Ok(kv_pairs.into_iter())
-}
-
-pub fn tx_scan_keys_cf(
-    txn: &Transaction<TransactionDB>,
-    cf_handle: ColumnFamilyRef,
-    range: impl Into<BoundRange>,
-    limit: u32,
-) -> Result<impl Iterator<Item=Key>> {
-    let bound_range = range.into();
-    let (start, end) = bound_range.into_keys();
-    let start: Vec<u8> = start.into();
-    let it = txn.prefix_iterator_cf(&cf_handle, &start);
-    let end_it_key = end
-        .map(|e| {
-            let e_vec: Vec<u8> = e.into();
-            txn.prefix_iterator_cf(&cf_handle, e_vec)
-        })
-        .and_then(|mut it| it.next())
-        .and_then(|res| res.ok()).map(|kv| kv.0);
-
-    let mut keys: Vec<Key> = Vec::new();
-    for inner in it {
-        if let Ok(kv_bytes) = inner {
-            keys.push(kv_bytes.0.to_vec().into());
-            if Some(kv_bytes.0) == end_it_key {
-                break;
-            }
-        }
-        if keys.len() >= limit as usize {
-            break;
-        }
-    }
-    Ok(keys.into_iter())
 }
 
 pub fn gen_next_meta_index() -> u16 {

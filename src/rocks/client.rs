@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use rocksdb::{ColumnFamilyRef, Transaction, TransactionDB, WriteBatchWithTransaction};
+use rocksdb::{ColumnFamilyRef, TransactionDB, WriteBatchWithTransaction};
 use crate::config::async_deletion_enabled_or_default;
 
 use crate::rocks::errors::{CF_NOT_EXISTS_ERR, KEY_VERSION_EXHUSTED_ERR, TXN_ERROR};
@@ -7,6 +7,7 @@ use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::{KEY_ENCODER, Result as RocksResult};
+use crate::rocks::transaction::RocksTransaction;
 
 pub struct RocksRawClient {
     client: Arc<TransactionDB>,
@@ -82,11 +83,12 @@ impl RocksRawClient {
     ) -> RocksResult<T>
     where
         T: Send + Sync + 'static,
-        F: FnOnce(&Transaction<TransactionDB>) -> RocksResult<T> {
+        F: FnOnce(&RocksTransaction) -> RocksResult<T> {
         let client = self.client.clone();
         let txn = client.transaction();
-        let res = f(&txn)?;
-        if txn.commit().is_err() {
+        let rock_txn = RocksTransaction::new(txn);
+        let res = f(&rock_txn)?;
+        if rock_txn.commit().is_err() {
             return Err(TXN_ERROR);
         }
         Ok(res)
@@ -95,7 +97,7 @@ impl RocksRawClient {
 
 // get_version_for_new must be called outside of a MutexGuard, otherwise it will deadlock.
 pub fn get_version_for_new(
-    txn: &Transaction<TransactionDB>,
+    txn: &RocksTransaction,
     gc_cf: ColumnFamilyRef,
     key: &str
 ) -> RocksResult<u16> {
@@ -105,7 +107,7 @@ pub fn get_version_for_new(
     }
 
     let gc_key = KEY_ENCODER.encode_txn_kv_gc_key(key);
-    let next_version = txn.get_cf(&gc_cf, gc_key)?.map_or_else(
+    let next_version = txn.get(gc_cf.clone(), gc_key)?.map_or_else(
         || 0,
         |v| {
             let version = u16::from_be_bytes(v[..].try_into().unwrap());
@@ -118,6 +120,6 @@ pub fn get_version_for_new(
     );
     // check next version available
     let gc_version_key = KEY_ENCODER.encode_txn_kv_gc_version_key(key, next_version);
-    txn.get_cf(&gc_cf, gc_version_key)?
+    txn.get(gc_cf, gc_version_key)?
         .map_or_else(|| Ok(next_version), |_| Err(KEY_VERSION_EXHUSTED_ERR))
 }
