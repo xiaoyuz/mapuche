@@ -5,7 +5,7 @@ use rand::seq::SliceRandom;
 use rocksdb::{ColumnFamilyRef};
 use crate::config::{async_del_set_threshold_or_default, async_expire_set_threshold_or_default};
 use crate::Frame;
-use crate::rocks::{CF_NAME_SET_DATA, CF_NAME_GC, CF_NAME_SET_META, CF_NAME_SET_SUB_META, gen_next_meta_index, get_client, KEY_ENCODER, Result as RocksResult};
+use crate::rocks::{CF_NAME_SET_DATA, CF_NAME_GC, CF_NAME_META, CF_NAME_SET_SUB_META, gen_next_meta_index, get_client, KEY_ENCODER, Result as RocksResult};
 use crate::rocks::client::{get_version_for_new, RocksRawClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::REDIS_WRONG_TYPE_ERR;
@@ -26,7 +26,7 @@ pub struct SetCF<'a> {
 impl<'a> SetCF<'a> {
     pub fn new(client: &'a RocksRawClient) -> Self {
         SetCF {
-            meta_cf: client.cf_handle(CF_NAME_SET_META).unwrap(),
+            meta_cf: client.cf_handle(CF_NAME_META).unwrap(),
             sub_meta_cf: client.cf_handle(CF_NAME_SET_SUB_META).unwrap(),
             gc_cf: client.cf_handle(CF_NAME_GC).unwrap(),
             data_cf: client.cf_handle(CF_NAME_SET_DATA).unwrap(),

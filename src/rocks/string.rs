@@ -5,7 +5,7 @@ use bytes::Bytes;
 
 use rocksdb::{ColumnFamilyRef};
 use crate::Frame;
-use crate::rocks::{get_client, KEY_ENCODER, CF_NAME_STRING_DATA};
+use crate::rocks::{get_client, KEY_ENCODER, CF_NAME_META};
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{REDIS_WRONG_TYPE_ERR, RError};
@@ -26,7 +26,7 @@ pub struct StringCF<'a> {
 impl<'a> StringCF<'a> {
     pub fn new(client: &'a RocksRawClient) -> Self {
         StringCF {
-            data_cf: client.cf_handle(CF_NAME_STRING_DATA).unwrap(),
+            data_cf: client.cf_handle(CF_NAME_META).unwrap(),
         }
     }
 }

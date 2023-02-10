@@ -16,8 +16,7 @@ pub mod set;
 pub mod transaction;
 
 pub const CF_NAME_GC: &str = "gc";
-pub const CF_NAME_STRING_DATA: &str = "string_data";
-pub const CF_NAME_SET_META: &str = "set_meta";
+pub const CF_NAME_META: &str = "meta";
 pub const CF_NAME_SET_SUB_META: &str = "set_sub_meta";
 pub const CF_NAME_SET_DATA: &str = "set_data";
 
@@ -37,8 +36,9 @@ fn new_db() -> Result<TransactionDB<MultiThreaded>> {
     opts.create_missing_column_families(true);
 
     let cf_names = vec![
-        CF_NAME_STRING_DATA,
-        CF_NAME_SET_META, CF_NAME_SET_SUB_META, CF_NAME_GC, CF_NAME_SET_DATA,
+        CF_NAME_META,
+        CF_NAME_GC,
+        CF_NAME_SET_SUB_META, CF_NAME_SET_DATA,
     ];
 
     TransactionDB::open_cf(
