@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use rocksdb::{BoundColumnFamily, Transaction, TransactionDB, WriteBatchWithTransaction};
+use rocksdb::{AsColumnFamilyRef, BoundColumnFamily, Transaction, TransactionDB, WriteBatchWithTransaction};
 use crate::config::async_deletion_enabled_or_default;
 
 use crate::rocks::errors::{CF_NOT_EXISTS_ERR, KEY_VERSION_EXHUSTED_ERR, TXN_ERROR};
@@ -101,7 +101,7 @@ impl RocksRawClient {
 // get_version_for_new must be called outside of a MutexGuard, otherwise it will deadlock.
 pub fn get_version_for_new(
     txn: &Transaction<TransactionDB>,
-    gc_cf: &Arc<BoundColumnFamily>,
+    gc_cf: &impl AsColumnFamilyRef,
     key: &str
 ) -> RocksResult<u16> {
     // check if async deletion is enabled, return ASAP if not
