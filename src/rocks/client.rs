@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use rocksdb::{AsColumnFamilyRef, BoundColumnFamily, Transaction, TransactionDB, WriteBatchWithTransaction};
+use rocksdb::{ColumnFamilyRef, Transaction, TransactionDB, WriteBatchWithTransaction};
 use crate::config::async_deletion_enabled_or_default;
 
 use crate::rocks::errors::{CF_NOT_EXISTS_ERR, KEY_VERSION_EXHUSTED_ERR, TXN_ERROR};
@@ -46,7 +46,7 @@ impl RocksRawClient {
         let cf = self.cf_handle(cf)?;
 
         let cf_key_pairs = keys.clone().into_iter().map(|k| (&cf, k))
-            .collect::<Vec<(&Arc<BoundColumnFamily>, Key)>>();
+            .collect::<Vec<(&ColumnFamilyRef, Key)>>();
 
         let results = client.multi_get_cf(cf_key_pairs);
         let mut kvpairs = Vec::new();
@@ -77,7 +77,7 @@ impl RocksRawClient {
         client.write(write_batch).map_err(|e| e.into())
     }
 
-    pub fn cf_handle(&self, name: &str) -> RocksResult<Arc<BoundColumnFamily>> {
+    pub fn cf_handle(&self, name: &str) -> RocksResult<ColumnFamilyRef> {
         self.client.cf_handle(name).ok_or(CF_NOT_EXISTS_ERR)
     }
 
@@ -101,7 +101,7 @@ impl RocksRawClient {
 // get_version_for_new must be called outside of a MutexGuard, otherwise it will deadlock.
 pub fn get_version_for_new(
     txn: &Transaction<TransactionDB>,
-    gc_cf: &impl AsColumnFamilyRef,
+    gc_cf: ColumnFamilyRef,
     key: &str
 ) -> RocksResult<u16> {
     // check if async deletion is enabled, return ASAP if not
@@ -110,7 +110,7 @@ pub fn get_version_for_new(
     }
 
     let gc_key = KEY_ENCODER.encode_txn_kv_gc_key(key);
-    let next_version = txn.get_cf(gc_cf, gc_key)?.map_or_else(
+    let next_version = txn.get_cf(&gc_cf, gc_key)?.map_or_else(
         || 0,
         |v| {
             let version = u16::from_be_bytes(v[..].try_into().unwrap());
@@ -123,6 +123,6 @@ pub fn get_version_for_new(
     );
     // check next version available
     let gc_version_key = KEY_ENCODER.encode_txn_kv_gc_version_key(key, next_version);
-    txn.get_cf(gc_cf, gc_version_key)?
+    txn.get_cf(&gc_cf, gc_version_key)?
         .map_or_else(|| Ok(next_version), |_| Err(KEY_VERSION_EXHUSTED_ERR))
 }

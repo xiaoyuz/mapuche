@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::str;
-use std::sync::Arc;
+
 use bytes::Bytes;
 use regex::bytes::Regex;
-use rocksdb::{AsColumnFamilyRef, BoundColumnFamily, Transaction, TransactionDB};
+use rocksdb::{ColumnFamilyRef, Transaction, TransactionDB};
 use crate::Frame;
 use crate::rocks::{tx_scan, get_client, KEY_ENCODER, CF_NAME_STRING_DATA};
 use crate::rocks::encoding::{DataType, KeyDecoder};
@@ -238,22 +238,22 @@ impl StringCommand {
         client.del(CF_NAME_STRING_DATA, ekey)
     }
 
-    pub fn txn_string_del(&self, txn: &Transaction<TransactionDB>, cf: &impl AsColumnFamilyRef, key: &str) -> RocksResult<()> {
+    pub fn txn_string_del(&self, txn: &Transaction<TransactionDB>, cf: ColumnFamilyRef, key: &str) -> RocksResult<()> {
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        txn.delete_cf(cf, ekey).map_err(|e| e.into())
+        txn.delete_cf(&cf, ekey).map_err(|e| e.into())
     }
 
     pub fn txn_expire_if_needed(
         self,
         txn: &Transaction<TransactionDB>,
-        cf: &impl AsColumnFamilyRef,
+        cf: ColumnFamilyRef,
         key: &str
     ) -> RocksResult<()> {
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        if let Some(v) = txn.get_cf(cf, ekey.clone())? {
+        if let Some(v) = txn.get_cf(&cf, ekey.clone())? {
             let ttl = KeyDecoder::decode_key_ttl(&v);
             if key_is_expired(ttl) {
-                txn.delete_cf(cf, ekey)?;
+                txn.delete_cf(&cf, ekey)?;
             }
         }
         Ok(())
@@ -280,7 +280,7 @@ impl StringCommand {
                         DataType::String => {
                             // check key expired
                             if key_is_expired(ttl) {
-                                self.txn_expire_if_needed(txn, &cf, &key)?;
+                                self.txn_expire_if_needed(txn, cf, &key)?;
                                 return Ok(0);
                             }
                             let value = KeyDecoder::decode_key_string_slice(&meta_value);
@@ -317,7 +317,7 @@ impl StringCommand {
                     if key_is_expired(ttl) {
                         match dt {
                             DataType::String => {
-                                self.txn_expire_if_needed(txn, &cf, &key)?;
+                                self.txn_expire_if_needed(txn, cf, &key)?;
                             }
                             _ => {
                                 // TODO: add all types
@@ -350,7 +350,7 @@ impl StringCommand {
             let ekeys = KEY_ENCODER.encode_raw_kv_strings(&keys);
 
             let cf_key_pairs = ekeys.clone().into_iter().map(|k| (&cf, k))
-                .collect::<Vec<(&Arc<BoundColumnFamily>, Key)>>();
+                .collect::<Vec<(&ColumnFamilyRef, Key)>>();
 
             let values = txn.multi_get_cf(cf_key_pairs);
             for i in 0..ekeys.len() {
@@ -364,7 +364,7 @@ impl StringCommand {
             for idx in 0..keys_len {
                 match dts[idx] {
                     DataType::String => {
-                        self.clone().txn_string_del(txn, &cf, &keys[idx])?;
+                        self.clone().txn_string_del(txn, cf.clone(), &keys[idx])?;
                         resp += 1;
                     }
                     _ => {

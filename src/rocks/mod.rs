@@ -1,7 +1,7 @@
 
 use std::sync::Arc;
 use lazy_static::lazy_static;
-use rocksdb::{AsColumnFamilyRef, Direction, IteratorMode, MultiThreaded, Options, Transaction, TransactionDB, TransactionDBOptions};
+use rocksdb::{ColumnFamilyRef, MultiThreaded, Options, Transaction, TransactionDB, TransactionDBOptions};
 use crate::config::config_meta_key_number_or_default;
 use crate::fetch_idx_and_add;
 use crate::rocks::client::RocksRawClient;
@@ -100,18 +100,18 @@ pub fn tx_scan(
 
 pub fn tx_scan_cf(
     txn: &Transaction<TransactionDB>,
-    cf_handle: &impl AsColumnFamilyRef,
+    cf_handle: ColumnFamilyRef,
     range: impl Into<BoundRange>,
     limit: u32,
 ) -> Result<impl Iterator<Item=KvPair>> {
     let bound_range = range.into();
     let (start, end) = bound_range.into_keys();
     let start: Vec<u8> = start.into();
-    let it = txn.prefix_iterator_cf(cf_handle, &start);
+    let it = txn.prefix_iterator_cf(&cf_handle, &start);
     let end_it_key = end
         .map(|e| {
             let e_vec: Vec<u8> = e.into();
-            txn.prefix_iterator_cf(cf_handle, e_vec)
+            txn.prefix_iterator_cf(&cf_handle, e_vec)
         })
         .and_then(|mut it| it.next())
         .and_then(|res| res.ok()).map(|kv| kv.0);
@@ -134,18 +134,18 @@ pub fn tx_scan_cf(
 
 pub fn tx_scan_keys_cf(
     txn: &Transaction<TransactionDB>,
-    cf_handle: &impl AsColumnFamilyRef,
+    cf_handle: ColumnFamilyRef,
     range: impl Into<BoundRange>,
     limit: u32,
 ) -> Result<impl Iterator<Item=Key>> {
     let bound_range = range.into();
     let (start, end) = bound_range.into_keys();
     let start: Vec<u8> = start.into();
-    let it = txn.prefix_iterator_cf(cf_handle, &start);
+    let it = txn.prefix_iterator_cf(&cf_handle, &start);
     let end_it_key = end
         .map(|e| {
             let e_vec: Vec<u8> = e.into();
-            txn.prefix_iterator_cf(cf_handle, e_vec)
+            txn.prefix_iterator_cf(&cf_handle, e_vec)
         })
         .and_then(|mut it| it.next())
         .and_then(|res| res.ok()).map(|kv| kv.0);
@@ -234,7 +234,7 @@ mod tests {
         let end_key: Key = Key::from("aaa1".to_owned());
         let bound_range: BoundRange = (start_key..end_key).into();
 
-        let it = tx_scan_cf(&txn, &cf1, bound_range, 100).unwrap();
+        let it = tx_scan_cf(&txn, cf1, bound_range, 100).unwrap();
         for inner in it {
             println!("{inner:?}");
         }

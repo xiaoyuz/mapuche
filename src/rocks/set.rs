@@ -1,5 +1,5 @@
-use std::sync::Arc;
-use rocksdb::{BoundColumnFamily, Transaction, TransactionDB};
+
+use rocksdb::{ColumnFamilyRef, Transaction, TransactionDB};
 use crate::config::async_expire_set_threshold_or_default;
 use crate::Frame;
 use crate::rocks::{CF_NAME_SET_DATA, CF_NAME_GC, CF_NAME_SET_META, CF_NAME_SET_SUB_META, gen_next_meta_index, get_client, KEY_ENCODER, Result as RocksResult, tx_scan_cf, tx_scan_keys_cf};
@@ -10,10 +10,10 @@ use crate::rocks::kv::key::Key;
 use crate::utils::{count_unique_keys, key_is_expired, resp_err, resp_int};
 
 pub struct SetCF<'a> {
-    meta_cf: Arc<BoundColumnFamily<'a>>,
-    sub_meta_cf: Arc<BoundColumnFamily<'a>>,
-    gc_cf: Arc<BoundColumnFamily<'a>>,
-    data_cf: Arc<BoundColumnFamily<'a>>,
+    meta_cf: ColumnFamilyRef<'a>,
+    sub_meta_cf: ColumnFamilyRef<'a>,
+    gc_cf: ColumnFamilyRef<'a>,
+    data_cf: ColumnFamilyRef<'a>,
 }
 
 impl<'a> SetCF<'a> {
@@ -50,7 +50,7 @@ impl SetCommand {
                     }
                     let bound_range =
                         KEY_ENCODER.encode_txn_kv_sub_meta_key_range(&key, version);
-                    let iter = tx_scan_cf(txn, &cfs.sub_meta_cf, bound_range, u32::MAX)?;
+                    let iter = tx_scan_cf(txn, cfs.sub_meta_cf, bound_range, u32::MAX)?;
                     let sum = iter
                         .map(|kv| i64::from_be_bytes(kv.1.try_into().unwrap()))
                         .sum();
@@ -83,7 +83,7 @@ impl SetCommand {
                         self.clone()
                             .txn_expire_if_needed(txn, &cfs, &key)?;
                         expired = true;
-                        version = get_version_for_new(txn, &cfs.gc_cf, &key)?;
+                        version = get_version_for_new(txn, cfs.gc_cf, &key)?;
                     }
                     let mut member_data_keys = Vec::with_capacity(members.len());
                     for m in &members {
@@ -95,7 +95,7 @@ impl SetCommand {
                     // count the unique members
                     let real_member_count = count_unique_keys(&member_data_keys);
                     let cf_key_pairs = member_data_keys.clone().into_iter().map(|k| (&cfs.data_cf, k))
-                        .collect::<Vec<(&Arc<BoundColumnFamily>, Key)>>();
+                        .collect::<Vec<(&ColumnFamilyRef, Key)>>();
                     let values_count = txn.multi_get_cf(cf_key_pairs)
                         .into_iter().filter(|res| {
                         if let Ok(Some(_)) = res {
@@ -133,7 +133,7 @@ impl SetCommand {
                     Ok(added)
                 }
                 None => {
-                    let version = get_version_for_new(txn, &cfs.gc_cf, &key)?;
+                    let version = get_version_for_new(txn, cfs.gc_cf, &key)?;
                     // create new meta key and meta value
                     for m in &members {
                         // check member already exists
@@ -197,14 +197,14 @@ impl SetCommand {
                     let sub_meta_range =
                         KEY_ENCODER.encode_txn_kv_sub_meta_key_range(&key, version);
 
-                    let iter = tx_scan_keys_cf(txn, &cfs.sub_meta_cf, sub_meta_range, u32::MAX)?;
+                    let iter = tx_scan_keys_cf(txn, cfs.sub_meta_cf.clone(), sub_meta_range, u32::MAX)?;
                     for k in iter {
                         txn.delete_cf(&cfs.sub_meta_cf, k)?;
                     }
 
                     let data_bound_range =
                         KEY_ENCODER.encode_txn_kv_set_data_key_range(&key, version);
-                    let iter = tx_scan_keys_cf(txn, &cfs.data_cf, data_bound_range, u32::MAX)?;
+                    let iter = tx_scan_keys_cf(txn, cfs.data_cf.clone(), data_bound_range, u32::MAX)?;
                     for k in iter {
                         txn.delete_cf(&cfs.data_cf, k)?;
                     }
