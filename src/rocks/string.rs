@@ -254,7 +254,7 @@ impl StringCommand {
         Ok(resp_int(new_int))
     }
 
-    pub fn txn_string_del(&self, txn: &RocksTransaction, client: &RocksRawClient, key: &str) -> RocksResult<()> {
+    pub fn txn_del(&self, txn: &RocksTransaction, client: &RocksRawClient, key: &str) -> RocksResult<()> {
         let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
         txn.del(cfs.data_cf, ekey)
@@ -263,14 +263,15 @@ impl StringCommand {
     pub fn txn_expire_if_needed(
         self,
         txn: &RocksTransaction,
-        cf: ColumnFamilyRef,
+        client: &RocksRawClient,
         key: &str
     ) -> RocksResult<()> {
+        let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        if let Some(v) = txn.get(cf.clone(), ekey.clone())? {
+        if let Some(v) = txn.get(cfs.data_cf.clone(), ekey.clone())? {
             let ttl = KeyDecoder::decode_key_ttl(&v);
             if key_is_expired(ttl) {
-                txn.del(cf.clone(), ekey)?;
+                txn.del(cfs.data_cf.clone(), ekey)?;
             }
         }
         Ok(())
@@ -282,7 +283,7 @@ impl StringCommand {
         let key = key.to_owned();
         let timestamp = timestamp;
         let ekey = KEY_ENCODER.encode_txn_kv_string(&key);
-        let resp = client.exec_txn(move |txn| {
+        let resp = client.exec_txn(|txn| {
             match txn.get(cfs.data_cf.clone(), ekey.clone())? {
                 Some(meta_value) => {
                     let ttl = KeyDecoder::decode_key_ttl(&meta_value);
@@ -297,7 +298,7 @@ impl StringCommand {
                         DataType::String => {
                             // check key expired
                             if key_is_expired(ttl) {
-                                self.txn_expire_if_needed(txn, cfs.data_cf.clone(), &key)?;
+                                self.txn_expire_if_needed(txn, &client, &key)?;
                                 return Ok(0);
                             }
                             let value = KeyDecoder::decode_key_string_slice(&meta_value);
@@ -326,7 +327,7 @@ impl StringCommand {
         let cfs = StringCF::new(&client);
         let key = key.to_owned();
         let ekey = KEY_ENCODER.encode_txn_kv_string(&key);
-        client.exec_txn(move |txn| {
+        client.exec_txn(|txn| {
             match txn.get(cfs.data_cf.clone(), ekey.clone())? {
                 Some(meta_value) => {
                     let dt = KeyDecoder::decode_key_type(&meta_value);
@@ -334,7 +335,7 @@ impl StringCommand {
                     if key_is_expired(ttl) {
                         match dt {
                             DataType::String => {
-                                self.txn_expire_if_needed(txn, cfs.data_cf.clone(), &key)?;
+                                self.txn_expire_if_needed(txn, &client, &key)?;
                             }
                             _ => {
                                 // TODO: add all types
@@ -375,11 +376,11 @@ impl StringCommand {
             for ekey in ekeys {
                 match dts.get(&ekey) {
                     Some(DataType::String) => {
-                        self.clone().txn_string_del(txn, &client, &ekey_map[&ekey])?;
+                        self.clone().txn_del(txn, &client, &ekey_map[&ekey])?;
                         resp += 1;
                     }
                     Some(DataType::Set) => {
-                        SetCommand.txn_set_del(txn, &client, &ekey_map[&ekey])?;
+                        SetCommand.txn_del(txn, &client, &ekey_map[&ekey])?;
                         resp += 1;
                     }
                     _ => {

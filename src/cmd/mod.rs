@@ -58,6 +58,18 @@ pub use sismember::Sismember;
 mod smismember;
 pub use smismember:: Smismember;
 
+mod srandmember;
+pub use srandmember::Srandmember;
+
+mod smembers;
+pub use smembers::Smembers;
+
+mod srem;
+pub use srem::Srem;
+
+mod spop;
+pub use spop::Spop;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -92,6 +104,10 @@ pub enum Command {
     Scard(Scard),
     Sismember(Sismember),
     Smismember(Smismember),
+    Smembers(Smembers),
+    Srandmember(Srandmember),
+    Spop(Spop),
+    Srem(Srem),
 
     Unknown(Unknown),
 }
@@ -176,6 +192,16 @@ impl Command {
                 Smismember::parse_frames(&mut parse),
                 &mut parse,
             )),
+            "smembers" => Command::Smembers(transform_parse(
+                Smembers::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "srandmember" => Command::Srandmember(transform_parse(
+                Srandmember::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "spop" => Command::Spop(transform_parse(Spop::parse_frames(&mut parse), &mut parse)),
+            "srem" => Command::Srem(transform_parse(Srem::parse_frames(&mut parse), &mut parse)),
 
             _ => {
                 // The command is not recognized and an Unknown command is
@@ -234,6 +260,10 @@ impl Command {
             Scard(cmd) => cmd.apply(dst).await,
             Sismember(cmd) => cmd.apply(dst).await,
             Smismember(cmd) => cmd.apply(dst).await,
+            Smembers(cmd) => cmd.apply(dst).await,
+            Srandmember(cmd) => cmd.apply(dst).await,
+            Spop(cmd) => cmd.apply(dst).await,
+            Srem(cmd) => cmd.apply(dst).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
             // `Unsubscribe` cannot be applied. It may only be received from the
@@ -270,6 +300,10 @@ impl Command {
             Command::Scard(_) => "scard",
             Command::Sismember(_) => "sismember",
             Command::Smismember(_) => "smismember",
+            Command::Smembers(_) => "smembers",
+            Command::Srandmember(_) => "srandmember",
+            Command::Spop(_) => "spop",
+            Command::Srem(_) => "srem",
             Command::Unknown(cmd) => cmd.get_name(),
         }
     }

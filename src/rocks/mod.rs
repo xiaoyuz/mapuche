@@ -67,10 +67,9 @@ pub fn gen_next_meta_index() -> u16 {
 
 #[cfg(test)]
 mod tests {
-    use rocksdb::{Direction, IteratorMode, MultiThreaded, Options, TransactionDB, TransactionDBOptions, WriteBatchWithTransaction};
-    use crate::rocks::kv::bound_range::BoundRange;
-    use crate::rocks::kv::key::Key;
-    use crate::rocks::{tx_scan_cf};
+    use rocksdb::{Direction, IteratorMode, TransactionDB, WriteBatchWithTransaction};
+    
+    
 
     #[test]
     fn test_rocksdb() {
@@ -102,37 +101,6 @@ mod tests {
                 break;
             }
             println!("{inner_res:?}");
-        }
-    }
-
-    #[test]
-    fn test_cf() {
-        let mut opts = Options::default();
-        opts.create_if_missing(true);
-        opts.create_missing_column_families(true);
-
-        let transaction_opts = TransactionDBOptions::default();
-
-        let db: TransactionDB<MultiThreaded> = TransactionDB::open_cf(&opts, &transaction_opts, ".rocksdb_store", ["cf1", "cf2"]).unwrap();
-
-        let mut batch = WriteBatchWithTransaction::default();
-        let cf1 = db.cf_handle("cf1").unwrap();
-        let cf2 = db.cf_handle("cf2").unwrap();
-
-        batch.put_cf(&cf1, b"aaa0", b"t1");
-        batch.put_cf(&cf1, b"aaa1", b"t2");
-        batch.put_cf(&cf2, b"aaa0123", b"t3");
-        db.write(batch).unwrap();
-
-        let txn = db.transaction();
-
-        let start_key: Key = Key::from("aaa0".to_owned());
-        let end_key: Key = Key::from("aaa1".to_owned());
-        let bound_range: BoundRange = (start_key..end_key).into();
-
-        let it = tx_scan_cf(&txn, cf1, bound_range, 100).unwrap();
-        for inner in it {
-            println!("{inner:?}");
         }
     }
 }

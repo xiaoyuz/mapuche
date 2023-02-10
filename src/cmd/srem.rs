@@ -9,22 +9,21 @@ use crate::rocks::set::SetCommand;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
-pub struct Smismember {
+pub struct Srem {
     key: String,
     members: Vec<String>,
     valid: bool,
 }
 
-impl Smismember {
-    pub fn new(key: &str) -> Smismember {
-        Smismember {
+impl Srem {
+    pub fn new(key: &str) -> Srem {
+        Srem {
             key: key.to_string(),
             members: vec![],
             valid: true,
         }
     }
 
-    /// Get the key
     pub fn key(&self) -> &str {
         &self.key
     }
@@ -37,47 +36,48 @@ impl Smismember {
         self.members.push(member.to_string());
     }
 
-    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Smismember> {
+    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Srem> {
         let key = parse.next_string()?;
-        let mut smismember = Smismember::new(&key);
+        let mut srem = Srem::new(&key);
         while let Ok(member) = parse.next_string() {
-            smismember.add_member(&member);
+            srem.add_member(&member);
         }
-        Ok(smismember)
+        Ok(srem)
     }
 
-    pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Smismember> {
+    pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Srem> {
         if argv.len() < 2 {
-            return Ok(Smismember::new_invalid());
+            return Ok(Srem::new_invalid());
         }
-        let mut s = Smismember::new(&String::from_utf8_lossy(&argv[0]));
+        let key = &String::from_utf8_lossy(&argv[0]);
+        let mut srem = Srem::new(key);
         for arg in &argv[1..] {
-            s.add_member(&String::from_utf8_lossy(arg));
+            srem.add_member(&String::from_utf8_lossy(arg));
         }
-        Ok(s)
+        Ok(srem)
     }
 
     pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
-        let response = self.smismember().await?;
+        let response = self.srem().await?;
         debug!(?response);
         dst.write_frame(&response).await?;
 
         Ok(())
     }
 
-    pub async fn smismember(&self) -> RocksResult<Frame> {
+    pub async fn srem(&self) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
         SetCommand
-            .sismember(&self.key, &self.members, true)
+            .srem(&self.key, &self.members)
             .await
     }
 }
 
-impl Invalid for Smismember {
-    fn new_invalid() -> Smismember {
-        Smismember {
+impl Invalid for Srem {
+    fn new_invalid() -> Srem {
+        Srem {
             key: "".to_string(),
             members: vec![],
             valid: false,

@@ -259,7 +259,7 @@ impl SetCommand {
     }
 
     pub async fn sismember(
-        mut self,
+        self,
         key: &str,
         members: &Vec<String>,
         resp_in_arr: bool,
@@ -340,7 +340,7 @@ impl SetCommand {
     }
 
     pub async fn srandmemeber(
-        mut self,
+        self,
         key: &str,
         count: i64,
         repeatable: bool,
@@ -421,7 +421,7 @@ impl SetCommand {
         })
     }
 
-    pub async fn smembers(mut self, key: &str) -> RocksResult<Frame> {
+    pub async fn smembers(self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = SetCF::new(&client);
         let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(key);
@@ -462,7 +462,7 @@ impl SetCommand {
     }
 
     pub async fn srem(
-        mut self,
+        self,
         key: &str,
         members: &Vec<String>,
     ) -> RocksResult<Frame> {
@@ -541,13 +541,13 @@ impl SetCommand {
             }
         });
         match resp {
-            Ok(v) => Ok(resp_int(v as i64)),
+            Ok(v) => Ok(resp_int(v)),
             Err(e) => Ok(resp_err(e)),
         }
     }
 
     /// spop will pop members by alphabetical order
-    pub async fn spop(mut self, key: &str, count: u64) -> RocksResult<Frame> {
+    pub async fn spop(self, key: &str, count: u64) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = SetCF::new(&client);
         let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(key);
@@ -652,7 +652,7 @@ impl SetCommand {
         }
     }
 
-    pub fn txn_set_del(&self, txn: &RocksTransaction, client: &RocksRawClient, key: &str) -> RocksResult<()> {
+    pub fn txn_del(&self, txn: &RocksTransaction, client: &RocksRawClient, key: &str) -> RocksResult<()> {
         let key = key.to_owned();
         let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
         let cfs = SetCF::new(client);
