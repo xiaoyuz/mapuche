@@ -6,6 +6,7 @@ use crate::fetch_idx_and_add;
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::errors::RError;
 use crate::rocks::encoding::KeyEncoder;
+use crate::rocks::transaction::RocksTransaction;
 
 pub mod client;
 pub mod errors;
@@ -27,6 +28,22 @@ pub static mut INSTANCE_ID: u64 = 0;
 lazy_static! {
     pub static ref KEY_ENCODER: KeyEncoder = KeyEncoder::new();
     pub static ref ROCKS_DB: Arc<TransactionDB> = Arc::new(new_db().unwrap());
+}
+
+pub trait RocksCommand {
+    fn txn_del(
+        &self,
+        txn: &RocksTransaction,
+        client: &RocksRawClient,
+        key: &str,
+    ) -> Result<()>;
+
+    fn txn_expire_if_needed(
+        self,
+        txn: &RocksTransaction,
+        client: &RocksRawClient,
+        key: &str
+    ) -> Result<i64>;
 }
 
 fn new_db() -> Result<TransactionDB<MultiThreaded>> {

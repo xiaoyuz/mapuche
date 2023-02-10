@@ -5,7 +5,7 @@ use bytes::Bytes;
 
 use rocksdb::{ColumnFamilyRef};
 use crate::Frame;
-use crate::rocks::{get_client, KEY_ENCODER, CF_NAME_META};
+use crate::rocks::{get_client, KEY_ENCODER, CF_NAME_META, RocksCommand};
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{REDIS_WRONG_TYPE_ERR, RError};
@@ -254,29 +254,6 @@ impl StringCommand {
         Ok(resp_int(new_int))
     }
 
-    pub fn txn_del(&self, txn: &RocksTransaction, client: &RocksRawClient, key: &str) -> RocksResult<()> {
-        let cfs = StringCF::new(client);
-        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        txn.del(cfs.data_cf, ekey)
-    }
-
-    pub fn txn_expire_if_needed(
-        self,
-        txn: &RocksTransaction,
-        client: &RocksRawClient,
-        key: &str
-    ) -> RocksResult<()> {
-        let cfs = StringCF::new(client);
-        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        if let Some(v) = txn.get(cfs.data_cf.clone(), ekey.clone())? {
-            let ttl = KeyDecoder::decode_key_ttl(&v);
-            if key_is_expired(ttl) {
-                txn.del(cfs.data_cf.clone(), ekey)?;
-            }
-        }
-        Ok(())
-    }
-
     pub async fn expire(self, key: &str, timestamp: i64) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = StringCF::new(&client);
@@ -465,5 +442,31 @@ impl StringCommand {
         //     Ok(resp_array(vec![resp_next_key, resp_keys]))
         // })
         Ok(resp_array(vec![]))
+    }
+}
+
+impl RocksCommand for StringCommand {
+    fn txn_del(&self, txn: &RocksTransaction, client: &RocksRawClient, key: &str) -> RocksResult<()> {
+        let cfs = StringCF::new(client);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
+        txn.del(cfs.data_cf, ekey)
+    }
+
+    fn txn_expire_if_needed(
+        self,
+        txn: &RocksTransaction,
+        client: &RocksRawClient,
+        key: &str
+    ) -> RocksResult<i64> {
+        let cfs = StringCF::new(client);
+        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
+        if let Some(v) = txn.get(cfs.data_cf.clone(), ekey.clone())? {
+            let ttl = KeyDecoder::decode_key_ttl(&v);
+            if key_is_expired(ttl) {
+                txn.del(cfs.data_cf.clone(), ekey)?;
+                return Ok(1);
+            }
+        }
+        Ok(0)
     }
 }
