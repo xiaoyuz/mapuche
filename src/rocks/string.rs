@@ -373,6 +373,18 @@ impl StringCommand {
         }
     }
 
+    // fn txn_rename(
+    //     &self,
+    //     txn: &RocksTransaction,
+    //     client: &RocksRawClient,
+    //     old_key: &str,
+    //     new_key: &str,
+    // ) -> RocksResult<()> {
+    //     let cfs = StringCF::new(client);
+    //     let ekey = KEY_ENCODER.encode_txn_kv_string(key);
+    //     txn.del(cfs.data_cf, ekey)
+    // }
+
     // TODO
     pub async fn scan(
         self,

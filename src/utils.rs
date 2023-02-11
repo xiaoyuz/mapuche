@@ -1,7 +1,10 @@
 use std::collections::HashSet;
+use std::io;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::Frame;
 use crate::rocks::errors::RError;
+
+const TIMESTAMP_FORMAT: &str = "%Y/%m/%d %H:%M:%S%.3f %:z";
 
 pub fn resp_ok() -> Frame {
     Frame::Simple("OK".to_string())
@@ -72,4 +75,9 @@ pub async fn sleep(ms: u32) {
 
 pub fn count_unique_keys<T: std::hash::Hash + Eq>(keys: &[T]) -> usize {
     keys.iter().collect::<HashSet<&T>>().len()
+}
+
+pub fn timestamp_local(io: &mut dyn io::Write) -> io::Result<()> {
+    let now = chrono::Local::now().format(TIMESTAMP_FORMAT);
+    write!(io, "{now}")
 }

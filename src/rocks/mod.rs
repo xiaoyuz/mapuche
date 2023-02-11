@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use lazy_static::lazy_static;
 use rocksdb::{MultiThreaded, Options, TransactionDB, TransactionDBOptions};
-use crate::config::config_meta_key_number_or_default;
+use crate::config::{config_meta_key_number_or_default, data_store_dir_or_default};
 use crate::fetch_idx_and_add;
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::errors::RError;
@@ -59,7 +59,7 @@ fn new_db() -> Result<TransactionDB<MultiThreaded>> {
     ];
 
     TransactionDB::open_cf(
-        &opts, &transaction_opts, ".rocksdb_store", cf_names
+        &opts, &transaction_opts, data_store_dir_or_default(), cf_names
     ).map_err(|e| e.into())
 }
 
@@ -85,10 +85,11 @@ pub fn gen_next_meta_index() -> u16 {
 #[cfg(test)]
 mod tests {
     use rocksdb::{Direction, IteratorMode, TransactionDB, WriteBatchWithTransaction};
+    use crate::config::data_store_dir_or_default;
 
     #[test]
     fn test_rocksdb() {
-        let db: TransactionDB = TransactionDB::open_default(".rocksdb_store").unwrap();
+        let db: TransactionDB = TransactionDB::open_default(data_store_dir_or_default()).unwrap();
         db.put(b"my key", b"my value").unwrap();
         match db.get(b"my key") {
             Ok(Some(value)) => println!("retrieved value {}", String::from_utf8(value).unwrap()),

@@ -1,4 +1,28 @@
+use lazy_static::lazy_static;
 use serde::Deserialize;
+use crate::DEFAULT_PORT;
+
+use slog::{self, Drain};
+use slog_term;
+use std::fs::OpenOptions;
+
+lazy_static! {
+    pub static ref LOGGER: slog::Logger = slog::Logger::root(
+        slog_term::FullFormat::new(slog_term::PlainSyncDecorator::new(
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .append(true)
+                .open(log_file())
+                .unwrap()
+        ))
+        .use_custom_timestamp(crate::utils::timestamp_local)
+        .build()
+        .filter_level(slog::Level::from_usize(log_level()).unwrap())
+        .fuse(),
+        slog::o!()
+    );
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -10,13 +34,6 @@ pub struct Config {
 struct Server {
     listen: Option<String>,
     port: Option<u16>,
-    tls_listen: Option<String>,
-    tls_port: Option<u16>,
-    tls_key_file: Option<String>,
-    tls_cert_file: Option<String>,
-    tls_auth_client: Option<bool>,
-    tls_ca_cert_file: Option<String>,
-    pd_addrs: Option<String>,
     instance_id: Option<String>,
     prometheus_listen: Option<String>,
     prometheus_port: Option<u16>,
@@ -24,9 +41,6 @@ struct Server {
     password: Option<String>,
     log_level: Option<String>,
     log_file: Option<String>,
-    cluster_broadcast_addr: Option<String>,
-    cluster_topology_interval: Option<u64>,
-    cluster_topology_expire: Option<u64>,
     meta_key_number: Option<u16>,
 }
 
@@ -52,6 +66,7 @@ struct Backend {
     max_batch_wait_time: Option<u64>,
     max_batch_size: Option<usize>,
     max_inflight_requests: Option<usize>,
+    data_store_dir: Option<String>,
 
     txn_retry_count: Option<u32>,
     txn_region_backoff_delay_ms: Option<u64>,
@@ -82,6 +97,128 @@ struct Backend {
 
 // Config
 pub static mut SERVER_CONFIG: Option<Config> = None;
+
+pub fn set_global_config(config: Config) {
+    unsafe {
+        SERVER_CONFIG.replace(config);
+    }
+}
+
+pub fn is_auth_enabled() -> bool {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if c.server.password.clone().is_some() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+// return false only if auth is enabled and password mismatch
+pub fn is_auth_matched(password: &str) -> bool {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.server.password.clone() {
+                return s == password;
+            }
+        }
+    }
+    true
+}
+
+pub fn config_listen_or_default() -> String {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.server.listen.clone() {
+                return s;
+            }
+        }
+    }
+
+    "0.0.0.0".to_owned()
+}
+
+pub fn config_port_or_default() -> String {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.server.port {
+                return s.to_string();
+            }
+        }
+    }
+
+    DEFAULT_PORT.to_owned()
+}
+
+pub fn config_instance_id_or_default() -> String {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.server.instance_id.clone() {
+                return s;
+            }
+        }
+    }
+    "1".to_owned()
+}
+
+pub fn config_prometheus_listen_or_default() -> String {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.server.prometheus_listen.clone() {
+                return s;
+            }
+        }
+    }
+    "0.0.0.0".to_owned()
+}
+
+pub fn config_prometheus_port_or_default() -> String {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.server.prometheus_port {
+                return s.to_string();
+            }
+        }
+    }
+    "8080".to_owned()
+}
+
+fn log_level_str() -> String {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(l) = c.server.log_level.clone() {
+                return l;
+            }
+        }
+    }
+    "info".to_owned()
+}
+
+pub fn log_level() -> usize {
+    let level_str = log_level_str();
+    match level_str.as_str() {
+        "off" => 0,
+        "critical" => 1,
+        "error" => 2,
+        "warning" => 3,
+        "info" => 4,
+        "debug" => 5,
+        "trace" => 6,
+        _ => 0,
+    }
+}
+
+pub fn log_file() -> String {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(l) = c.server.log_file.clone() {
+                return l;
+            }
+        }
+    }
+    "rocksdb-service.log".to_owned()
+}
 
 pub fn config_meta_key_number_or_default() -> u16 {
     unsafe {
@@ -136,4 +273,15 @@ pub fn async_del_set_threshold_or_default() -> u32 {
     } else {
         u32::MAX
     }
+}
+
+pub fn data_store_dir_or_default() -> String {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.data_store_dir.clone() {
+                return b;
+            }
+        }
+    }
+    "./mapuche_store".to_owned()
 }

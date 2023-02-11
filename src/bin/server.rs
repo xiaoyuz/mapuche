@@ -1,8 +1,9 @@
-use mapuche::{server, DEFAULT_PORT};
+use std::process::exit;
+use mapuche::{server};
 
 use clap::Parser;
 use tokio::net::TcpListener;
-use tokio::signal;
+use tokio::{fs, signal};
 
 #[cfg(feature = "otel")]
 // To be able to set the XrayPropagator
@@ -19,16 +20,50 @@ use opentelemetry_aws::trace::XrayPropagator;
 use tracing_subscriber::{
     fmt, layer::SubscriberExt, util::SubscriberInitExt, util::TryInitError, EnvFilter,
 };
+use mapuche::config::{Config, config_instance_id_or_default, config_listen_or_default, config_port_or_default, config_prometheus_listen_or_default, config_prometheus_port_or_default, set_global_config};
 
 #[tokio::main]
 pub async fn main() -> mapuche::Result<()> {
     set_up_logging()?;
 
-    let cli = Cli::parse();
-    let port = cli.port.unwrap_or(DEFAULT_PORT);
+    let cli = Cli::from_args();
+    let mut config: Option<Config> = None;
+
+    if let Some(config_file_name) = cli.config {
+        let config_content =
+            fs::read_to_string(config_file_name).await.expect("Failed to read config file");
+
+        // deserialize toml config
+        config = match toml::from_str(&config_content) {
+            Ok(d) => Some(d),
+            Err(e) => {
+                println!("Unable to load config file {e}");
+                exit(1);
+            }
+        };
+    };
+
+    match &config {
+        Some(c) => {
+            println!("{c:?}");
+            set_global_config(c.clone())
+        }
+        None => (),
+    }
+
+    let c_port = config_port_or_default();
+    let port = cli.port.as_deref().unwrap_or(&c_port);
+    let c_listen = config_listen_or_default();
+    let listen_addr = cli.listen_addr.as_deref().unwrap_or(&c_listen);
+    let c_instance_id = config_instance_id_or_default();
+    let _instance_id_str = cli.instance_id.as_deref().unwrap_or(&c_instance_id);
+    let c_prom_listen = config_prometheus_listen_or_default();
+    let _prom_listen = cli.prom_listen_addr.as_deref().unwrap_or(&c_prom_listen);
+    let c_prom_port = config_prometheus_port_or_default();
+    let _prom_port = cli.prom_port.as_deref().unwrap_or(&c_prom_port);
 
     // Bind a TCP listener
-    let listener = TcpListener::bind(&format!("127.0.0.1:{port}")).await?;
+    let listener = TcpListener::bind(&format!("{}:{}", &listen_addr, port)).await?;
 
     server::run(listener, signal::ctrl_c()).await;
 
@@ -38,8 +73,23 @@ pub async fn main() -> mapuche::Result<()> {
 #[derive(Parser, Debug)]
 #[clap(name = "mapuche-server", version, author, about = "A Redis server")]
 struct Cli {
-    #[clap(long)]
-    port: Option<u16>,
+    #[structopt(name = "listen", long = "--listen")]
+    listen_addr: Option<String>,
+
+    #[structopt(name = "port", long = "--port")]
+    port: Option<String>,
+
+    #[structopt(name = "instid", long = "--instid")]
+    instance_id: Option<String>,
+
+    #[structopt(name = "promlisten", long = "--promlisten")]
+    prom_listen_addr: Option<String>,
+
+    #[structopt(name = "promport", long = "--promport")]
+    prom_port: Option<String>,
+
+    #[structopt(name = "config", long = "--config")]
+    config: Option<String>,
 }
 
 #[cfg(not(feature = "otel"))]

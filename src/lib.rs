@@ -41,7 +41,7 @@ use shutdown::Shutdown;
 /// Default port that a redis server listens on.
 ///
 /// Used if no port is specified.
-pub const DEFAULT_PORT: u16 = 6380;
+pub const DEFAULT_PORT: &str = "6380";
 
 /// Error returned by most functions.
 ///
