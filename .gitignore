@@ -2,3 +2,4 @@
 /Cargo.lock
 .idea
 .rocksdb_store
+mapuche_store
