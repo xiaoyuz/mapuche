@@ -246,7 +246,7 @@ impl KeyEncoder {
         key.into()
     }
 
-    pub fn encode_txn_kv_set_meta_value(&self, ttl: u64, version: u16, index_size: u16) -> Value {
+    pub fn encode_txn_kv_set_meta_value(&self, ttl: i64, version: u16, index_size: u16) -> Value {
         let dt = self.get_type_bytes(DataType::Set);
         let mut val = Vec::with_capacity(13);
 
@@ -260,5 +260,11 @@ impl KeyEncoder {
             val.extend_from_slice(&index_size.to_be_bytes());
         }
         val
+    }
+}
+
+impl Default for KeyEncoder {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -1,7 +1,8 @@
 use bytes::Bytes;
-use tracing::debug;
+use slog::debug;
 use crate::cmd::Invalid;
 use crate::{Connection, Frame};
+use crate::config::LOGGER;
 use crate::parse::Parse;
 use crate::rocks::errors::DECREMENT_OVERFLOW;
 
@@ -59,7 +60,11 @@ impl IncrDecr {
     pub(crate) async fn apply(mut self, dst: &mut Connection, inc: bool) -> crate::Result<()> {
         let response = self.incr_by(inc).await.unwrap_or_else(Into::into);
 
-        debug!(?response);
+        debug!(
+            LOGGER,
+            "res, {:?}",
+            response
+        );
 
         dst.write_frame(&response).await?;
 

@@ -101,7 +101,7 @@ impl RocksRawClient {
     }
 
     pub fn cf_handle(&self, name: &str) -> RocksResult<ColumnFamilyRef> {
-        self.client.cf_handle(name).ok_or_else(|| CF_NOT_EXISTS_ERR)
+        self.client.cf_handle(name).ok_or(CF_NOT_EXISTS_ERR)
     }
 
     pub fn exec_txn<T, F>(

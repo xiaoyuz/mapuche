@@ -6,6 +6,7 @@ use crate::fetch_idx_and_add;
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::errors::RError;
 use crate::rocks::encoding::KeyEncoder;
+use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
 
 pub mod client;
@@ -39,10 +40,19 @@ pub trait RocksCommand {
     ) -> Result<()>;
 
     fn txn_expire_if_needed(
-        self,
+        &self,
         txn: &RocksTransaction,
         client: &RocksRawClient,
         key: &str
+    ) -> Result<i64>;
+
+    fn expire(
+        &self,
+        txn: &RocksTransaction,
+        client: &RocksRawClient,
+        key: &str,
+        timestamp: i64,
+        meta_value: &Value,
     ) -> Result<i64>;
 }
 

@@ -1,8 +1,9 @@
 use crate::{Connection, Frame, Parse};
 
 use bytes::Bytes;
-use tracing::{debug};
+use slog::debug;
 use crate::cmd::Invalid;
+use crate::config::LOGGER;
 
 use crate::rocks::Result as RocksResult;
 use crate::rocks::string::StringCommand;
@@ -51,7 +52,11 @@ impl Del {
     pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.del().await.unwrap_or_else(Into::into);
 
-        debug!(?response);
+        debug!(
+            LOGGER,
+            "res, {:?}",
+            response
+        );
 
         dst.write_frame(&response).await?;
 

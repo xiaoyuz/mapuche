@@ -1,7 +1,8 @@
 use bytes::Bytes;
-use tracing::debug;
+use slog::debug;
 use crate::cmd::Invalid;
 use crate::{Connection, Frame};
+use crate::config::LOGGER;
 use crate::parse::Parse;
 use crate::rocks::KEY_ENCODER;
 use crate::rocks::kv::kvpair::KvPair;
@@ -64,7 +65,11 @@ impl Mset {
     pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.batch_put().await.unwrap_or_else(Into::into);
 
-        debug!(?response);
+        debug!(
+            LOGGER,
+            "res, {:?}",
+            response
+        );
 
         // Write the response back to the client
         dst.write_frame(&response).await?;

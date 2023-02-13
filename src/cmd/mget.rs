@@ -1,7 +1,8 @@
 use bytes::Bytes;
-use tracing::debug;
+use slog::debug;
 use crate::cmd::Invalid;
 use crate::{Connection, Frame};
+use crate::config::LOGGER;
 use crate::parse::Parse;
 use crate::rocks::string::StringCommand;
 use crate::utils::resp_invalid_arguments;
@@ -52,7 +53,11 @@ impl Mget {
     pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.batch_get().await.unwrap_or_else(Into::into);
 
-        debug!(?response);
+        debug!(
+            LOGGER,
+            "res, {:?}",
+            response
+        );
 
         // Write the response back to the client
         dst.write_frame(&response).await?;

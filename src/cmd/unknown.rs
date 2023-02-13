@@ -1,6 +1,6 @@
+use slog::debug;
 use crate::{Connection, Frame};
-
-use tracing::{debug, instrument};
+use crate::config::LOGGER;
 
 /// Represents an "unknown" command. This is not a real `Redis` command.
 #[derive(Debug)]
@@ -25,11 +25,14 @@ impl Unknown {
     /// Responds to the client, indicating the command is not recognized.
     ///
     /// This usually means the command is not yet implemented by `mapuche`.
-    #[instrument(skip(self, dst))]
     pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
         let response = Frame::Error(format!("ERR unknown command '{}'", self.command_name));
 
-        debug!(?response);
+        debug!(
+            LOGGER,
+            "res, {:?}",
+            response
+        );
 
         dst.write_frame(&response).await?;
         Ok(())

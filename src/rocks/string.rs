@@ -264,19 +264,16 @@ impl StringCommand {
         let resp = client.exec_txn(|txn| {
             match txn.get(cfs.data_cf.clone(), ekey.clone())? {
                 Some(meta_value) => {
-                    let ttl = KeyDecoder::decode_key_ttl(&meta_value);
-                    if timestamp == 0 && ttl == 0 {
-                        // this is a persist command
-                        // check old ttl first, no need to perform op
+                    if timestamp == 0 {
                         return Ok(0);
                     }
                     let dt = KeyDecoder::decode_key_type(&meta_value);
-                    let _version = KeyDecoder::decode_key_version(&meta_value);
                     match dt {
                         DataType::String => {
+                            let ttl = KeyDecoder::decode_key_ttl(&meta_value);
                             // check key expired
                             if key_is_expired(ttl) {
-                                self.txn_expire_if_needed(txn, &client, &key)?;
+                                self.txn_expire_if_needed(txn, &client, &ekey, &meta_value)?;
                                 return Ok(0);
                             }
                             let value = KeyDecoder::decode_key_string_slice(&meta_value);
@@ -284,6 +281,9 @@ impl StringCommand {
                                 KEY_ENCODER.encode_txn_kv_string_slice(value, timestamp);
                             txn.put(cfs.data_cf.clone(), ekey, new_meta_value)?;
                             Ok(1)
+                        }
+                        DataType::Set => {
+                            SetCommand.expire(txn, &client, &key, timestamp, &meta_value)
                         }
                         _ => {
                             // TODO: add all types
@@ -313,7 +313,10 @@ impl StringCommand {
                     if key_is_expired(ttl) {
                         match dt {
                             DataType::String => {
-                                self.txn_expire_if_needed(txn, &client, &key)?;
+                                self.txn_expire_if_needed(txn, &client, &ekey, &meta_value)?;
+                            }
+                            DataType::Set => {
+                                SetCommand.txn_expire_if_needed(txn, &client, &key)?;
                             }
                             _ => {
                                 // TODO: add all types
@@ -354,7 +357,7 @@ impl StringCommand {
             for ekey in ekeys {
                 match dts.get(&ekey) {
                     Some(DataType::String) => {
-                        self.clone().txn_del(txn, &client, &ekey_map[&ekey])?;
+                        txn.del(cfs.data_cf.clone(), ekey.clone())?;
                         resp += 1;
                     }
                     Some(DataType::Set) => {
@@ -374,18 +377,6 @@ impl StringCommand {
         }
     }
 
-    // fn txn_rename(
-    //     &self,
-    //     txn: &RocksTransaction,
-    //     client: &RocksRawClient,
-    //     old_key: &str,
-    //     new_key: &str,
-    // ) -> RocksResult<()> {
-    //     let cfs = StringCF::new(client);
-    //     let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-    //     txn.del(cfs.data_cf, ekey)
-    // }
-
     // TODO
     pub async fn scan(
         self,
@@ -393,95 +384,24 @@ impl StringCommand {
         _count: u32,
         _regex: &str,
     ) -> RocksResult<Frame> {
-        // let client = get_client();
-        // let ekey = KEY_ENCODER.encode_txn_kv_string(start);
-        // let re = Regex::new(regex).unwrap();
-        // client.exec_txn(move |txn| {
-        //     let mut keys = vec![];
-        //     let mut retrieved_key_count = 0;
-        //     let mut next_key = vec![];
-        //     let mut left_bound = ekey.clone();
-        //
-        //     // set to a non-zore value before loop
-        //     let mut last_round_iter_count = 1;
-        //     while retrieved_key_count < count as usize {
-        //         if last_round_iter_count == 0 {
-        //             next_key = vec![];
-        //             break;
-        //         }
-        //
-        //         let range = left_bound.clone()..KEY_ENCODER.encode_txn_kv_keyspace_end();
-        //         let bound_range: BoundRange = range.into();
-        //
-        //         // the iterator will scan all keyspace include sub metakey and datakey
-        //         let iter = tx_scan(txn, bound_range, 100)?;
-        //
-        //         // reset count to zero
-        //         last_round_iter_count = 0;
-        //         for kv in iter {
-        //             // skip the left bound key, this should be exclusive
-        //             if kv.0 == left_bound {
-        //                 continue;
-        //             }
-        //             left_bound = kv.0.clone();
-        //             // left bound key is exclusive
-        //             last_round_iter_count += 1;
-        //             let (userkey, is_meta_key) =
-        //                 KeyDecoder::decode_key_userkey_from_metakey(&kv.0);
-        //
-        //             // skip it if it is not a meta key
-        //             if !is_meta_key {
-        //                 continue;
-        //             }
-        //
-        //             let ttl = KeyDecoder::decode_key_ttl(&kv.1);
-        //             if retrieved_key_count == (count - 1) as usize {
-        //                 next_key = userkey.clone();
-        //                 retrieved_key_count += 1;
-        //                 if re.is_match(&userkey) && !key_is_expired(ttl) {
-        //                     keys.push(resp_bulk(userkey));
-        //                 }
-        //                 break;
-        //             }
-        //             retrieved_key_count += 1;
-        //             if re.is_match(&userkey) {
-        //                 keys.push(resp_bulk(userkey));
-        //             }
-        //         }
-        //     }
-        //     let resp_next_key = resp_bulk(next_key);
-        //     let resp_keys = resp_array(keys);
-        //
-        //     Ok(resp_array(vec![resp_next_key, resp_keys]))
-        // })
         Ok(resp_array(vec![]))
-    }
-}
-
-impl RocksCommand for StringCommand {
-    fn txn_del(&self, txn: &RocksTransaction, client: &RocksRawClient, key: &str) -> RocksResult<()> {
-        let cfs = StringCF::new(client);
-        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        txn.del(cfs.data_cf, ekey)
     }
 
     fn txn_expire_if_needed(
-        self,
+        &self,
         txn: &RocksTransaction,
         client: &RocksRawClient,
-        key: &str
+        ekey: &Key,
+        meta_value: &Value,
     ) -> RocksResult<i64> {
         let cfs = StringCF::new(client);
-        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        if let Some(v) = txn.get(cfs.data_cf.clone(), ekey.clone())? {
-            let ttl = KeyDecoder::decode_key_ttl(&v);
-            if key_is_expired(ttl) {
-                txn.del(cfs.data_cf.clone(), ekey)?;
-                REMOVED_EXPIRED_KEY_COUNTER
-                    .with_label_values(&["string"])
-                    .inc();
-                return Ok(1);
-            }
+        let ttl = KeyDecoder::decode_key_ttl(meta_value);
+        if key_is_expired(ttl) {
+            txn.del(cfs.data_cf.clone(), ekey.to_owned())?;
+            REMOVED_EXPIRED_KEY_COUNTER
+                .with_label_values(&["string"])
+                .inc();
+            return Ok(1);
         }
         Ok(0)
     }

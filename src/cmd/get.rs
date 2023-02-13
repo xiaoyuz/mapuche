@@ -1,8 +1,9 @@
 use crate::{Connection, Frame, Parse};
 
 use bytes::Bytes;
-use tracing::{debug, instrument};
+use slog::debug;
 use crate::cmd::Invalid;
+use crate::config::LOGGER;
 
 use crate::rocks::Result as RocksResult;
 use crate::rocks::string::StringCommand;
@@ -76,12 +77,15 @@ impl Get {
     ///
     /// The response is written to `dst`. This is called by the server in order
     /// to execute a received command.
-    #[instrument(skip(self, dst))]
     pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
         // Get the value from the shared database state
         let response = self.get().await.unwrap_or_else(Into::into);
 
-        debug!(?response);
+        debug!(
+            LOGGER,
+            "res, {:?}",
+            response
+        );
 
         // Write the response back to the client
         dst.write_frame(&response).await?;

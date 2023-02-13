@@ -2,7 +2,8 @@ use crate::cmd::{Invalid, Parse, ParseError};
 use crate::{Connection, Frame};
 
 use bytes::Bytes;
-use tracing::{debug, instrument};
+use slog::debug;
+use crate::config::LOGGER;
 
 use crate::rocks::string::StringCommand;
 use crate::utils::{resp_invalid_arguments, timestamp_from_ttl};
@@ -185,11 +186,14 @@ impl Set {
     ///
     /// The response is written to `dst`. This is called by the server in order
     /// to execute a received command.
-    #[instrument(skip(self, dst))]
     pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.set().await?;
 
-        debug!(?response);
+        debug!(
+            LOGGER,
+            "res, {:?}",
+            response
+        );
         dst.write_frame(&response).await?;
 
         Ok(())

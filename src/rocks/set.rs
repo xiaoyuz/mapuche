@@ -594,7 +594,12 @@ impl SetCommand {
 }
 
 impl RocksCommand for SetCommand {
-    fn txn_del(&self, txn: &RocksTransaction, client: &RocksRawClient, key: &str) -> RocksResult<()> {
+    fn txn_del(
+        &self,
+        txn: &RocksTransaction,
+        client: &RocksRawClient,
+        key: &str,
+    ) -> RocksResult<()> {
         let key = key.to_owned();
         let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
         let cfs = SetCF::new(client);
@@ -650,7 +655,7 @@ impl RocksCommand for SetCommand {
     }
 
     fn txn_expire_if_needed(
-        self,
+        &self,
         txn: &RocksTransaction,
         client: &RocksRawClient,
         key: &str
@@ -713,5 +718,27 @@ impl RocksCommand for SetCommand {
             }
             None => Ok(0)
         }
+    }
+
+    fn expire(
+        &self,
+        txn: &RocksTransaction,
+        client: &RocksRawClient,
+        key: &str,
+        timestamp: i64,
+        meta_value: &Value,
+    ) -> RocksResult<i64> {
+        let cfs = SetCF::new(client);
+        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(key);
+        let ttl = KeyDecoder::decode_key_ttl(meta_value);
+        if key_is_expired(ttl) {
+            self.txn_expire_if_needed(txn, client, key)?;
+            return Ok(0);
+        }
+        let version = KeyDecoder::decode_key_version(meta_value);
+        let new_meta_value = KEY_ENCODER
+            .encode_txn_kv_set_meta_value(timestamp, version, 0);
+        txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
+        Ok(1)
     }
 }
