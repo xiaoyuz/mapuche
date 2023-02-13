@@ -21,6 +21,8 @@ use tracing_subscriber::{
     fmt, layer::SubscriberExt, util::SubscriberInitExt, util::TryInitError, EnvFilter,
 };
 use mapuche::config::{Config, config_instance_id_or_default, config_listen_or_default, config_port_or_default, config_prometheus_listen_or_default, config_prometheus_port_or_default, set_global_config};
+use mapuche::metrics::PrometheusServer;
+use mapuche::rocks::set_instance_id;
 
 #[tokio::main]
 pub async fn main() -> mapuche::Result<()> {
@@ -56,11 +58,28 @@ pub async fn main() -> mapuche::Result<()> {
     let c_listen = config_listen_or_default();
     let listen_addr = cli.listen_addr.as_deref().unwrap_or(&c_listen);
     let c_instance_id = config_instance_id_or_default();
-    let _instance_id_str = cli.instance_id.as_deref().unwrap_or(&c_instance_id);
+    let instance_id_str = cli.instance_id.as_deref().unwrap_or(&c_instance_id);
     let c_prom_listen = config_prometheus_listen_or_default();
-    let _prom_listen = cli.prom_listen_addr.as_deref().unwrap_or(&c_prom_listen);
+    let prom_listen = cli.prom_listen_addr.as_deref().unwrap_or(&c_prom_listen);
     let c_prom_port = config_prometheus_port_or_default();
-    let _prom_port = cli.prom_port.as_deref().unwrap_or(&c_prom_port);
+    let prom_port = cli.prom_port.as_deref().unwrap_or(&c_prom_port);
+
+    let mut instance_id: u64 = 0;
+    match instance_id_str.parse::<u64>() {
+        Ok(val) => {
+            instance_id = val;
+            set_instance_id(val);
+        }
+        Err(_) => set_instance_id(0),
+    };
+
+    let pmt_server = PrometheusServer::new(
+        format!("{}:{}", &prom_listen, prom_port),
+        instance_id as i64,
+    );
+    tokio::spawn(async move {
+        pmt_server.run().await;
+    });
 
     // Bind a TCP listener
     let listener = TcpListener::bind(&format!("{}:{}", &listen_addr, port)).await?;

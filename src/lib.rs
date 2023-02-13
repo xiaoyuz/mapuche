@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate prometheus;
+
 pub mod client;
 
 pub mod config;
@@ -33,8 +36,9 @@ mod buffer;
 pub use buffer::{buffer, Buffer};
 
 mod shutdown;
-mod rocks;
+pub mod rocks;
 pub mod utils;
+pub mod metrics;
 
 use shutdown::Shutdown;
 

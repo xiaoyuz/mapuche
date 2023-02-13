@@ -181,7 +181,7 @@ pub fn config_prometheus_port_or_default() -> String {
             }
         }
     }
-    "8080".to_owned()
+    "18080".to_owned()
 }
 
 fn log_level_str() -> String {

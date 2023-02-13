@@ -42,6 +42,9 @@ rand = {version = "0.8.5", features = ["small_rng"] }
 slog = { version = "2.3", features = ["max_level_trace", "release_max_level_debug"] }
 slog-term = { version = "2.4" }
 toml = { version = "0.7.2" }
+prometheus = { version = "0.13.0", features = ["process"]}
+hyper = { version = "0.14.17", features = ["full"] }
+pprof = { version = "0.9", features = ["flamegraph", "protobuf-codec"] }
 
 [dev-dependencies]
 # Enable test-utilities in dev mode only. This is mostly for tests.
