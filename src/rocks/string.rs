@@ -5,6 +5,7 @@ use bytes::Bytes;
 
 use rocksdb::{ColumnFamilyRef};
 use crate::Frame;
+use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
 use crate::rocks::{get_client, KEY_ENCODER, CF_NAME_META, RocksCommand};
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
@@ -476,6 +477,9 @@ impl RocksCommand for StringCommand {
             let ttl = KeyDecoder::decode_key_ttl(&v);
             if key_is_expired(ttl) {
                 txn.del(cfs.data_cf.clone(), ekey)?;
+                REMOVED_EXPIRED_KEY_COUNTER
+                    .with_label_values(&["string"])
+                    .inc();
                 return Ok(1);
             }
         }

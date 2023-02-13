@@ -4,7 +4,7 @@ use hyper::service::{make_service_fn, service_fn};
 use prometheus::{Encoder, TextEncoder};
 use slog::{error, info};
 use crate::config::LOGGER;
-use crate::metrics::{CURRENT_CONNECTION_COUNTER, INSTANCE_ID_GAUGER, REQUEST_COUNTER, TIKV_CLIENT_RETRIES};
+use crate::metrics::{CURRENT_CONNECTION_COUNTER, INSTANCE_ID_GAUGER, REQUEST_COUNTER};
 use crate::Result;
 
 pub struct PrometheusServer {
@@ -14,7 +14,6 @@ pub struct PrometheusServer {
 impl PrometheusServer {
     pub fn new(listen_addr: String, instance_id: i64) -> PrometheusServer {
         INSTANCE_ID_GAUGER.set(instance_id);
-        TIKV_CLIENT_RETRIES.get();
         REQUEST_COUNTER.get();
         CURRENT_CONNECTION_COUNTER.get();
 

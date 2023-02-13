@@ -1,5 +1,6 @@
 
 use rocksdb::{ColumnFamilyRef, Transaction, TransactionDB};
+use crate::metrics::ROCKS_ERR_COUNTER;
 
 
 use crate::rocks::errors::{TXN_ERROR};
@@ -22,18 +23,33 @@ impl<'a> RocksTransaction<'a> {
 
     pub fn get(&self, cf: ColumnFamilyRef, key: Key) -> RocksResult<Option<Value>> {
         let key: Vec<u8> = key.into();
-        self.inner_txn.get_cf(&cf, key).map_err(|e| e.into())
+        self.inner_txn.get_cf(&cf, key).map_err(|e| {
+            ROCKS_ERR_COUNTER
+                .with_label_values(&["txn_client_error"])
+                .inc();
+            e.into()
+        })
     }
 
     pub fn put(&self, cf: ColumnFamilyRef, key: Key, value: Value) -> RocksResult<()> {
         let key: Vec<u8> = key.into();
         let value: Vec<u8> = value;
-        self.inner_txn.put_cf(&cf, key, value).map_err(|e| e.into())
+        self.inner_txn.put_cf(&cf, key, value).map_err(|e| {
+            ROCKS_ERR_COUNTER
+                .with_label_values(&["txn_client_error"])
+                .inc();
+            e.into()
+        })
     }
 
     pub fn del(&self, cf: ColumnFamilyRef, key: Key) -> RocksResult<()> {
         let key: Vec<u8> = key.into();
-        self.inner_txn.delete_cf(&cf, key).map_err(|e| e.into())
+        self.inner_txn.delete_cf(&cf, key).map_err(|e| {
+            ROCKS_ERR_COUNTER
+                .with_label_values(&["txn_client_error"])
+                .inc();
+            e.into()
+        })
     }
 
     pub fn batch_get(&self, cf: ColumnFamilyRef, keys: Vec<Key>) -> RocksResult<Vec<KvPair>> {
@@ -52,14 +68,23 @@ impl<'a> RocksTransaction<'a> {
                         kvpairs.push(kvpair);
                     }
                 }
-                Err(_) => {}
+                Err(_) => {
+                    ROCKS_ERR_COUNTER
+                        .with_label_values(&["txn_client_error"])
+                        .inc();
+                }
             }
         }
         Ok(kvpairs)
     }
 
     pub fn commit(self) -> RocksResult<()> {
-        self.inner_txn.commit().map_err(|_| TXN_ERROR)
+        self.inner_txn.commit().map_err(|_| {
+            ROCKS_ERR_COUNTER
+                .with_label_values(&["txn_client_error"])
+                .inc();
+            TXN_ERROR
+        })
     }
 
     pub fn scan(

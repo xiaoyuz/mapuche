@@ -5,6 +5,7 @@ use rand::seq::SliceRandom;
 use rocksdb::{ColumnFamilyRef};
 use crate::config::{async_del_set_threshold_or_default, async_expire_set_threshold_or_default};
 use crate::Frame;
+use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
 use crate::rocks::{CF_NAME_SET_DATA, CF_NAME_GC, CF_NAME_META, CF_NAME_SET_SUB_META, gen_next_meta_index, get_client, KEY_ENCODER, Result as RocksResult, RocksCommand};
 use crate::rocks::client::{get_version_for_new, RocksRawClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
@@ -705,6 +706,9 @@ impl RocksCommand for SetCommand {
 
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
                 }
+                REMOVED_EXPIRED_KEY_COUNTER
+                    .with_label_values(&["set"])
+                    .inc();
                 Ok(1)
             }
             None => Ok(0)
