@@ -1,12 +1,12 @@
-use bytes::Bytes;
-use slog::debug;
 use crate::cmd::Invalid;
-use crate::{Connection, Frame};
 use crate::config::LOGGER;
 use crate::parse::Parse;
+use crate::{Connection, Frame};
+use bytes::Bytes;
+use slog::debug;
 
-use crate::rocks::Result as RocksResult;
 use crate::rocks::string::StringCommand;
+use crate::rocks::Result as RocksResult;
 use crate::utils::{resp_invalid_arguments, timestamp_from_ttl};
 
 #[derive(Debug, Clone)]
@@ -66,22 +66,14 @@ impl Expire {
             .expire(is_millis, expire_at)
             .await
             .unwrap_or_else(Into::into);
-        debug!(
-            LOGGER,
-            "res, {:?}",
-            response
-        );
+        debug!(LOGGER, "res, {:?}", response);
 
         dst.write_frame(&response).await?;
 
         Ok(())
     }
 
-    pub async fn expire(
-        self,
-        is_millis: bool,
-        expire_at: bool,
-    ) -> RocksResult<Frame> {
+    pub async fn expire(self, is_millis: bool, expire_at: bool) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
@@ -92,9 +84,7 @@ impl Expire {
         if !expire_at {
             ttl = timestamp_from_ttl(ttl);
         }
-        StringCommand
-            .expire(&self.key, ttl)
-            .await
+        StringCommand.expire(&self.key, ttl).await
     }
 }
 

@@ -1,12 +1,12 @@
 use crate::{Connection, Frame, Parse};
 
-use bytes::Bytes;
-use slog::debug;
 use crate::cmd::Invalid;
 use crate::config::LOGGER;
+use bytes::Bytes;
+use slog::debug;
 
-use crate::rocks::Result as RocksResult;
 use crate::rocks::string::StringCommand;
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 /// Get the value of key.
@@ -81,11 +81,7 @@ impl Get {
         // Get the value from the shared database state
         let response = self.get().await.unwrap_or_else(Into::into);
 
-        debug!(
-            LOGGER,
-            "res, {:?}",
-            response
-        );
+        debug!(LOGGER, "res, {:?}", response);
 
         // Write the response back to the client
         dst.write_frame(&response).await?;
@@ -106,7 +102,7 @@ impl Get {
 
     pub async fn get(&self) -> RocksResult<Frame> {
         if !self.valid {
-            return Ok(resp_invalid_arguments())
+            return Ok(resp_invalid_arguments());
         }
         StringCommand.get(&self.key).await
     }

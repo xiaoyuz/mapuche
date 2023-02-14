@@ -1,6 +1,6 @@
+use rocksdb::Error as RocksError;
 use std::num::{ParseFloatError, ParseIntError};
 use thiserror::Error;
-use rocksdb::Error as RocksError;
 
 #[derive(Error, Debug)]
 pub enum RError {
@@ -14,7 +14,8 @@ pub enum RError {
 
 impl RError {
     pub fn owned_error<T>(s: T) -> Self
-        where T: Into<String>
+    where
+        T: Into<String>,
     {
         RError::Owned(s.into())
     }

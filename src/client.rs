@@ -342,18 +342,16 @@ impl Subscriber {
     /// `None` indicates the subscription has been terminated.
     pub async fn next_message(&mut self) -> crate::Result<Option<Message>> {
         match self.client.connection.read_frame().await? {
-            Some(mframe) => {
-                match mframe {
-                    Frame::Array(ref frame) => match frame.as_slice() {
-                        [message, channel, content] if *message == "message" => Ok(Some(Message {
-                            channel: channel.to_string(),
-                            content: Bytes::from(content.to_string()),
-                        })),
-                        _ => Err(mframe.to_error()),
-                    },
-                    frame => Err(frame.to_error()),
-                }
-            }
+            Some(mframe) => match mframe {
+                Frame::Array(ref frame) => match frame.as_slice() {
+                    [message, channel, content] if *message == "message" => Ok(Some(Message {
+                        channel: channel.to_string(),
+                        content: Bytes::from(content.to_string()),
+                    })),
+                    _ => Err(mframe.to_error()),
+                },
+                frame => Err(frame.to_error()),
+            },
             None => Ok(None),
         }
     }

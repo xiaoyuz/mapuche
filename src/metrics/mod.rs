@@ -4,8 +4,8 @@ use prometheus::{
     exponential_buckets, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
 };
 
-use lazy_static::lazy_static;
 pub use self::http::PrometheusServer;
+use lazy_static::lazy_static;
 
 lazy_static! {
     pub static ref INSTANCE_ID_GAUGER: IntGauge =

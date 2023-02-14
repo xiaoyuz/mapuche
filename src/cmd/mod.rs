@@ -56,7 +56,7 @@ mod sismember;
 pub use sismember::Sismember;
 
 mod smismember;
-pub use smismember:: Smismember;
+pub use smismember::Smismember;
 
 mod srandmember;
 pub use srandmember::Srandmember;

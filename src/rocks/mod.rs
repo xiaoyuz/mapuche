@@ -1,20 +1,20 @@
-use std::sync::Arc;
-use lazy_static::lazy_static;
-use rocksdb::{MultiThreaded, Options, TransactionDB, TransactionDBOptions};
 use crate::config::{config_meta_key_number_or_default, data_store_dir_or_default};
 use crate::fetch_idx_and_add;
 use crate::rocks::client::RocksRawClient;
-use crate::rocks::errors::RError;
 use crate::rocks::encoding::KeyEncoder;
+use crate::rocks::errors::RError;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
+use lazy_static::lazy_static;
+use rocksdb::{MultiThreaded, Options, TransactionDB, TransactionDBOptions};
+use std::sync::Arc;
 
 pub mod client;
-pub mod errors;
-pub mod string;
-pub mod kv;
 pub mod encoding;
+pub mod errors;
+pub mod kv;
 pub mod set;
+pub mod string;
 pub mod transaction;
 
 pub const CF_NAME_GC: &str = "gc";
@@ -33,18 +33,13 @@ lazy_static! {
 }
 
 pub trait RocksCommand {
-    fn txn_del(
-        &self,
-        txn: &RocksTransaction,
-        client: &RocksRawClient,
-        key: &str,
-    ) -> Result<()>;
+    fn txn_del(&self, txn: &RocksTransaction, client: &RocksRawClient, key: &str) -> Result<()>;
 
     fn txn_expire_if_needed(
         &self,
         txn: &RocksTransaction,
         client: &RocksRawClient,
-        key: &str
+        key: &str,
     ) -> Result<i64>;
 
     fn txn_expire(
@@ -73,13 +68,19 @@ fn new_db() -> Result<TransactionDB<MultiThreaded>> {
 
     let cf_names = vec![
         CF_NAME_META,
-        CF_NAME_GC, CF_NAME_GC_VERSION,
-        CF_NAME_SET_SUB_META, CF_NAME_SET_DATA,
+        CF_NAME_GC,
+        CF_NAME_GC_VERSION,
+        CF_NAME_SET_SUB_META,
+        CF_NAME_SET_DATA,
     ];
 
     TransactionDB::open_cf(
-        &opts, &transaction_opts, data_store_dir_or_default(), cf_names
-    ).map_err(|e| e.into())
+        &opts,
+        &transaction_opts,
+        data_store_dir_or_default(),
+        cf_names,
+    )
+    .map_err(|e| e.into())
 }
 
 pub fn set_instance_id(id: u64) {
@@ -103,8 +104,8 @@ pub fn gen_next_meta_index() -> u16 {
 
 #[cfg(test)]
 mod tests {
-    use rocksdb::{Direction, IteratorMode, TransactionDB, WriteBatchWithTransaction};
     use crate::config::data_store_dir_or_default;
+    use rocksdb::{Direction, IteratorMode, TransactionDB, WriteBatchWithTransaction};
 
     #[test]
     fn test_rocksdb() {

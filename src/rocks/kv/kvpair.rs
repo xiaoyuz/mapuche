@@ -1,6 +1,6 @@
-use std::{fmt, str};
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
+use std::{fmt, str};
 
 #[derive(Default, Clone, Eq, PartialEq)]
 pub struct KvPair(pub Key, pub Value);
@@ -44,9 +44,9 @@ impl KvPair {
 }
 
 impl<K, V> From<(K, V)> for KvPair
-    where
-        K: Into<Key>,
-        V: Into<Value>,
+where
+    K: Into<Key>,
+    V: Into<Value>,
 {
     fn from((k, v): (K, V)) -> Self {
         KvPair(k.into(), v.into())

@@ -1,11 +1,11 @@
-use hyper::{Body, Request, Response, Server};
-use hyper::header::CONTENT_TYPE;
-use hyper::service::{make_service_fn, service_fn};
-use prometheus::{Encoder, TextEncoder};
-use slog::{error, info};
 use crate::config::LOGGER;
 use crate::metrics::{CURRENT_CONNECTION_COUNTER, INSTANCE_ID_GAUGER, REQUEST_COUNTER};
 use crate::Result;
+use hyper::header::CONTENT_TYPE;
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Request, Response, Server};
+use prometheus::{Encoder, TextEncoder};
+use slog::{error, info};
 
 pub struct PrometheusServer {
     listen_addr: String,

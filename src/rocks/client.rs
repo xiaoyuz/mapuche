@@ -1,16 +1,16 @@
-use std::sync::Arc;
-use rocksdb::{ColumnFamilyRef, TransactionDB, WriteBatchWithTransaction};
-use tokio::time::Instant;
 use crate::config::async_deletion_enabled_or_default;
 use crate::metrics::{ROCKS_ERR_COUNTER, TXN_COUNTER, TXN_DURATION};
+use rocksdb::{ColumnFamilyRef, TransactionDB, WriteBatchWithTransaction};
+use std::sync::Arc;
+use tokio::time::Instant;
 
 use crate::rocks::errors::{CF_NOT_EXISTS_ERR, KEY_VERSION_EXHUSTED_ERR, TXN_ERROR};
+use crate::rocks::kv::bound_range::BoundRange;
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
-use crate::rocks::{KEY_ENCODER, Result as RocksResult};
-use crate::rocks::kv::bound_range::BoundRange;
 use crate::rocks::transaction::RocksTransaction;
+use crate::rocks::{Result as RocksResult, KEY_ENCODER};
 use crate::server::duration_to_sec;
 
 pub struct RocksRawClient {
@@ -19,9 +19,7 @@ pub struct RocksRawClient {
 
 impl RocksRawClient {
     pub fn new(client: Arc<TransactionDB>) -> Self {
-        Self {
-            client,
-        }
+        Self { client }
     }
 
     pub fn get(&self, cf: ColumnFamilyRef, key: Key) -> RocksResult<Option<Value>> {
@@ -61,7 +59,10 @@ impl RocksRawClient {
     pub fn batch_get(&self, cf: ColumnFamilyRef, keys: Vec<Key>) -> RocksResult<Vec<KvPair>> {
         let client = self.client.clone();
 
-        let cf_key_pairs = keys.clone().into_iter().map(|k| (&cf, k))
+        let cf_key_pairs = keys
+            .clone()
+            .into_iter()
+            .map(|k| (&cf, k))
             .collect::<Vec<(&ColumnFamilyRef, Key)>>();
 
         let results = client.multi_get_cf(cf_key_pairs);
@@ -110,7 +111,7 @@ impl RocksRawClient {
         cf_handle: ColumnFamilyRef,
         range: impl Into<BoundRange>,
         limit: u32,
-    ) -> RocksResult<impl Iterator<Item=KvPair>> {
+    ) -> RocksResult<impl Iterator<Item = KvPair>> {
         let bound_range = range.into();
         let (start, end) = bound_range.into_keys();
         let start: Vec<u8> = start.into();
@@ -121,7 +122,8 @@ impl RocksRawClient {
                 self.client.prefix_iterator_cf(&cf_handle, e_vec)
             })
             .and_then(|mut it| it.next())
-            .and_then(|res| res.ok()).map(|kv| kv.0);
+            .and_then(|res| res.ok())
+            .map(|kv| kv.0);
 
         let mut kv_pairs: Vec<KvPair> = Vec::new();
         for inner in it {
@@ -139,13 +141,11 @@ impl RocksRawClient {
         Ok(kv_pairs.into_iter())
     }
 
-    pub fn exec_txn<T, F>(
-        &self,
-        f: F,
-    ) -> RocksResult<T>
+    pub fn exec_txn<T, F>(&self, f: F) -> RocksResult<T>
     where
         T: Send + Sync + 'static,
-        F: FnOnce(&RocksTransaction) -> RocksResult<T> {
+        F: FnOnce(&RocksTransaction) -> RocksResult<T>,
+    {
         let client = self.client.clone();
         let txn = client.transaction();
         TXN_COUNTER.inc();
@@ -169,7 +169,7 @@ pub fn get_version_for_new(
     txn: &RocksTransaction,
     gc_cf: ColumnFamilyRef,
     gc_version_cf: ColumnFamilyRef,
-    key: &str
+    key: &str,
 ) -> RocksResult<u16> {
     // check if async deletion is enabled, return ASAP if not
     if !async_deletion_enabled_or_default() {

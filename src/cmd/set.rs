@@ -1,9 +1,9 @@
 use crate::cmd::{Invalid, Parse, ParseError};
 use crate::{Connection, Frame};
 
+use crate::config::LOGGER;
 use bytes::Bytes;
 use slog::debug;
-use crate::config::LOGGER;
 
 use crate::rocks::string::StringCommand;
 use crate::utils::{resp_invalid_arguments, timestamp_from_ttl};
@@ -134,7 +134,13 @@ impl Set {
             Err(err) => return Err(err.into()),
         }
 
-        Ok(Set { key, value, expire, nx, valid: true })
+        Ok(Set {
+            key,
+            value,
+            expire,
+            nx,
+            valid: true,
+        })
     }
 
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Set> {
@@ -189,11 +195,7 @@ impl Set {
     pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.set().await?;
 
-        debug!(
-            LOGGER,
-            "res, {:?}",
-            response
-        );
+        debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -206,17 +208,16 @@ impl Set {
         Ok(match self.nx {
             Some(_) => self.put_not_exists().await,
             None => self.put().await,
-        }.unwrap_or_else(Into::into))
+        }
+        .unwrap_or_else(Into::into))
     }
 
     async fn put_not_exists(&self) -> RocksResult<Frame> {
-        StringCommand
-            .put_not_exists(&self.key, &self.value)
-            .await
+        StringCommand.put_not_exists(&self.key, &self.value).await
     }
 
     async fn put(&self) -> RocksResult<Frame> {
-        let ttl = self.expire.map_or(-1, |d| { timestamp_from_ttl(d) });
+        let ttl = self.expire.map_or(-1, timestamp_from_ttl);
         StringCommand.put(&self.key, &self.value, ttl).await
     }
 

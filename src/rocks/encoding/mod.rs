@@ -1,5 +1,5 @@
-pub mod encode;
 pub mod decode;
+pub mod encode;
 
 #[derive(Debug, Clone)]
 pub enum DataType {
@@ -25,7 +25,7 @@ impl fmt::Display for DataType {
 }
 
 use std::fmt;
-pub use {encode::KeyEncoder, decode::KeyDecoder};
+pub use {decode::KeyDecoder, encode::KeyEncoder};
 
 const SIGN_MASK: u64 = 0x8000000000000000;
 

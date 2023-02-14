@@ -1,12 +1,12 @@
-use bytes::Bytes;
-use slog::debug;
 use crate::cmd::Invalid;
-use crate::{Connection, Frame};
 use crate::config::LOGGER;
 use crate::parse::Parse;
+use crate::{Connection, Frame};
+use bytes::Bytes;
+use slog::debug;
 
-use crate::rocks::Result as RocksResult;
 use crate::rocks::string::StringCommand;
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -54,11 +54,7 @@ impl Exists {
     pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.exists().await.unwrap_or_else(Into::into);
 
-        debug!(
-            LOGGER,
-            "res, {:?}",
-            response
-        );
+        debug!(LOGGER, "res, {:?}", response);
 
         dst.write_frame(&response).await?;
 
@@ -69,9 +65,7 @@ impl Exists {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand
-            .exists(&self.keys)
-            .await
+        StringCommand.exists(&self.keys).await
     }
 }
 

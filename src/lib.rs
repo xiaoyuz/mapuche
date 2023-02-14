@@ -7,10 +7,10 @@ pub mod config;
 
 pub mod cmd;
 
-use std::sync::atomic::{AtomicU16, Ordering};
+pub use cmd::Command;
 use lazy_static::lazy_static;
 use rand::{rngs::SmallRng, Rng, SeedableRng};
-pub use cmd::Command;
+use std::sync::atomic::{AtomicU16, Ordering};
 
 mod connection;
 
@@ -35,11 +35,11 @@ mod buffer;
 
 pub use buffer::{buffer, Buffer};
 
-mod shutdown;
-pub mod rocks;
-pub mod utils;
-pub mod metrics;
 pub mod gc;
+pub mod metrics;
+pub mod rocks;
+mod shutdown;
+pub mod utils;
 
 use shutdown::Shutdown;
 

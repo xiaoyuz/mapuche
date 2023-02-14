@@ -1,6 +1,8 @@
-use std::borrow::Borrow;
-use std::ops::{Bound, Range, RangeBounds, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive};
 use crate::rocks::kv::key::Key;
+use std::borrow::Borrow;
+use std::ops::{
+    Bound, Range, RangeBounds, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BoundRange {
@@ -181,7 +183,7 @@ impl<T: Into<Key> + Borrow<U>, U: ToOwned<Owned = T> + ?Sized> IntoOwnedRange fo
 }
 
 impl<T: Into<Key> + Borrow<U>, U: ToOwned<Owned = T> + ?Sized> IntoOwnedRange
-for RangeInclusive<&U>
+    for RangeInclusive<&U>
 {
     fn into_owned(self) -> BoundRange {
         let (from, to) = self.into_inner();
@@ -190,7 +192,7 @@ for RangeInclusive<&U>
 }
 
 impl<T: Into<Key> + Borrow<U>, U: ToOwned<Owned = T> + ?Sized> IntoOwnedRange
-for RangeToInclusive<&U>
+    for RangeToInclusive<&U>
 {
     fn into_owned(self) -> BoundRange {
         From::from(RangeToInclusive {

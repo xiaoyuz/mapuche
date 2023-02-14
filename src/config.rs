@@ -1,6 +1,6 @@
+use crate::DEFAULT_PORT;
 use lazy_static::lazy_static;
 use serde::Deserialize;
-use crate::DEFAULT_PORT;
 
 use slog::{self, Drain};
 use slog_term;
@@ -93,7 +93,6 @@ struct Backend {
     async_expire_set_threshold: Option<u32>,
     async_expire_zset_threshold: Option<u32>,
 }
-
 
 // Config
 pub static mut SERVER_CONFIG: Option<Config> = None;

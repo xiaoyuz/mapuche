@@ -3,22 +3,24 @@ use std::str;
 
 use bytes::Bytes;
 
-use rocksdb::{ColumnFamilyRef};
-use crate::Frame;
 use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
-use crate::rocks::{get_client, KEY_ENCODER, CF_NAME_META, RocksCommand};
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
-use crate::rocks::errors::{REDIS_WRONG_TYPE_ERR, RError};
-
+use crate::rocks::errors::{RError, REDIS_WRONG_TYPE_ERR};
+use crate::rocks::{get_client, RocksCommand, CF_NAME_META, KEY_ENCODER};
+use crate::Frame;
+use rocksdb::ColumnFamilyRef;
 
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
-use crate::rocks::Result as RocksResult;
 use crate::rocks::set::SetCommand;
 use crate::rocks::transaction::RocksTransaction;
-use crate::utils::{key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil, resp_ok, resp_str, ttl_from_timestamp};
+use crate::rocks::Result as RocksResult;
+use crate::utils::{
+    key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil, resp_ok, resp_str,
+    ttl_from_timestamp,
+};
 
 pub struct StringCF<'a> {
     data_cf: ColumnFamilyRef<'a>,
@@ -36,7 +38,6 @@ impl<'a> StringCF<'a> {
 pub struct StringCommand;
 
 impl StringCommand {
-
     pub async fn get(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = StringCF::new(&client);
@@ -130,7 +131,9 @@ impl StringCommand {
                         let ttl = KeyDecoder::decode_key_ttl(val);
                         if key_is_expired(ttl) {
                             // delete key
-                            client.del(cfs.data_cf.clone(), k).expect("remove outdated data failed");
+                            client
+                                .del(cfs.data_cf.clone(), k)
+                                .expect("remove outdated data failed");
                             Frame::Null
                         } else {
                             let data = KeyDecoder::decode_key_string_value(val);
@@ -240,9 +243,7 @@ impl StringCommand {
                         Ok((prev_int, prev))
                     }
                 }
-                None => {
-                    Ok((0, None))
-                }
+                None => Ok((0, None)),
             }
         })?;
 
@@ -291,7 +292,7 @@ impl StringCommand {
                         }
                     }
                 }
-                None => Ok(0)
+                None => Ok(0),
             }
         });
         match resp {
@@ -378,12 +379,7 @@ impl StringCommand {
     }
 
     // TODO
-    pub async fn scan(
-        self,
-        _start: &str,
-        _count: u32,
-        _regex: &str,
-    ) -> RocksResult<Frame> {
+    pub async fn scan(self, _start: &str, _count: u32, _regex: &str) -> RocksResult<Frame> {
         Ok(resp_array(vec![]))
     }
 

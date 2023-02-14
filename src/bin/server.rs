@@ -1,11 +1,15 @@
+use mapuche::server;
 use std::process::exit;
-use mapuche::{server};
 
 use clap::Parser;
 use tokio::net::TcpListener;
 use tokio::{fs, signal};
 
-use mapuche::config::{Config, config_instance_id_or_default, config_listen_or_default, config_port_or_default, config_prometheus_listen_or_default, config_prometheus_port_or_default, set_global_config};
+use mapuche::config::{
+    config_instance_id_or_default, config_listen_or_default, config_port_or_default,
+    config_prometheus_listen_or_default, config_prometheus_port_or_default, set_global_config,
+    Config,
+};
 use mapuche::metrics::PrometheusServer;
 use mapuche::rocks::set_instance_id;
 
@@ -15,8 +19,9 @@ pub async fn main() -> mapuche::Result<()> {
     let mut config: Option<Config> = None;
 
     if let Some(config_file_name) = cli.config {
-        let config_content =
-            fs::read_to_string(config_file_name).await.expect("Failed to read config file");
+        let config_content = fs::read_to_string(config_file_name)
+            .await
+            .expect("Failed to read config file");
 
         // deserialize toml config
         config = match toml::from_str(&config_content) {

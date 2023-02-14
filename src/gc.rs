@@ -1,22 +1,25 @@
-use std::collections::HashSet;
-use std::sync::Arc;
-use std::time::Duration;
-use crc::{Crc, CRC_16_XMODEM};
-use rocksdb::ColumnFamilyRef;
-use slog::{debug, error, info};
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::{mpsc, Mutex};
-use tokio::time;
-use tokio::time::MissedTickBehavior;
-use crate::config::{async_deletion_enabled_or_default, async_gc_interval_or_default, async_gc_worker_queue_size_or_default, LOGGER};
+use crate::config::{
+    async_deletion_enabled_or_default, async_gc_interval_or_default,
+    async_gc_worker_queue_size_or_default, LOGGER,
+};
 use crate::metrics::GC_TASK_QUEUE_COUNTER;
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::RError;
-use crate::rocks::{CF_NAME_GC, CF_NAME_GC_VERSION, get_client, KEY_ENCODER, RocksCommand};
+use crate::rocks::{get_client, RocksCommand, CF_NAME_GC, CF_NAME_GC_VERSION, KEY_ENCODER};
+use crc::{Crc, CRC_16_XMODEM};
+use rocksdb::ColumnFamilyRef;
+use slog::{debug, error, info};
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::{mpsc, Mutex};
+use tokio::time;
+use tokio::time::MissedTickBehavior;
 
-use crate::rocks::Result as RocksResult;
 use crate::rocks::set::SetCommand;
+use crate::rocks::Result as RocksResult;
 
 const CRC16: Crc<u16> = Crc::<u16>::new(&CRC_16_XMODEM);
 
@@ -180,7 +183,7 @@ impl GcWorker {
                     .with_label_values(&[&self.id.to_string()])
                     .inc();
                 Ok(())
-            }
+            };
         }
         Ok(())
     }
@@ -212,8 +215,7 @@ impl GcWorker {
                 }
             }
             // delete gc version key
-            let gc_version_key =
-                KEY_ENCODER.encode_txn_kv_gc_version_key(&user_key, version);
+            let gc_version_key = KEY_ENCODER.encode_txn_kv_gc_version_key(&user_key, version);
             txn.del(gc_cfs.gc_version_cf.clone(), gc_version_key)?;
             Ok(())
         })?;
@@ -230,9 +232,7 @@ impl GcWorker {
                 if ver == version {
                     debug!(
                         LOGGER,
-                        "[GC] clean gc key for user key {} with version {}",
-                        user_key,
-                        version
+                        "[GC] clean gc key for user key {} with version {}", user_key, version
                     );
                     txn.del(gc_cfs.gc_cf.clone(), gc_key)?;
                 }

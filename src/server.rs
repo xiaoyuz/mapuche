@@ -1,14 +1,17 @@
 use crate::{Command, Connection, Db, DbDropGuard, Shutdown};
 
+use crate::config::{async_gc_worker_number_or_default, LOGGER};
+use crate::gc::GcMaster;
+use crate::metrics::{
+    CURRENT_CONNECTION_COUNTER, REQUEST_CMD_COUNTER, REQUEST_CMD_FINISH_COUNTER,
+    REQUEST_CMD_HANDLE_TIME, REQUEST_COUNTER, TOTAL_CONNECTION_PROCESSED,
+};
+use slog::{debug, error, info};
 use std::future::Future;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration, Instant};
-use slog::{debug, error, info};
-use crate::config::{async_gc_worker_number_or_default, LOGGER};
-use crate::gc::GcMaster;
-use crate::metrics::{CURRENT_CONNECTION_COUNTER, REQUEST_CMD_COUNTER, REQUEST_CMD_FINISH_COUNTER, REQUEST_CMD_HANDLE_TIME, REQUEST_COUNTER, TOTAL_CONNECTION_PROCESSED};
 
 /// Server listener state. Created in the `run` call. It includes a `run` method
 /// which performs the TCP listening and initialization of per-connection state.
@@ -119,10 +122,7 @@ const MAX_CONNECTIONS: usize = 3000;
 ///
 /// `tokio::signal::ctrl_c()` can be used as the `shutdown` argument. This will
 /// listen for a SIGINT signal.
-pub async fn run(
-    listener: TcpListener,
-    shutdown: impl Future,
-) {
+pub async fn run(listener: TcpListener, shutdown: impl Future) {
     // When the provided `shutdown` future completes, we must send a shutdown
     // message to all active connections. We use a broadcast channel for this
     // purpose. The call below ignores the receiver of the broadcast pair, and when
@@ -359,11 +359,7 @@ impl Handler {
             REQUEST_COUNTER.inc();
             REQUEST_CMD_COUNTER.with_label_values(&[&cmd_name]).inc();
 
-            debug!(
-                LOGGER,
-                "req {:?}",
-                cmd
-            );
+            debug!(LOGGER, "req {:?}", cmd);
 
             // Perform the work needed to apply the command. This may mutate the
             // database state as a result.

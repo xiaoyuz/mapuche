@@ -1,10 +1,10 @@
-use std::ops::Range;
 use crate::config::config_meta_key_number_or_default;
 use crate::rocks::encoding::{DataType, ENC_ASC_PADDING, ENC_GROUP_SIZE, ENC_MARKER};
 use crate::rocks::get_instance_id;
 use crate::rocks::kv::bound_range::BoundRange;
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
+use std::ops::Range;
 
 pub struct KeyEncoder {
     // instance_id will be encoded to 2 bytes vec

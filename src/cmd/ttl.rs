@@ -1,12 +1,12 @@
 use crate::{Connection, Frame, Parse};
 
-use bytes::Bytes;
-use slog::debug;
 use crate::cmd::Invalid;
 use crate::config::LOGGER;
+use bytes::Bytes;
+use slog::debug;
 
-use crate::rocks::Result as RocksResult;
 use crate::rocks::string::StringCommand;
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -47,27 +47,18 @@ impl TTL {
     pub(crate) async fn apply(self, dst: &mut Connection, is_millis: bool) -> crate::Result<()> {
         let response = self.ttl(is_millis).await.unwrap_or_else(Into::into);
 
-        debug!(
-            LOGGER,
-            "res, {:?}",
-            response
-        );
+        debug!(LOGGER, "res, {:?}", response);
 
         dst.write_frame(&response).await?;
 
         Ok(())
     }
 
-    pub async fn ttl(
-        self,
-        is_millis: bool,
-    ) -> RocksResult<Frame> {
+    pub async fn ttl(self, is_millis: bool) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand
-            .ttl(&self.key, is_millis)
-            .await
+        StringCommand.ttl(&self.key, is_millis).await
     }
 }
 

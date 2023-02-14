@@ -2,9 +2,7 @@ use std::fmt;
 use std::ops::Bound;
 
 #[derive(Default, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct Key(
-    pub(super) Vec<u8>,
-);
+pub struct Key(pub(super) Vec<u8>);
 
 impl Key {
     pub const EMPTY: Self = Key(Vec::new());

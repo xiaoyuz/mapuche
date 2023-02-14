@@ -1,6 +1,6 @@
-use slog::debug;
-use crate::{Connection, Frame};
 use crate::config::LOGGER;
+use crate::{Connection, Frame};
+use slog::debug;
 
 /// Represents an "unknown" command. This is not a real `Redis` command.
 #[derive(Debug)]
@@ -28,11 +28,7 @@ impl Unknown {
     pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
         let response = Frame::Error(format!("ERR unknown command '{}'", self.command_name));
 
-        debug!(
-            LOGGER,
-            "res, {:?}",
-            response
-        );
+        debug!(LOGGER, "res, {:?}", response);
 
         dst.write_frame(&response).await?;
         Ok(())
