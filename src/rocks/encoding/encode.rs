@@ -261,6 +261,26 @@ impl KeyEncoder {
         }
         val
     }
+
+    fn encode_txn_kv_gc_version_key_bound(&self, start: bool) -> Key {
+        let mut key = Vec::with_capacity(5);
+        key.push(TXN_KEY_PREFIX);
+        key.extend_from_slice(self.instance_id.as_slice());
+        key.push(DATA_TYPE_GC_VERSION);
+        if start {
+            key.push(PLACE_HOLDER);
+        } else {
+            key.push(PLACE_HOLDER + 1);
+        }
+        key.into()
+    }
+
+    pub fn encode_txn_kv_gc_version_key_range(&self) -> BoundRange {
+        let range_start = self.encode_txn_kv_gc_version_key_bound(true);
+        let range_end = self.encode_txn_kv_gc_version_key_bound(false);
+        let range: Range<Key> = range_start..range_end;
+        range.into()
+    }
 }
 
 impl Default for KeyEncoder {

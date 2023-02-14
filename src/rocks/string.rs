@@ -283,7 +283,7 @@ impl StringCommand {
                             Ok(1)
                         }
                         DataType::Set => {
-                            SetCommand.expire(txn, &client, &key, timestamp, &meta_value)
+                            SetCommand.txn_expire(txn, &client, &key, timestamp, &meta_value)
                         }
                         _ => {
                             // TODO: add all types

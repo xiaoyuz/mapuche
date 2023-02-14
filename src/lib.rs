@@ -39,6 +39,7 @@ mod shutdown;
 pub mod rocks;
 pub mod utils;
 pub mod metrics;
+pub mod gc;
 
 use shutdown::Shutdown;
 

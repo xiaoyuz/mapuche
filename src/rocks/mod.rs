@@ -18,6 +18,7 @@ pub mod set;
 pub mod transaction;
 
 pub const CF_NAME_GC: &str = "gc";
+pub const CF_NAME_GC_VERSION: &str = "gc_version";
 pub const CF_NAME_META: &str = "meta";
 pub const CF_NAME_SET_SUB_META: &str = "set_sub_meta";
 pub const CF_NAME_SET_DATA: &str = "set_data";
@@ -46,7 +47,7 @@ pub trait RocksCommand {
         key: &str
     ) -> Result<i64>;
 
-    fn expire(
+    fn txn_expire(
         &self,
         txn: &RocksTransaction,
         client: &RocksRawClient,
@@ -54,6 +55,14 @@ pub trait RocksCommand {
         timestamp: i64,
         meta_value: &Value,
     ) -> Result<i64>;
+
+    fn txn_gc(
+        &self,
+        txn: &RocksTransaction,
+        client: &RocksRawClient,
+        key: &str,
+        version: u16,
+    ) -> Result<()>;
 }
 
 fn new_db() -> Result<TransactionDB<MultiThreaded>> {
@@ -64,7 +73,7 @@ fn new_db() -> Result<TransactionDB<MultiThreaded>> {
 
     let cf_names = vec![
         CF_NAME_META,
-        CF_NAME_GC,
+        CF_NAME_GC, CF_NAME_GC_VERSION,
         CF_NAME_SET_SUB_META, CF_NAME_SET_DATA,
     ];
 

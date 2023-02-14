@@ -116,4 +116,13 @@ impl KeyDecoder {
         let idx = 8 + enc_ukey.len();
         key[idx..].to_vec()
     }
+
+    pub fn decode_key_gc_userkey_version(key: Key) -> (Vec<u8>, u16) {
+        let key: Vec<u8> = key.into();
+        let enc_key_start = 5;
+        let ukey = Self::decode_bytes(&key[enc_key_start..]);
+        let idx = 5 + Self::encoded_bytes_len(&key[enc_key_start..]);
+        let version = u16::from_be_bytes(key[idx..idx + 2].try_into().unwrap());
+        (ukey, version)
+    }
 }

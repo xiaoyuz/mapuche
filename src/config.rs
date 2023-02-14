@@ -275,6 +275,30 @@ pub fn async_del_set_threshold_or_default() -> u32 {
     }
 }
 
+pub fn async_gc_worker_queue_size_or_default() -> usize {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.async_gc_worker_queue_size {
+                return b;
+            }
+        }
+    }
+    // default async gc worker queue size
+    100000
+}
+
+pub fn async_gc_interval_or_default() -> u64 {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.async_gc_interval {
+                return b;
+            }
+        }
+    }
+    // default async gc interval in ms
+    10000
+}
+
 pub fn data_store_dir_or_default() -> String {
     unsafe {
         if let Some(c) = &SERVER_CONFIG {
@@ -284,4 +308,16 @@ pub fn data_store_dir_or_default() -> String {
         }
     }
     "./mapuche_store".to_owned()
+}
+
+pub fn async_gc_worker_number_or_default() -> usize {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.async_gc_worker_number {
+                return b;
+            }
+        }
+    }
+    // default async gc worker number
+    10
 }

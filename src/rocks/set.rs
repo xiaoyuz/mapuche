@@ -3,10 +3,11 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use rand::seq::SliceRandom;
 use rocksdb::{ColumnFamilyRef};
-use crate::config::{async_del_set_threshold_or_default, async_expire_set_threshold_or_default};
+use slog::info;
+use crate::config::{async_del_set_threshold_or_default, async_expire_set_threshold_or_default, LOGGER};
 use crate::Frame;
 use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
-use crate::rocks::{CF_NAME_SET_DATA, CF_NAME_GC, CF_NAME_META, CF_NAME_SET_SUB_META, gen_next_meta_index, get_client, KEY_ENCODER, Result as RocksResult, RocksCommand};
+use crate::rocks::{CF_NAME_SET_DATA, CF_NAME_GC, CF_NAME_META, CF_NAME_SET_SUB_META, gen_next_meta_index, get_client, KEY_ENCODER, Result as RocksResult, RocksCommand, CF_NAME_GC_VERSION};
 use crate::rocks::client::{get_version_for_new, RocksRawClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::REDIS_WRONG_TYPE_ERR;
@@ -21,6 +22,7 @@ pub struct SetCF<'a> {
     meta_cf: ColumnFamilyRef<'a>,
     sub_meta_cf: ColumnFamilyRef<'a>,
     gc_cf: ColumnFamilyRef<'a>,
+    gc_version_cf: ColumnFamilyRef<'a>,
     data_cf: ColumnFamilyRef<'a>,
 }
 
@@ -30,6 +32,7 @@ impl<'a> SetCF<'a> {
             meta_cf: client.cf_handle(CF_NAME_META).unwrap(),
             sub_meta_cf: client.cf_handle(CF_NAME_SET_SUB_META).unwrap(),
             gc_cf: client.cf_handle(CF_NAME_GC).unwrap(),
+            gc_version_cf: client.cf_handle(CF_NAME_GC_VERSION).unwrap(),
             data_cf: client.cf_handle(CF_NAME_SET_DATA).unwrap(),
         }
     }
@@ -62,7 +65,12 @@ impl SetCommand {
                         self.clone()
                             .txn_expire_if_needed(txn, &client, &key)?;
                         expired = true;
-                        version = get_version_for_new(txn, cfs.gc_cf.clone(), &key)?;
+                        version = get_version_for_new(
+                            txn,
+                            cfs.gc_cf.clone(),
+                            cfs.gc_version_cf.clone(),
+                            &key,
+                        )?;
                     }
                     let mut member_data_keys = Vec::with_capacity(members.len());
                     for m in &members {
@@ -105,7 +113,12 @@ impl SetCommand {
                     Ok(added)
                 }
                 None => {
-                    let version = get_version_for_new(txn, cfs.gc_cf.clone(), &key)?;
+                    let version = get_version_for_new(
+                        txn,
+                        cfs.gc_cf.clone(),
+                        cfs.gc_version_cf.clone(),
+                        &key,
+                    )?;
                     // create new meta key and meta value
                     for m in &members {
                         // check member already exists
@@ -619,7 +632,7 @@ impl RocksCommand for SetCommand {
                     let gc_version_key =
                         KEY_ENCODER.encode_txn_kv_gc_version_key(&key, version);
                     txn.put(
-                        cfs.gc_cf.clone(),
+                        cfs.gc_version_cf.clone(),
                         gc_version_key,
                         vec![KEY_ENCODER.get_type_bytes(DataType::Set)],
                     )?;
@@ -681,7 +694,7 @@ impl RocksCommand for SetCommand {
                     let gc_version_key =
                         KEY_ENCODER.encode_txn_kv_gc_version_key(&key, version);
                     txn.put(
-                        cfs.gc_cf.clone(),
+                        cfs.gc_version_cf.clone(),
                         gc_version_key,
                         vec![KEY_ENCODER.get_type_bytes(DataType::Set)],
                     )?;
@@ -720,7 +733,7 @@ impl RocksCommand for SetCommand {
         }
     }
 
-    fn expire(
+    fn txn_expire(
         &self,
         txn: &RocksTransaction,
         client: &RocksRawClient,
@@ -740,5 +753,32 @@ impl RocksCommand for SetCommand {
             .encode_txn_kv_set_meta_value(timestamp, version, 0);
         txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
         Ok(1)
+    }
+
+    fn txn_gc(
+        &self,
+        txn: &RocksTransaction,
+        client: &RocksRawClient,
+        key: &str,
+        version: u16,
+    ) -> RocksResult<()> {
+        let cfs = SetCF::new(client);
+        // delete all sub meta key of this key and version
+        let bound_range =
+            KEY_ENCODER.encode_txn_kv_sub_meta_key_range(key, version);
+        let iter = txn.scan_keys(cfs.sub_meta_cf.clone(), bound_range, u32::MAX)?;
+        for k in iter {
+            info!(LOGGER, "Set found meta to gc, {}", k.clone().len());
+            txn.del(cfs.sub_meta_cf.clone(), k)?;
+        }
+        // delete all data key of this key and version
+        let bound_range =
+            KEY_ENCODER.encode_txn_kv_set_data_key_range(key, version);
+        let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
+        for k in iter {
+            info!(LOGGER, "Set found data to gc, {}", k.clone().len());
+            txn.del(cfs.data_cf.clone(), k)?;
+        }
+        Ok(())
     }
 }

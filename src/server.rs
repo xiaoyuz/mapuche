@@ -6,7 +6,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration, Instant};
 use slog::{debug, error, info};
-use crate::config::LOGGER;
+use crate::config::{async_gc_worker_number_or_default, LOGGER};
+use crate::gc::GcMaster;
 use crate::metrics::{CURRENT_CONNECTION_COUNTER, REQUEST_CMD_COUNTER, REQUEST_CMD_FINISH_COUNTER, REQUEST_CMD_HANDLE_TIME, REQUEST_COUNTER, TOTAL_CONNECTION_PROCESSED};
 
 /// Server listener state. Created in the `run` call. It includes a `run` method
@@ -140,6 +141,9 @@ pub async fn run(
         shutdown_complete_rx,
     };
 
+    let mut gc_master = GcMaster::new(async_gc_worker_number_or_default());
+    gc_master.start_workers().await;
+
     // Concurrently run the server and listen for the `shutdown` signal. The
     // server task runs until an error is encountered, so under normal
     // circumstances, this `select!` statement runs until the `shutdown` signal
@@ -170,6 +174,9 @@ pub async fn run(
             if let Err(err) = res {
                 error!(LOGGER, "failed to accept, case {}", err.to_string());
             }
+        }
+        _ = gc_master.run() => {
+            error!(LOGGER, "gc master exit");
         }
         _ = shutdown => {
             // The shutdown signal has been received.
