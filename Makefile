@@ -13,6 +13,9 @@ debug:
 release:
 	cargo build --release
 
+nightly-release:
+	cargo +nightly build --release -Z sparse-registry
+
 unit-test:
 	cargo test --all
 
