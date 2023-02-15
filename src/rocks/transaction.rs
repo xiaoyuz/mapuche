@@ -1,5 +1,5 @@
 use crate::metrics::ROCKS_ERR_COUNTER;
-use rocksdb::{ColumnFamilyRef, Transaction, TransactionDB};
+use rocksdb::{ColumnFamilyRef, Direction, IteratorMode, Transaction, TransactionDB};
 
 use crate::rocks::errors::TXN_ERROR;
 use crate::rocks::kv::bound_range::BoundRange;
@@ -100,6 +100,45 @@ impl<'a> RocksTransaction<'a> {
             .map(|e| {
                 let e_vec: Vec<u8> = e.into();
                 self.inner_txn.prefix_iterator_cf(&cf_handle, e_vec)
+            })
+            .and_then(|mut it| it.next())
+            .and_then(|res| res.ok())
+            .map(|kv| kv.0);
+
+        let mut kv_pairs: Vec<KvPair> = Vec::new();
+        for inner in it {
+            if let Ok(kv_bytes) = inner {
+                if Some(&kv_bytes.0) == end_it_key.as_ref() {
+                    break;
+                }
+                let pair: (Key, Value) = (kv_bytes.0.to_vec().into(), kv_bytes.1.to_vec());
+                kv_pairs.push(pair.into());
+            }
+            if kv_pairs.len() >= limit as usize {
+                break;
+            }
+        }
+        Ok(kv_pairs.into_iter())
+    }
+
+    pub fn scan_reverse(
+        &self,
+        cf_handle: ColumnFamilyRef,
+        range: impl Into<BoundRange>,
+        limit: u32,
+    ) -> RocksResult<impl Iterator<Item = KvPair>> {
+        let bound_range = range.into();
+        let (start, end) = bound_range.into_keys();
+        let start: Vec<u8> = start.into();
+
+        let it = self
+            .inner_txn
+            .iterator_cf(&cf_handle, IteratorMode::From(&start, Direction::Reverse));
+        let end_it_key = end
+            .map(|e| {
+                let e_vec: Vec<u8> = e.into();
+                self.inner_txn
+                    .iterator_cf(&cf_handle, IteratorMode::From(&e_vec, Direction::Reverse))
             })
             .and_then(|mut it| it.next())
             .and_then(|res| res.ok())

@@ -82,6 +82,21 @@ pub use ltrim::Ltrim;
 mod lrange;
 pub use lrange::Lrange;
 
+mod llen;
+pub use llen::Llen;
+
+mod lindex;
+pub use lindex::Lindex;
+
+mod lset;
+pub use lset::Lset;
+
+mod linsert;
+pub use linsert::Linsert;
+
+mod lrem;
+pub use lrem::Lrem;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -128,6 +143,11 @@ pub enum Command {
     Rpop(Pop),
     Lrange(Lrange),
     Ltrim(Ltrim),
+    Llen(Llen),
+    Lindex(Lindex),
+    Lset(Lset),
+    Lrem(Lrem),
+    Linsert(Linsert),
 
     Unknown(Unknown),
 }
@@ -231,6 +251,17 @@ impl Command {
                 &mut parse,
             )),
             "ltrim" => Command::Ltrim(transform_parse(Ltrim::parse_frames(&mut parse), &mut parse)),
+            "llen" => Command::Llen(transform_parse(Llen::parse_frames(&mut parse), &mut parse)),
+            "lindex" => Command::Lindex(transform_parse(
+                Lindex::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "lset" => Command::Lset(transform_parse(Lset::parse_frames(&mut parse), &mut parse)),
+            "lrem" => Command::Lrem(transform_parse(Lrem::parse_frames(&mut parse), &mut parse)),
+            "linsert" => Command::Linsert(transform_parse(
+                Linsert::parse_frames(&mut parse),
+                &mut parse,
+            )),
 
             _ => {
                 // The command is not recognized and an Unknown command is
@@ -299,6 +330,11 @@ impl Command {
             Rpop(cmd) => cmd.apply(dst, false).await,
             Lrange(cmd) => cmd.apply(dst).await,
             Ltrim(cmd) => cmd.apply(dst).await,
+            Llen(cmd) => cmd.apply(dst).await,
+            Lindex(cmd) => cmd.apply(dst).await,
+            Lset(cmd) => cmd.apply(dst).await,
+            Lrem(cmd) => cmd.apply(dst).await,
+            Linsert(cmd) => cmd.apply(dst).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
             // `Unsubscribe` cannot be applied. It may only be received from the
@@ -345,6 +381,11 @@ impl Command {
             Command::Rpop(_) => "rpop",
             Command::Lrange(_) => "lrange",
             Command::Ltrim(_) => "ltrim",
+            Command::Llen(_) => "llen",
+            Command::Lindex(_) => "lindex",
+            Command::Lset(_) => "lset",
+            Command::Lrem(_) => "lrem",
+            Command::Linsert(_) => "linsert",
             Command::Unknown(cmd) => cmd.get_name(),
         }
     }

@@ -335,3 +335,27 @@ pub fn async_del_list_threshold_or_default() -> u32 {
         u32::MAX
     }
 }
+
+pub fn cmd_linsert_length_limit_or_default() -> u32 {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.cmd_linsert_length_limit {
+                return b;
+            }
+        }
+    }
+    // default linsert length no limit
+    0
+}
+
+pub fn cmd_lrem_length_limit_or_default() -> u32 {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.cmd_lrem_length_limit {
+                return b;
+            }
+        }
+    }
+    // default lrem length no limit
+    0
+}

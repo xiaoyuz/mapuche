@@ -1,8 +1,14 @@
-use crate::config::async_del_list_threshold_or_default;
+use crate::config::{
+    async_del_list_threshold_or_default, cmd_linsert_length_limit_or_default,
+    cmd_lrem_length_limit_or_default,
+};
 use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
 use crate::rocks::client::{get_version_for_new, RocksRawClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
-use crate::rocks::errors::REDIS_WRONG_TYPE_ERR;
+use crate::rocks::errors::{
+    REDIS_INDEX_OUT_OF_RANGE_ERR, REDIS_LIST_TOO_LARGE_ERR, REDIS_NO_SUCH_KEY_ERR,
+    REDIS_WRONG_TYPE_ERR,
+};
 use crate::rocks::kv::bound_range::BoundRange;
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
@@ -381,6 +387,419 @@ impl ListCommand {
                 None => Ok(resp_array(vec![])),
             }
         })
+    }
+
+    pub async fn llen(self, key: &str) -> RocksResult<Frame> {
+        let client = get_client();
+        let cfs = ListCF::new(&client);
+        let key = key.to_owned();
+
+        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        client.exec_txn(|txn| {
+            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+                Some(meta_value) => {
+                    // check key type and ttl
+                    if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::List) {
+                        return Err(REDIS_WRONG_TYPE_ERR);
+                    }
+                    let (ttl, _version, left, right) =
+                        KeyDecoder::decode_key_list_meta(&meta_value);
+                    if key_is_expired(ttl) {
+                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        return Ok(resp_int(0));
+                    }
+
+                    let llen: i64 = (right - left) as i64;
+                    Ok(resp_int(llen))
+                }
+                None => Ok(resp_int(0)),
+            }
+        })
+    }
+
+    pub async fn lindex(self, key: &str, mut idx: i64) -> RocksResult<Frame> {
+        let client = get_client();
+        let cfs = ListCF::new(&client);
+        let key = key.to_owned();
+
+        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        client.exec_txn(|txn| {
+            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+                Some(meta_value) => {
+                    // check key type and ttl
+                    if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::List) {
+                        return Err(REDIS_WRONG_TYPE_ERR);
+                    }
+                    let (ttl, version, left, right) = KeyDecoder::decode_key_list_meta(&meta_value);
+                    if key_is_expired(ttl) {
+                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        return Ok(resp_nil());
+                    }
+
+                    let len = right - left;
+                    // try convert idx to positive if needed
+                    if idx < 0 {
+                        idx += len as i64;
+                    }
+
+                    let real_idx = left as i64 + idx;
+
+                    // get value from data key
+                    let data_key =
+                        KEY_ENCODER.encode_txn_kv_list_data_key(&key, real_idx as u64, version);
+                    if let Some(value) = txn.get(cfs.data_cf.clone(), data_key)? {
+                        Ok(resp_bulk(value))
+                    } else {
+                        Ok(resp_nil())
+                    }
+                }
+                None => Ok(resp_nil()),
+            }
+        })
+    }
+
+    pub async fn lset(self, key: &str, mut idx: i64, ele: &Bytes) -> RocksResult<Frame> {
+        let client = get_client();
+        let cfs = ListCF::new(&client);
+        let key = key.to_owned();
+        let ele = ele.to_owned();
+
+        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let resp = client.exec_txn(|txn| {
+            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+                Some(meta_value) => {
+                    // check key type and ttl
+                    if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::List) {
+                        return Err(REDIS_WRONG_TYPE_ERR);
+                    }
+                    let (ttl, version, left, right) = KeyDecoder::decode_key_list_meta(&meta_value);
+                    if key_is_expired(ttl) {
+                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        return Err(REDIS_NO_SUCH_KEY_ERR);
+                    }
+
+                    // convert idx to positive is needed
+                    if idx < 0 {
+                        idx += (right - left) as i64;
+                    }
+
+                    let uidx = idx + left as i64;
+                    if idx < 0 || uidx < left as i64 || uidx > (right - 1) as i64 {
+                        return Err(REDIS_INDEX_OUT_OF_RANGE_ERR);
+                    }
+
+                    let data_key =
+                        KEY_ENCODER.encode_txn_kv_list_data_key(&key, uidx as u64, version);
+                    // data keys exists, update it to new value
+                    txn.put(cfs.data_cf.clone(), data_key, ele.to_vec())?;
+                    Ok(())
+                }
+                None => Err(REDIS_NO_SUCH_KEY_ERR),
+            }
+        });
+
+        match resp {
+            Ok(_) => Ok(resp_ok()),
+            Err(e) => Ok(resp_err(e)),
+        }
+    }
+
+    pub async fn linsert(
+        self,
+        key: &str,
+        before_pivot: bool,
+        pivot: &Bytes,
+        element: &Bytes,
+    ) -> RocksResult<Frame> {
+        let client = get_client();
+        let cfs = ListCF::new(&client);
+        let key = key.to_owned();
+        let pivot = pivot.to_owned();
+        let element = element.to_owned();
+
+        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let resp = client.exec_txn(|txn| {
+            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+                Some(meta_value) => {
+                    // check key type and ttl
+                    if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::List) {
+                        return Err(REDIS_WRONG_TYPE_ERR);
+                    }
+                    let (ttl, version, mut left, mut right) =
+                        KeyDecoder::decode_key_list_meta(&meta_value);
+                    if key_is_expired(ttl) {
+                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        return Ok(0);
+                    }
+
+                    // check list length is not too long
+                    let limit_len = cmd_linsert_length_limit_or_default();
+                    if limit_len > 0 && right - left > limit_len as u64 {
+                        return Err(REDIS_LIST_TOO_LARGE_ERR);
+                    }
+
+                    // get list items bound range
+                    let bound_range = KEY_ENCODER.encode_txn_kv_list_data_key_range(&key, version);
+
+                    // iter will only return the matched kvpair
+                    let mut iter = txn
+                        .scan(cfs.data_cf.clone(), bound_range, u32::MAX)?
+                        .filter(|kv| {
+                            if kv.1 == pivot.to_vec() {
+                                return true;
+                            }
+                            false
+                        });
+
+                    // yeild the first matched kvpair
+                    if let Some(kv) = iter.next() {
+                        // decode the idx from data key
+                        let idx = KeyDecoder::decode_key_list_idx_from_datakey(&key, kv.0);
+
+                        // compare the pivot distance to left and right, choose the shorter one
+                        let from_left = idx - left < right - idx;
+
+                        let idx_op;
+                        if from_left {
+                            idx_op = if before_pivot { idx - 1 } else { idx };
+                            // move data key from left to left-1
+                            // move backwards for elements in idx [left, idx_op], add the new element to idx_op
+                            if idx_op >= left {
+                                let left_range = KEY_ENCODER.encode_txn_kv_list_data_key_idx_range(
+                                    &key, left, idx_op, version,
+                                );
+                                let iter = txn.scan(cfs.data_cf.clone(), left_range, u32::MAX)?;
+
+                                for kv in iter {
+                                    let key_idx =
+                                        KeyDecoder::decode_key_list_idx_from_datakey(&key, kv.0);
+                                    let new_data_key = KEY_ENCODER.encode_txn_kv_list_data_key(
+                                        &key,
+                                        key_idx - 1,
+                                        version,
+                                    );
+                                    txn.put(cfs.data_cf.clone(), new_data_key, kv.1)?;
+                                }
+                            }
+
+                            left -= 1;
+                        } else {
+                            idx_op = if before_pivot { idx } else { idx + 1 };
+                            // move data key from right to right+1
+                            // move forwards for elements in idx [idx_op, right-1], add the new element to idx_op
+                            // if idx_op == right, no need to move data key
+                            if idx_op < right {
+                                let right_range = KEY_ENCODER
+                                    .encode_txn_kv_list_data_key_idx_range(
+                                        &key,
+                                        idx_op,
+                                        right - 1,
+                                        version,
+                                    );
+                                let iter = txn.scan(cfs.data_cf.clone(), right_range, u32::MAX)?;
+
+                                for kv in iter {
+                                    let key_idx =
+                                        KeyDecoder::decode_key_list_idx_from_datakey(&key, kv.0);
+                                    let new_data_key = KEY_ENCODER.encode_txn_kv_list_data_key(
+                                        &key,
+                                        key_idx + 1,
+                                        version,
+                                    );
+                                    txn.put(cfs.data_cf.clone(), new_data_key, kv.1)?;
+                                }
+                            }
+
+                            right += 1;
+                        }
+
+                        // fill the pivot
+                        let pivot_data_key =
+                            KEY_ENCODER.encode_txn_kv_list_data_key(&key, idx_op, version);
+                        txn.put(cfs.data_cf.clone(), pivot_data_key, element.to_vec())?;
+
+                        // update meta key
+                        let new_meta_value =
+                            KEY_ENCODER.encode_txn_kv_list_meta_value(ttl, version, left, right);
+                        txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
+
+                        let len = (right - left) as i64;
+                        Ok(len)
+                    } else {
+                        // no matched pivot, ignore
+                        Ok(-1)
+                    }
+                }
+                None => Ok(0),
+            }
+        });
+
+        match resp {
+            Ok(v) => Ok(resp_int(v)),
+            Err(e) => Ok(resp_err(e)),
+        }
+    }
+
+    pub async fn lrem(
+        self,
+        key: &str,
+        count: usize,
+        from_head: bool,
+        ele: &Bytes,
+    ) -> RocksResult<Frame> {
+        let client = get_client();
+        let cfs = ListCF::new(&client);
+        let key = key.to_owned();
+        let ele = ele.to_owned();
+
+        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let resp = client.exec_txn(|txn| {
+            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+                Some(meta_value) => {
+                    // check key type and ttl
+                    if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::List) {
+                        return Err(REDIS_WRONG_TYPE_ERR);
+                    }
+                    let (ttl, version, left, right) = KeyDecoder::decode_key_list_meta(&meta_value);
+                    if key_is_expired(ttl) {
+                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        return Ok(0);
+                    }
+
+                    let len = right - left;
+
+                    // check list length is not too long
+                    let limit_len = cmd_lrem_length_limit_or_default();
+                    if limit_len > 0 && len > limit_len as u64 {
+                        return Err(REDIS_LIST_TOO_LARGE_ERR);
+                    }
+
+                    // get list items bound range
+                    let bound_range = KEY_ENCODER.encode_txn_kv_list_data_key_range(&key, version);
+
+                    // iter will only return the matched kvpair
+                    let iter = txn
+                        .scan(cfs.data_cf.clone(), bound_range.clone(), u32::MAX)?
+                        .filter(|kv| {
+                            if kv.1 == ele.to_vec() {
+                                return true;
+                            }
+                            false
+                        });
+
+                    // hole saves the elements to be removed in order
+                    let mut hole: Vec<u64> = iter
+                        .map(|kv| KeyDecoder::decode_key_list_idx_from_datakey(&key, kv.0))
+                        .collect();
+
+                    // no matched element, return 0
+                    if hole.is_empty() {
+                        return Ok(0);
+                    }
+
+                    if !from_head {
+                        hole.reverse();
+                    }
+
+                    let mut removed_count = 0;
+
+                    if from_head {
+                        let iter = txn.scan(cfs.data_cf.clone(), bound_range, u32::MAX)?;
+
+                        for kv in iter {
+                            let key_idx =
+                                KeyDecoder::decode_key_list_idx_from_datakey(&key, kv.0.clone());
+                            if hole.is_empty() {
+                                break;
+                            }
+
+                            if !((count > 0 && removed_count == count)
+                                || removed_count == hole.len())
+                                && hole[removed_count] == key_idx
+                            {
+                                txn.del(cfs.data_cf.clone(), kv.0)?;
+                                removed_count += 1;
+                                continue;
+                            }
+
+                            // check if key idx need to be backward move
+                            if removed_count > 0 {
+                                let new_data_key = KEY_ENCODER.encode_txn_kv_list_data_key(
+                                    &key,
+                                    key_idx - removed_count as u64,
+                                    version,
+                                );
+                                txn.put(cfs.data_cf.clone(), new_data_key, kv.1)?;
+                                txn.del(cfs.data_cf.clone(), kv.0)?;
+                            }
+                        }
+
+                        // update meta key or delete it if no element left
+                        if len == removed_count as u64 {
+                            txn.del(cfs.meta_cf.clone(), meta_key)?;
+                        } else {
+                            let new_meta_value = KEY_ENCODER.encode_txn_kv_list_meta_value(
+                                ttl,
+                                version,
+                                left,
+                                right - removed_count as u64,
+                            );
+                            txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
+                        }
+                    } else {
+                        let iter = txn.scan_reverse(cfs.data_cf.clone(), bound_range, u32::MAX)?;
+
+                        for kv in iter {
+                            let key_idx =
+                                KeyDecoder::decode_key_list_idx_from_datakey(&key, kv.0.clone());
+                            if hole.is_empty() {
+                                break;
+                            }
+
+                            if !((count > 0 && removed_count == count)
+                                || removed_count == hole.len())
+                                && hole[removed_count] == key_idx
+                            {
+                                txn.del(cfs.data_cf.clone(), kv.0)?;
+                                removed_count += 1;
+                                continue;
+                            }
+
+                            // check if key idx need to be forward move
+                            if removed_count > 0 {
+                                let new_data_key = KEY_ENCODER.encode_txn_kv_list_data_key(
+                                    &key,
+                                    key_idx + removed_count as u64,
+                                    version,
+                                );
+                                txn.put(cfs.data_cf.clone(), new_data_key, kv.1)?;
+                                txn.del(cfs.data_cf.clone(), kv.0)?;
+                            }
+                        }
+
+                        // update meta key or delete it if no element left
+                        if len == removed_count as u64 {
+                            txn.del(cfs.meta_cf.clone(), meta_key)?;
+                        } else {
+                            let new_meta_value = KEY_ENCODER.encode_txn_kv_list_meta_value(
+                                ttl,
+                                version,
+                                left + removed_count as u64,
+                                right,
+                            );
+                            txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
+                        }
+                    }
+                    Ok(removed_count as i64)
+                }
+                None => Ok(0),
+            }
+        });
+
+        match resp {
+            Ok(_) => Ok(resp_ok()),
+            Err(e) => Ok(resp_err(e)),
+        }
     }
 }
 
