@@ -70,6 +70,18 @@ pub use srem::Srem;
 mod spop;
 pub use spop::Spop;
 
+mod push;
+pub use push::Push;
+
+mod pop;
+pub use pop::Pop;
+
+mod ltrim;
+pub use ltrim::Ltrim;
+
+mod lrange;
+pub use lrange::Lrange;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -108,6 +120,14 @@ pub enum Command {
     Srandmember(Srandmember),
     Spop(Spop),
     Srem(Srem),
+
+    // list
+    Lpush(Push),
+    Rpush(Push),
+    Lpop(Pop),
+    Rpop(Pop),
+    Lrange(Lrange),
+    Ltrim(Ltrim),
 
     Unknown(Unknown),
 }
@@ -202,6 +222,15 @@ impl Command {
             )),
             "spop" => Command::Spop(transform_parse(Spop::parse_frames(&mut parse), &mut parse)),
             "srem" => Command::Srem(transform_parse(Srem::parse_frames(&mut parse), &mut parse)),
+            "lpush" => Command::Lpush(transform_parse(Push::parse_frames(&mut parse), &mut parse)),
+            "rpush" => Command::Rpush(transform_parse(Push::parse_frames(&mut parse), &mut parse)),
+            "lpop" => Command::Lpop(transform_parse(Pop::parse_frames(&mut parse), &mut parse)),
+            "rpop" => Command::Rpop(transform_parse(Pop::parse_frames(&mut parse), &mut parse)),
+            "lrange" => Command::Lrange(transform_parse(
+                Lrange::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "ltrim" => Command::Ltrim(transform_parse(Ltrim::parse_frames(&mut parse), &mut parse)),
 
             _ => {
                 // The command is not recognized and an Unknown command is
@@ -264,6 +293,12 @@ impl Command {
             Srandmember(cmd) => cmd.apply(dst).await,
             Spop(cmd) => cmd.apply(dst).await,
             Srem(cmd) => cmd.apply(dst).await,
+            Lpush(cmd) => cmd.apply(dst, true).await,
+            Rpush(cmd) => cmd.apply(dst, false).await,
+            Lpop(cmd) => cmd.apply(dst, true).await,
+            Rpop(cmd) => cmd.apply(dst, false).await,
+            Lrange(cmd) => cmd.apply(dst).await,
+            Ltrim(cmd) => cmd.apply(dst).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
             // `Unsubscribe` cannot be applied. It may only be received from the
@@ -304,6 +339,12 @@ impl Command {
             Command::Srandmember(_) => "srandmember",
             Command::Spop(_) => "spop",
             Command::Srem(_) => "srem",
+            Command::Lpush(_) => "lpush",
+            Command::Rpush(_) => "rpush",
+            Command::Lpop(_) => "lpop",
+            Command::Rpop(_) => "rpop",
+            Command::Lrange(_) => "lrange",
+            Command::Ltrim(_) => "ltrim",
             Command::Unknown(cmd) => cmd.get_name(),
         }
     }

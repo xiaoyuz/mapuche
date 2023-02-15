@@ -13,6 +13,7 @@ pub mod client;
 pub mod encoding;
 pub mod errors;
 pub mod kv;
+pub mod list;
 pub mod set;
 pub mod string;
 pub mod transaction;
@@ -22,6 +23,7 @@ pub const CF_NAME_GC_VERSION: &str = "gc_version";
 pub const CF_NAME_META: &str = "meta";
 pub const CF_NAME_SET_SUB_META: &str = "set_sub_meta";
 pub const CF_NAME_SET_DATA: &str = "set_data";
+pub const CF_NAME_LIST_DATA: &str = "list_data";
 
 pub type Result<T> = std::result::Result<T, RError>;
 
@@ -72,6 +74,7 @@ fn new_db() -> Result<TransactionDB<MultiThreaded>> {
         CF_NAME_GC_VERSION,
         CF_NAME_SET_SUB_META,
         CF_NAME_SET_DATA,
+        CF_NAME_LIST_DATA,
     ];
 
     TransactionDB::open_cf(

@@ -4,7 +4,7 @@ use crate::rocks::get_instance_id;
 use crate::rocks::kv::bound_range::BoundRange;
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 
 pub struct KeyEncoder {
     // instance_id will be encoded to 2 bytes vec
@@ -280,6 +280,76 @@ impl KeyEncoder {
         let range_end = self.encode_txn_kv_gc_version_key_bound(false);
         let range: Range<Key> = range_start..range_end;
         range.into()
+    }
+
+    /// idx range [0, 1<<64]
+    /// left initial value  1<<32, left is point to the left element
+    /// right initial value 1<<32, right is point to the next right position of right element
+    /// list is indicated as null if left index equal to right
+    pub fn encode_txn_kv_list_data_key(&self, ukey: &str, idx: u64, version: u16) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(16 + enc_ukey.len());
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_LIST, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER);
+        key.extend_from_slice(&idx.to_be_bytes());
+        key.into()
+    }
+
+    pub fn encode_txn_kv_list_data_key_idx_range(
+        &self,
+        key: &str,
+        start: u64,
+        end: u64,
+        version: u16,
+    ) -> BoundRange {
+        let data_key_start = self.encode_txn_kv_list_data_key(key, start, version);
+        let data_key_end = self.encode_txn_kv_list_data_key(key, end, version);
+        let range: RangeInclusive<Key> = data_key_start..=data_key_end;
+        range.into()
+    }
+
+    fn encode_txn_kv_list_data_key_start(&self, ukey: &str, version: u16) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(8 + enc_ukey.len());
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_LIST, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER);
+        key.into()
+    }
+
+    fn encode_txn_kv_list_data_key_end(&self, ukey: &str, version: u16) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(8 + enc_ukey.len());
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_LIST, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER + 1);
+        key.into()
+    }
+
+    pub fn encode_txn_kv_list_data_key_range(&self, key: &str, version: u16) -> BoundRange {
+        let data_key_start = self.encode_txn_kv_list_data_key_start(key, version);
+        let data_key_end = self.encode_txn_kv_list_data_key_end(key, version);
+        let range: Range<Key> = data_key_start..data_key_end;
+        range.into()
+    }
+
+    pub fn encode_txn_kv_list_meta_value(
+        &self,
+        ttl: i64,
+        version: u16,
+        left: u64,
+        right: u64,
+    ) -> Value {
+        let dt = self.get_type_bytes(DataType::List);
+        let mut val = Vec::with_capacity(27);
+
+        val.push(dt);
+        val.extend_from_slice(&ttl.to_be_bytes());
+        val.extend_from_slice(&version.to_be_bytes());
+        val.extend_from_slice(&left.to_be_bytes());
+        val.extend_from_slice(&right.to_be_bytes());
+        val
     }
 }
 

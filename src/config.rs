@@ -320,3 +320,18 @@ pub fn async_gc_worker_number_or_default() -> usize {
     // default async gc worker number
     10
 }
+
+pub fn async_del_list_threshold_or_default() -> u32 {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.async_del_list_threshold {
+                return b;
+            }
+        }
+    }
+    if async_deletion_enabled_or_default() {
+        1000
+    } else {
+        u32::MAX
+    }
+}

@@ -125,4 +125,14 @@ impl KeyDecoder {
         let version = u16::from_be_bytes(key[idx..idx + 2].try_into().unwrap());
         (ukey, version)
     }
+
+    /// return (ttl, version, left, right)
+    pub fn decode_key_list_meta(value: &[u8]) -> (i64, u16, u64, u64) {
+        (
+            i64::from_be_bytes(value[1..9].try_into().unwrap()),
+            u16::from_be_bytes(value[9..11].try_into().unwrap()),
+            u64::from_be_bytes(value[11..19].try_into().unwrap()),
+            u64::from_be_bytes(value[19..].try_into().unwrap()),
+        )
+    }
 }
