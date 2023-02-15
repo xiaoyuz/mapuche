@@ -241,7 +241,8 @@ impl Db {
         // If there is no entry for the requested channel, then create a new
         // broadcast channel and associate it with the key. If one already
         // exists, return an associated receiver.
-        match state.pub_sub.entry(key) {
+        let entry = state.pub_sub.entry(key);
+        match entry {
             Entry::Occupied(e) => e.get().subscribe(),
             Entry::Vacant(e) => {
                 // No broadcast channel exists yet, so create one.
