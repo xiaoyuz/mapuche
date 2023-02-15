@@ -14,6 +14,7 @@ use rocksdb::ColumnFamilyRef;
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
+use crate::rocks::list::ListCommand;
 use crate::rocks::set::SetCommand;
 use crate::rocks::transaction::RocksTransaction;
 use crate::rocks::Result as RocksResult;
@@ -286,6 +287,9 @@ impl StringCommand {
                         DataType::Set => {
                             SetCommand.txn_expire(txn, &client, &key, timestamp, &meta_value)
                         }
+                        DataType::List => {
+                            ListCommand.txn_expire(txn, &client, &key, timestamp, &meta_value)
+                        }
                         _ => {
                             // TODO: add all types
                             Ok(0)
@@ -318,6 +322,9 @@ impl StringCommand {
                             }
                             DataType::Set => {
                                 SetCommand.txn_expire_if_needed(txn, &client, &key)?;
+                            }
+                            DataType::List => {
+                                ListCommand.txn_expire_if_needed(txn, &client, &key)?;
                             }
                             _ => {
                                 // TODO: add all types

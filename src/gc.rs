@@ -6,6 +6,7 @@ use crate::metrics::GC_TASK_QUEUE_COUNTER;
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::RError;
+use crate::rocks::list::ListCommand;
 use crate::rocks::{get_client, RocksCommand, CF_NAME_GC, CF_NAME_GC_VERSION, KEY_ENCODER};
 use crc::{Crc, CRC_16_XMODEM};
 use rocksdb::ColumnFamilyRef;
@@ -205,6 +206,13 @@ impl GcWorker {
                         "[GC] async delete set key {} with version {}", user_key, version
                     );
                     SetCommand.txn_gc(txn, &client, &user_key, version)?;
+                }
+                DataType::List => {
+                    debug!(
+                        LOGGER,
+                        "[GC] async delete list key {} with version {}", user_key, version
+                    );
+                    ListCommand.txn_gc(txn, &client, &user_key, version)?;
                 }
                 DataType::Null => {
                     panic!("unknown data type to do async deletion");
