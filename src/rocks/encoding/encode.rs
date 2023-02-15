@@ -351,6 +351,59 @@ impl KeyEncoder {
         val.extend_from_slice(&right.to_be_bytes());
         val
     }
+
+    pub fn encode_txn_kv_hash_data_key(&self, ukey: &str, field: &str, version: u16) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(8 + enc_ukey.len() + field.len());
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_HASH, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER);
+        key.extend_from_slice(field.as_bytes());
+        key.into()
+    }
+
+    pub fn encode_txn_kv_hash_data_key_start(&self, ukey: &str, version: u16) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(8 + enc_ukey.len());
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_HASH, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER);
+        key.into()
+    }
+
+    pub fn encode_txn_kv_hash_data_key_end(&self, ukey: &str, version: u16) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(8 + enc_ukey.len());
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_HASH, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER + 1);
+        key.into()
+    }
+
+    pub fn encode_txn_kv_hash_data_key_range(&self, key: &str, version: u16) -> BoundRange {
+        let data_key_start = self.encode_txn_kv_hash_data_key_start(key, version);
+        let data_key_end = self.encode_txn_kv_hash_data_key_end(key, version);
+        let range: Range<Key> = data_key_start..data_key_end;
+        range.into()
+    }
+
+    pub fn encode_txn_kv_hash_meta_value(&self, ttl: i64, version: u16, index_size: u16) -> Value {
+        let dt = self.get_type_bytes(DataType::Hash);
+        let mut val = Vec::with_capacity(13);
+
+        val.push(dt);
+        val.extend_from_slice(&ttl.to_be_bytes());
+        val.extend_from_slice(&version.to_be_bytes());
+
+        // if index_size is 0 means this is a new created key, use the default config number
+        if index_size == 0 {
+            val.extend_from_slice(&self.meta_key_number.to_be_bytes());
+        } else {
+            val.extend_from_slice(&index_size.to_be_bytes());
+        }
+
+        val
+    }
 }
 
 impl Default for KeyEncoder {

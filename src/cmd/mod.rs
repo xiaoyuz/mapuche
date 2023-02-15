@@ -97,6 +97,15 @@ pub use linsert::Linsert;
 mod lrem;
 pub use lrem::Lrem;
 
+mod hset;
+pub use hset::Hset;
+
+mod hget;
+pub use hget::Hget;
+
+mod hstrlen;
+pub use hstrlen::Hstrlen;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -148,6 +157,13 @@ pub enum Command {
     Lset(Lset),
     Lrem(Lrem),
     Linsert(Linsert),
+
+    // hash
+    Hset(Hset),
+    Hmset(Hset),
+    Hsetnx(Hset),
+    Hget(Hget),
+    Hstrlen(Hstrlen),
 
     Unknown(Unknown),
 }
@@ -262,6 +278,16 @@ impl Command {
                 Linsert::parse_frames(&mut parse),
                 &mut parse,
             )),
+            "hset" => Command::Hset(transform_parse(Hset::parse_frames(&mut parse), &mut parse)),
+            "hsetnx" => {
+                Command::Hsetnx(transform_parse(Hset::parse_frames(&mut parse), &mut parse))
+            }
+            "hmset" => Command::Hmset(transform_parse(Hset::parse_frames(&mut parse), &mut parse)),
+            "hget" => Command::Hget(transform_parse(Hget::parse_frames(&mut parse), &mut parse)),
+            "hstrlen" => Command::Hstrlen(transform_parse(
+                Hstrlen::parse_frames(&mut parse),
+                &mut parse,
+            )),
 
             _ => {
                 // The command is not recognized and an Unknown command is
@@ -335,6 +361,11 @@ impl Command {
             Lset(cmd) => cmd.apply(dst).await,
             Lrem(cmd) => cmd.apply(dst).await,
             Linsert(cmd) => cmd.apply(dst).await,
+            Hset(cmd) => cmd.apply(dst, false, false).await,
+            Hmset(cmd) => cmd.apply(dst, true, false).await,
+            Hsetnx(cmd) => cmd.apply(dst, false, true).await,
+            Hget(cmd) => cmd.apply(dst).await,
+            Hstrlen(cmd) => cmd.apply(dst).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
             // `Unsubscribe` cannot be applied. It may only be received from the
@@ -386,6 +417,12 @@ impl Command {
             Command::Lset(_) => "lset",
             Command::Lrem(_) => "lrem",
             Command::Linsert(_) => "linsert",
+            Command::Hset(_) => "hset",
+            Command::Hmset(_) => "hmset",
+            Command::Hsetnx(_) => "hsetnx",
+            Command::Hget(_) => "hget",
+            Command::Hstrlen(_) => "hstrlen",
+
             Command::Unknown(cmd) => cmd.get_name(),
         }
     }
