@@ -18,6 +18,7 @@ pub mod list;
 pub mod set;
 pub mod string;
 pub mod transaction;
+pub mod zset;
 
 pub const CF_NAME_GC: &str = "gc";
 pub const CF_NAME_GC_VERSION: &str = "gc_version";
@@ -27,6 +28,9 @@ pub const CF_NAME_SET_DATA: &str = "set_data";
 pub const CF_NAME_LIST_DATA: &str = "list_data";
 pub const CF_NAME_HASH_SUB_META: &str = "hash_sub_meta";
 pub const CF_NAME_HASH_DATA: &str = "hash_data";
+pub const CF_NAME_ZSET_SUB_META: &str = "zset_sub_meta";
+pub const CF_NAME_ZSET_DATA: &str = "zset_data";
+pub const CF_NAME_ZSET_SCORE: &str = "zset_score";
 
 pub type Result<T> = std::result::Result<T, RError>;
 
@@ -80,6 +84,9 @@ fn new_db() -> Result<TransactionDB<MultiThreaded>> {
         CF_NAME_LIST_DATA,
         CF_NAME_HASH_SUB_META,
         CF_NAME_HASH_DATA,
+        CF_NAME_ZSET_SUB_META,
+        CF_NAME_ZSET_DATA,
+        CF_NAME_ZSET_SCORE,
     ];
 
     TransactionDB::open_cf(

@@ -130,6 +130,24 @@ pub use hdel::Hdel;
 mod hincrby;
 pub use hincrby::Hincrby;
 
+mod zadd;
+pub use zadd::Zadd;
+
+mod zcard;
+pub use zcard::Zcard;
+
+mod zscore;
+pub use zscore::Zscore;
+
+mod zcount;
+pub use zcount::Zcount;
+
+mod zrange;
+pub use zrange::Zrange;
+
+mod zrevrange;
+pub use zrevrange::Zrevrange;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -196,6 +214,14 @@ pub enum Command {
     Hincrby(Hincrby),
     Hexists(Hexists),
     Hstrlen(Hstrlen),
+
+    // sorted set
+    Zadd(Zadd),
+    Zcard(Zcard),
+    Zscore(Zscore),
+    Zrange(Zrange),
+    Zrevrange(Zrevrange),
+    Zcount(Zcount),
 
     Unknown(Unknown),
 }
@@ -337,6 +363,24 @@ impl Command {
                 Hstrlen::parse_frames(&mut parse),
                 &mut parse,
             )),
+            "zadd" => Command::Zadd(transform_parse(Zadd::parse_frames(&mut parse), &mut parse)),
+            "zcard" => Command::Zcard(transform_parse(Zcard::parse_frames(&mut parse), &mut parse)),
+            "zscore" => Command::Zscore(transform_parse(
+                Zscore::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "zrange" => Command::Zrange(transform_parse(
+                Zrange::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "zrevrange" => Command::Zrevrange(transform_parse(
+                Zrevrange::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "zcount" => Command::Zcount(transform_parse(
+                Zcount::parse_frames(&mut parse),
+                &mut parse,
+            )),
 
             _ => {
                 // The command is not recognized and an Unknown command is
@@ -423,6 +467,12 @@ impl Command {
             Hincrby(cmd) => cmd.apply(dst).await,
             Hexists(cmd) => cmd.apply(dst).await,
             Hstrlen(cmd) => cmd.apply(dst).await,
+            Zadd(cmd) => cmd.apply(dst).await,
+            Zcard(cmd) => cmd.apply(dst).await,
+            Zscore(cmd) => cmd.apply(dst).await,
+            Zrange(cmd) => cmd.apply(dst).await,
+            Zrevrange(cmd) => cmd.apply(dst).await,
+            Zcount(cmd) => cmd.apply(dst).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
             // `Unsubscribe` cannot be applied. It may only be received from the
@@ -487,6 +537,12 @@ impl Command {
             Command::Hincrby(_) => "hincrby",
             Command::Hexists(_) => "hexists",
             Command::Hstrlen(_) => "hstrlen",
+            Command::Zadd(_) => "zadd",
+            Command::Zcard(_) => "zcard",
+            Command::Zscore(_) => "zscore",
+            Command::Zrange(_) => "zrange",
+            Command::Zrevrange(_) => "zrevrange",
+            Command::Zcount(_) => "zcount",
 
             Command::Unknown(cmd) => cmd.get_name(),
         }

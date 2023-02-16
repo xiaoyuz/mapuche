@@ -149,4 +149,29 @@ impl KeyDecoder {
         let idx = 8 + enc_ukey.len();
         key[idx..].to_vec()
     }
+
+    pub fn decode_key_zset_score_from_scorekey(ukey: &str, key: Key) -> f64 {
+        let key: Vec<u8> = key.into();
+        let enc_ukey = KEY_ENCODER.encode_bytes(ukey.as_bytes());
+        let idx = 8 + enc_ukey.len();
+        Self::decode_cmp_uint64_to_f64(u64::from_be_bytes(key[idx..idx + 8].try_into().unwrap()))
+    }
+
+    pub fn decode_key_zset_member_from_scorekey(ukey: &str, key: Key) -> Vec<u8> {
+        let key: Vec<u8> = key.into();
+        let enc_ukey = KEY_ENCODER.encode_bytes(ukey.as_bytes());
+        let idx = 17 + enc_ukey.len();
+        key[idx..].to_vec()
+    }
+
+    pub fn decode_key_zset_member_from_datakey(ukey: &str, key: Key) -> Vec<u8> {
+        let key: Vec<u8> = key.into();
+        let enc_ukey = KEY_ENCODER.encode_bytes(ukey.as_bytes());
+        let idx = 8 + enc_ukey.len();
+        key[idx..].to_vec()
+    }
+
+    pub fn decode_key_zset_data_value(value: &[u8]) -> f64 {
+        Self::decode_cmp_uint64_to_f64(u64::from_be_bytes(value[..].try_into().unwrap()))
+    }
 }

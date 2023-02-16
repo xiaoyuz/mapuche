@@ -1,5 +1,5 @@
 use crate::config::config_meta_key_number_or_default;
-use crate::rocks::encoding::{DataType, ENC_ASC_PADDING, ENC_GROUP_SIZE, ENC_MARKER};
+use crate::rocks::encoding::{DataType, ENC_ASC_PADDING, ENC_GROUP_SIZE, ENC_MARKER, SIGN_MASK};
 use crate::rocks::get_instance_id;
 use crate::rocks::kv::bound_range::BoundRange;
 use crate::rocks::kv::key::Key;
@@ -403,6 +403,160 @@ impl KeyEncoder {
         }
 
         val
+    }
+
+    pub fn encode_txn_kv_zset_meta_value(&self, ttl: i64, version: u16, index_size: u16) -> Value {
+        let dt = self.get_type_bytes(DataType::Zset);
+        let mut val = Vec::with_capacity(13);
+
+        val.push(dt);
+        val.extend_from_slice(&ttl.to_be_bytes());
+        val.extend_from_slice(&version.to_be_bytes());
+        // if index_size is 0 means this is a new created key, use the default config number
+        if index_size == 0 {
+            val.extend_from_slice(&self.meta_key_number.to_be_bytes());
+        } else {
+            val.extend_from_slice(&index_size.to_be_bytes());
+        }
+        val
+    }
+
+    pub fn encode_txn_kv_zset_data_key(&self, ukey: &str, member: &str, version: u16) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(8 + enc_ukey.len() + member.len());
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_ZSET, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER);
+        key.extend_from_slice(member.as_bytes());
+        key.into()
+    }
+
+    pub fn encode_txn_kv_zset_data_key_start(&self, ukey: &str, version: u16) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(8 + enc_ukey.len());
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_ZSET, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER);
+        key.into()
+    }
+
+    pub fn encode_txn_kv_zset_data_key_end(&self, ukey: &str, version: u16) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(8 + enc_ukey.len());
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_ZSET, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER + 1);
+        key.into()
+    }
+
+    pub fn encode_txn_kv_zset_data_key_range(&self, ukey: &str, version: u16) -> BoundRange {
+        let data_key_start = self.encode_txn_kv_zset_data_key_start(ukey, version);
+        let data_key_end = self.encode_txn_kv_zset_data_key_end(ukey, version);
+        let range: Range<Key> = data_key_start..data_key_end;
+        range.into()
+    }
+
+    pub fn encode_txn_kv_zset_data_value(&self, score: f64) -> Value {
+        self.encode_f64_to_cmp_uint64(score).to_be_bytes().to_vec()
+    }
+
+    fn encode_f64_to_cmp_uint64(&self, score: f64) -> u64 {
+        let mut b = score.to_bits();
+        if score >= 0f64 {
+            b |= SIGN_MASK;
+        } else {
+            b = !b;
+        }
+
+        b
+    }
+
+    // encode the member to score key
+    pub fn encode_txn_kv_zset_score_key(
+        &self,
+        ukey: &str,
+        score: f64,
+        member: &str,
+        version: u16,
+    ) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(17 + enc_ukey.len() + member.len());
+        let score = self.encode_f64_to_cmp_uint64(score);
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER);
+        key.extend_from_slice(&score.to_be_bytes());
+        key.push(PLACE_HOLDER);
+        key.extend_from_slice(member.as_bytes());
+        key.into()
+    }
+
+    pub fn encode_txn_kv_zset_score_key_start(&self, ukey: &str, version: u16) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(8 + enc_ukey.len());
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER);
+        key.into()
+    }
+
+    pub fn encode_txn_kv_zset_score_key_end(&self, ukey: &str, version: u16) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(8 + enc_ukey.len());
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER + 1);
+        key.into()
+    }
+
+    pub fn encode_txn_kv_zset_score_key_range(&self, ukey: &str, version: u16) -> BoundRange {
+        let range_start = self.encode_txn_kv_zset_score_key_start(ukey, version);
+        let range_end = self.encode_txn_kv_zset_score_key_end(ukey, version);
+        let range: Range<Key> = range_start..range_end;
+        range.into()
+    }
+
+    pub fn encode_txn_kv_zset_score_key_score_start(
+        &self,
+        ukey: &str,
+        score: f64,
+        with_frontier: bool,
+        version: u16,
+    ) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(17 + enc_ukey.len());
+        let mut score = self.encode_f64_to_cmp_uint64(score);
+        if !with_frontier {
+            score += 1;
+        }
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
+
+        key.push(PLACE_HOLDER);
+        key.extend_from_slice(&score.to_be_bytes());
+        key.push(PLACE_HOLDER);
+        key.into()
+    }
+
+    pub fn encode_txn_kv_zset_score_key_score_end(
+        &self,
+        ukey: &str,
+        score: f64,
+        with_frontier: bool,
+        version: u16,
+    ) -> Key {
+        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let mut key = Vec::with_capacity(17 + enc_ukey.len());
+        let mut score = self.encode_f64_to_cmp_uint64(score);
+        if !with_frontier {
+            score -= 1;
+        }
+
+        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
+        key.push(PLACE_HOLDER);
+        key.extend_from_slice(&score.to_be_bytes());
+        key.push(PLACE_HOLDER + 1);
+        key.into()
     }
 }
 

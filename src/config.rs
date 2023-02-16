@@ -389,3 +389,33 @@ pub fn async_del_hash_threshold_or_default() -> u32 {
         u32::MAX
     }
 }
+
+pub fn async_expire_zset_threshold_or_default() -> u32 {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.async_expire_zset_threshold {
+                return b;
+            }
+        }
+    }
+    if async_deletion_enabled_or_default() {
+        1000
+    } else {
+        u32::MAX
+    }
+}
+
+pub fn async_del_zset_threshold_or_default() -> u32 {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.async_del_zset_threshold {
+                return b;
+            }
+        }
+    }
+    if async_deletion_enabled_or_default() {
+        1000
+    } else {
+        u32::MAX
+    }
+}

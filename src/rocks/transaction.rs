@@ -27,9 +27,9 @@ impl<'a> RocksTransaction<'a> {
         })
     }
 
-    pub fn put(&self, cf: ColumnFamilyRef, key: Key, value: Value) -> RocksResult<()> {
+    pub fn put(&self, cf: ColumnFamilyRef, key: Key, value: impl Into<Value>) -> RocksResult<()> {
         let key: Vec<u8> = key.into();
-        let value: Vec<u8> = value;
+        let value: Vec<u8> = value.into();
         self.inner_txn.put_cf(&cf, key, value).map_err(|e| {
             ROCKS_ERR_COUNTER
                 .with_label_values(&["txn_client_error"])
