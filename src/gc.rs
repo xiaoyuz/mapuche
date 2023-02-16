@@ -21,6 +21,7 @@ use tokio::time;
 use tokio::time::MissedTickBehavior;
 
 use crate::rocks::set::SetCommand;
+use crate::rocks::zset::ZsetCommand;
 use crate::rocks::Result as RocksResult;
 
 const CRC16: Crc<u16> = Crc::<u16>::new(&CRC_16_XMODEM);
@@ -222,11 +223,14 @@ impl GcWorker {
                     );
                     HashCommand.txn_gc(txn, &client, &user_key, version)?;
                 }
-                DataType::Null => {
-                    panic!("unknown data type to do async deletion");
+                DataType::Zset => {
+                    debug!(
+                        LOGGER,
+                        "[GC] async delete zset key {} with version {}", user_key, version
+                    );
+                    ZsetCommand.txn_gc(txn, &client, &user_key, version)?;
                 }
-                _ => {
-                    // TODO
+                DataType::Null => {
                     panic!("unknown data type to do async deletion");
                 }
             }

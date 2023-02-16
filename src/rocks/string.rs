@@ -18,6 +18,7 @@ use crate::rocks::kv::value::Value;
 use crate::rocks::list::ListCommand;
 use crate::rocks::set::SetCommand;
 use crate::rocks::transaction::RocksTransaction;
+use crate::rocks::zset::ZsetCommand;
 use crate::rocks::Result as RocksResult;
 use crate::utils::{
     key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil, resp_ok, resp_str,
@@ -294,10 +295,10 @@ impl StringCommand {
                         DataType::Hash => {
                             HashCommand.txn_expire(txn, &client, &key, timestamp, &meta_value)
                         }
-                        _ => {
-                            // TODO: add all types
-                            Ok(0)
+                        DataType::Zset => {
+                            ZsetCommand.txn_expire(txn, &client, &key, timestamp, &meta_value)
                         }
+                        _ => Ok(0),
                     }
                 }
                 None => Ok(0),
@@ -314,43 +315,42 @@ impl StringCommand {
         let cfs = StringCF::new(&client);
         let key = key.to_owned();
         let ekey = KEY_ENCODER.encode_txn_kv_string(&key);
-        client.exec_txn(|txn| {
-            match txn.get(cfs.data_cf.clone(), ekey.clone())? {
-                Some(meta_value) => {
-                    let dt = KeyDecoder::decode_key_type(&meta_value);
-                    let ttl = KeyDecoder::decode_key_ttl(&meta_value);
-                    if key_is_expired(ttl) {
-                        match dt {
-                            DataType::String => {
-                                self.txn_expire_if_needed(txn, &client, &ekey, &meta_value)?;
-                            }
-                            DataType::Set => {
-                                SetCommand.txn_expire_if_needed(txn, &client, &key)?;
-                            }
-                            DataType::List => {
-                                ListCommand.txn_expire_if_needed(txn, &client, &key)?;
-                            }
-                            DataType::Hash => {
-                                HashCommand.txn_expire_if_needed(txn, &client, &key)?;
-                            }
-                            _ => {
-                                // TODO: add all types
-                            }
+        client.exec_txn(|txn| match txn.get(cfs.data_cf.clone(), ekey.clone())? {
+            Some(meta_value) => {
+                let dt = KeyDecoder::decode_key_type(&meta_value);
+                let ttl = KeyDecoder::decode_key_ttl(&meta_value);
+                if key_is_expired(ttl) {
+                    match dt {
+                        DataType::String => {
+                            self.txn_expire_if_needed(txn, &client, &ekey, &meta_value)?;
                         }
-                        return Ok(resp_int(-2));
-                    }
-                    if ttl == 0 {
-                        Ok(resp_int(-1))
-                    } else {
-                        let mut ttl = ttl_from_timestamp(ttl);
-                        if !is_millis {
-                            ttl /= 1000;
+                        DataType::Set => {
+                            SetCommand.txn_expire_if_needed(txn, &client, &key)?;
                         }
-                        Ok(resp_int(ttl))
+                        DataType::List => {
+                            ListCommand.txn_expire_if_needed(txn, &client, &key)?;
+                        }
+                        DataType::Hash => {
+                            HashCommand.txn_expire_if_needed(txn, &client, &key)?;
+                        }
+                        DataType::Zset => {
+                            ZsetCommand.txn_expire_if_needed(txn, &client, &key)?;
+                        }
+                        _ => {}
                     }
+                    return Ok(resp_int(-2));
                 }
-                None => Ok(resp_int(-2)),
+                if ttl == 0 {
+                    Ok(resp_int(-1))
+                } else {
+                    let mut ttl = ttl_from_timestamp(ttl);
+                    if !is_millis {
+                        ttl /= 1000;
+                    }
+                    Ok(resp_int(ttl))
+                }
             }
+            None => Ok(resp_int(-2)),
         })
     }
 
@@ -379,9 +379,19 @@ impl StringCommand {
                         SetCommand.txn_del(txn, &client, &ekey_map[&ekey])?;
                         resp += 1;
                     }
-                    _ => {
-                        // TODO add all types
+                    Some(DataType::List) => {
+                        ListCommand.txn_del(txn, &client, &ekey_map[&ekey])?;
+                        resp += 1;
                     }
+                    Some(DataType::Hash) => {
+                        HashCommand.txn_del(txn, &client, &ekey_map[&ekey])?;
+                        resp += 1;
+                    }
+                    Some(DataType::Zset) => {
+                        ZsetCommand.txn_del(txn, &client, &ekey_map[&ekey])?;
+                        resp += 1;
+                    }
+                    _ => {}
                 }
             }
             Ok(resp)
