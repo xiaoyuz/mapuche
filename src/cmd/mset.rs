@@ -80,8 +80,8 @@ impl Mset {
         let mut kvs = Vec::new();
         for (idx, key) in self.keys.iter().enumerate() {
             let val = &self.vals[idx];
-            let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-            let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut val.to_vec(), -1);
+            let ekey = KEY_ENCODER.encode_string(key);
+            let eval = KEY_ENCODER.encode_string_value(&mut val.to_vec(), -1);
             let kvpair = KvPair::from((ekey, eval));
             kvs.push(kvpair);
         }

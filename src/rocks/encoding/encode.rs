@@ -70,7 +70,7 @@ impl KeyEncoder {
         }
     }
 
-    pub fn encode_txn_kv_string(&self, ukey: &str) -> Key {
+    pub fn encode_string(&self, ukey: &str) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(5 + enc_ukey.len());
 
@@ -82,7 +82,7 @@ impl KeyEncoder {
         key.into()
     }
 
-    fn encode_txn_kv_string_internal(&self, vsize: usize, ttl: i64, version: u16) -> Value {
+    fn encode_string_internal(&self, vsize: usize, ttl: i64, version: u16) -> Value {
         let dt = self.get_type_bytes(DataType::String);
         let mut val = Vec::with_capacity(11 + vsize);
         val.push(dt);
@@ -91,25 +91,23 @@ impl KeyEncoder {
         val
     }
 
-    pub fn encode_txn_kv_string_slice(&self, value: &[u8], ttl: i64) -> Value {
-        let mut val = self.encode_txn_kv_string_internal(value.len(), ttl, 0);
+    pub fn encode_string_slice(&self, value: &[u8], ttl: i64) -> Value {
+        let mut val = self.encode_string_internal(value.len(), ttl, 0);
         val.extend_from_slice(value);
         val
     }
 
-    pub fn encode_txn_kv_string_value(&self, value: &mut Value, ttl: i64) -> Value {
-        let mut val = self.encode_txn_kv_string_internal(value.len(), ttl, 0);
+    pub fn encode_string_value(&self, value: &mut Value, ttl: i64) -> Value {
+        let mut val = self.encode_string_internal(value.len(), ttl, 0);
         val.append(value);
         val
     }
 
-    pub fn encode_raw_kv_strings(&self, keys: &[String]) -> Vec<Key> {
-        keys.iter()
-            .map(|ukey| self.encode_txn_kv_string(ukey))
-            .collect()
+    pub fn encode_strings(&self, keys: &[String]) -> Vec<Key> {
+        keys.iter().map(|ukey| self.encode_string(ukey)).collect()
     }
 
-    fn encode_txn_kv_meta_common_prefix(&self, enc_ukey: &[u8], key: &mut Vec<u8>) {
+    fn encode_meta_common_prefix(&self, enc_ukey: &[u8], key: &mut Vec<u8>) {
         key.push(TXN_KEY_PREFIX);
         key.extend_from_slice(self.instance_id.as_slice());
         key.push(DATA_TYPE_USER);
@@ -117,15 +115,15 @@ impl KeyEncoder {
         key.push(DATA_TYPE_META);
     }
 
-    pub fn encode_txn_kv_meta_key(&self, ukey: &str) -> Key {
+    pub fn encode_meta_key(&self, ukey: &str) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(5 + enc_ukey.len());
 
-        self.encode_txn_kv_meta_common_prefix(&enc_ukey, &mut key);
+        self.encode_meta_common_prefix(&enc_ukey, &mut key);
         key.into()
     }
 
-    pub fn encode_txn_kv_keyspace_end(&self) -> Key {
+    pub fn encode_keyspace_end(&self) -> Key {
         let mut key = Vec::with_capacity(4);
         key.push(TXN_KEY_PREFIX);
         key.extend_from_slice(self.instance_id.as_slice());
@@ -133,11 +131,11 @@ impl KeyEncoder {
         key.into()
     }
 
-    pub fn encode_txn_kv_sub_meta_key(&self, ukey: &str, version: u16, idx: u16) -> Key {
+    pub fn encode_sub_meta_key(&self, ukey: &str, version: u16, idx: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(10 + enc_ukey.len());
 
-        self.encode_txn_kv_meta_common_prefix(&enc_ukey, &mut key);
+        self.encode_meta_common_prefix(&enc_ukey, &mut key);
 
         key.extend_from_slice(&version.to_be_bytes());
         key.push(PLACE_HOLDER);
@@ -145,36 +143,36 @@ impl KeyEncoder {
         key.into()
     }
 
-    pub fn encode_txn_kv_sub_meta_key_start(&self, ukey: &str, version: u16) -> Key {
+    pub fn encode_sub_meta_key_start(&self, ukey: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
-        self.encode_txn_kv_meta_common_prefix(&enc_ukey, &mut key);
+        self.encode_meta_common_prefix(&enc_ukey, &mut key);
 
         key.extend_from_slice(&version.to_be_bytes());
         key.push(PLACE_HOLDER);
         key.into()
     }
 
-    pub fn encode_txn_kv_sub_meta_key_end(&self, ukey: &str, version: u16) -> Key {
+    pub fn encode_sub_meta_key_end(&self, ukey: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + ukey.len());
 
-        self.encode_txn_kv_meta_common_prefix(&enc_ukey, &mut key);
+        self.encode_meta_common_prefix(&enc_ukey, &mut key);
 
         key.extend_from_slice(&version.to_be_bytes());
         key.push(PLACE_HOLDER + 1);
         key.into()
     }
 
-    pub fn encode_txn_kv_sub_meta_key_range(&self, key: &str, version: u16) -> BoundRange {
-        let sub_meta_key_start = self.encode_txn_kv_sub_meta_key_start(key, version);
-        let sub_meta_key_end = self.encode_txn_kv_sub_meta_key_end(key, version);
+    pub fn encode_sub_meta_key_range(&self, key: &str, version: u16) -> BoundRange {
+        let sub_meta_key_start = self.encode_sub_meta_key_start(key, version);
+        let sub_meta_key_end = self.encode_sub_meta_key_end(key, version);
         let range: Range<Key> = sub_meta_key_start..sub_meta_key_end;
         range.into()
     }
 
-    pub fn encode_txn_kv_gc_key_prefix(&self, ukey: &str, data_type: u8, extra: usize) -> Vec<u8> {
+    pub fn encode_gc_key_prefix(&self, ukey: &str, data_type: u8, extra: usize) -> Vec<u8> {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(extra + enc_ukey.len());
         key.push(TXN_KEY_PREFIX);
@@ -185,18 +183,17 @@ impl KeyEncoder {
         key
     }
 
-    pub fn encode_txn_kv_gc_key(&self, ukey: &str) -> Key {
-        self.encode_txn_kv_gc_key_prefix(ukey, DATA_TYPE_GC, 5)
-            .into()
+    pub fn encode_gc_key(&self, ukey: &str) -> Key {
+        self.encode_gc_key_prefix(ukey, DATA_TYPE_GC, 5).into()
     }
 
-    pub fn encode_txn_kv_gc_version_key(&self, ukey: &str, version: u16) -> Key {
-        let mut key = self.encode_txn_kv_gc_key_prefix(ukey, DATA_TYPE_GC_VERSION, 7);
+    pub fn encode_gc_version_key(&self, ukey: &str, version: u16) -> Key {
+        let mut key = self.encode_gc_key_prefix(ukey, DATA_TYPE_GC_VERSION, 7);
         key.extend_from_slice(&version.to_be_bytes());
         key.into()
     }
 
-    fn encode_txn_kv_type_data_key_prefix(
+    fn encode_type_data_key_prefix(
         &self,
         key_type: u8,
         enc_ukey: &[u8],
@@ -211,42 +208,42 @@ impl KeyEncoder {
         key.extend_from_slice(&version.to_be_bytes());
     }
 
-    pub fn encode_txn_kv_set_data_key_start(&self, ukey: &str, version: u16) -> Key {
+    pub fn encode_set_data_key_start(&self, ukey: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SET, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_SET, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER);
         key.into()
     }
 
-    pub fn encode_txn_kv_set_data_key_end(&self, ukey: &str, version: u16) -> Key {
+    pub fn encode_set_data_key_end(&self, ukey: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SET, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_SET, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER + 1);
         key.into()
     }
 
-    pub fn encode_txn_kv_set_data_key_range(&self, key: &str, version: u16) -> BoundRange {
-        let data_key_start = self.encode_txn_kv_set_data_key_start(key, version);
-        let data_key_end = self.encode_txn_kv_set_data_key_end(key, version);
+    pub fn encode_set_data_key_range(&self, key: &str, version: u16) -> BoundRange {
+        let data_key_start = self.encode_set_data_key_start(key, version);
+        let data_key_end = self.encode_set_data_key_end(key, version);
         let range: Range<Key> = data_key_start..data_key_end;
         range.into()
     }
 
-    pub fn encode_txn_kv_set_data_key(&self, ukey: &str, member: &str, version: u16) -> Key {
+    pub fn encode_set_data_key(&self, ukey: &str, member: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len() + member.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SET, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_SET, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER);
         key.extend_from_slice(member.as_bytes());
         key.into()
     }
 
-    pub fn encode_txn_kv_set_meta_value(&self, ttl: i64, version: u16, index_size: u16) -> Value {
+    pub fn encode_set_meta_value(&self, ttl: i64, version: u16, index_size: u16) -> Value {
         let dt = self.get_type_bytes(DataType::Set);
         let mut val = Vec::with_capacity(13);
 
@@ -262,7 +259,7 @@ impl KeyEncoder {
         val
     }
 
-    fn encode_txn_kv_gc_version_key_bound(&self, start: bool) -> Key {
+    fn encode_gc_version_key_bound(&self, start: bool) -> Key {
         let mut key = Vec::with_capacity(5);
         key.push(TXN_KEY_PREFIX);
         key.extend_from_slice(self.instance_id.as_slice());
@@ -275,9 +272,9 @@ impl KeyEncoder {
         key.into()
     }
 
-    pub fn encode_txn_kv_gc_version_key_range(&self) -> BoundRange {
-        let range_start = self.encode_txn_kv_gc_version_key_bound(true);
-        let range_end = self.encode_txn_kv_gc_version_key_bound(false);
+    pub fn encode_gc_version_key_range(&self) -> BoundRange {
+        let range_start = self.encode_gc_version_key_bound(true);
+        let range_end = self.encode_gc_version_key_bound(false);
         let range: Range<Key> = range_start..range_end;
         range.into()
     }
@@ -286,61 +283,55 @@ impl KeyEncoder {
     /// left initial value  1<<32, left is point to the left element
     /// right initial value 1<<32, right is point to the next right position of right element
     /// list is indicated as null if left index equal to right
-    pub fn encode_txn_kv_list_data_key(&self, ukey: &str, idx: u64, version: u16) -> Key {
+    pub fn encode_list_data_key(&self, ukey: &str, idx: u64, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(16 + enc_ukey.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_LIST, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_LIST, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER);
         key.extend_from_slice(&idx.to_be_bytes());
         key.into()
     }
 
-    pub fn encode_txn_kv_list_data_key_idx_range(
+    pub fn encode_list_data_key_idx_range(
         &self,
         key: &str,
         start: u64,
         end: u64,
         version: u16,
     ) -> BoundRange {
-        let data_key_start = self.encode_txn_kv_list_data_key(key, start, version);
-        let data_key_end = self.encode_txn_kv_list_data_key(key, end, version);
+        let data_key_start = self.encode_list_data_key(key, start, version);
+        let data_key_end = self.encode_list_data_key(key, end, version);
         let range: RangeInclusive<Key> = data_key_start..=data_key_end;
         range.into()
     }
 
-    fn encode_txn_kv_list_data_key_start(&self, ukey: &str, version: u16) -> Key {
+    fn encode_list_data_key_start(&self, ukey: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_LIST, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_LIST, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER);
         key.into()
     }
 
-    fn encode_txn_kv_list_data_key_end(&self, ukey: &str, version: u16) -> Key {
+    fn encode_list_data_key_end(&self, ukey: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_LIST, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_LIST, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER + 1);
         key.into()
     }
 
-    pub fn encode_txn_kv_list_data_key_range(&self, key: &str, version: u16) -> BoundRange {
-        let data_key_start = self.encode_txn_kv_list_data_key_start(key, version);
-        let data_key_end = self.encode_txn_kv_list_data_key_end(key, version);
+    pub fn encode_list_data_key_range(&self, key: &str, version: u16) -> BoundRange {
+        let data_key_start = self.encode_list_data_key_start(key, version);
+        let data_key_end = self.encode_list_data_key_end(key, version);
         let range: Range<Key> = data_key_start..data_key_end;
         range.into()
     }
 
-    pub fn encode_txn_kv_list_meta_value(
-        &self,
-        ttl: i64,
-        version: u16,
-        left: u64,
-        right: u64,
-    ) -> Value {
+    pub fn encode_list_meta_value(&self, ttl: i64, version: u16, left: u64, right: u64) -> Value {
         let dt = self.get_type_bytes(DataType::List);
         let mut val = Vec::with_capacity(27);
 
@@ -352,42 +343,42 @@ impl KeyEncoder {
         val
     }
 
-    pub fn encode_txn_kv_hash_data_key(&self, ukey: &str, field: &str, version: u16) -> Key {
+    pub fn encode_hash_data_key(&self, ukey: &str, field: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len() + field.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_HASH, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_HASH, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER);
         key.extend_from_slice(field.as_bytes());
         key.into()
     }
 
-    pub fn encode_txn_kv_hash_data_key_start(&self, ukey: &str, version: u16) -> Key {
+    pub fn encode_hash_data_key_start(&self, ukey: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_HASH, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_HASH, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER);
         key.into()
     }
 
-    pub fn encode_txn_kv_hash_data_key_end(&self, ukey: &str, version: u16) -> Key {
+    pub fn encode_hash_data_key_end(&self, ukey: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_HASH, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_HASH, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER + 1);
         key.into()
     }
 
-    pub fn encode_txn_kv_hash_data_key_range(&self, key: &str, version: u16) -> BoundRange {
-        let data_key_start = self.encode_txn_kv_hash_data_key_start(key, version);
-        let data_key_end = self.encode_txn_kv_hash_data_key_end(key, version);
+    pub fn encode_hash_data_key_range(&self, key: &str, version: u16) -> BoundRange {
+        let data_key_start = self.encode_hash_data_key_start(key, version);
+        let data_key_end = self.encode_hash_data_key_end(key, version);
         let range: Range<Key> = data_key_start..data_key_end;
         range.into()
     }
 
-    pub fn encode_txn_kv_hash_meta_value(&self, ttl: i64, version: u16, index_size: u16) -> Value {
+    pub fn encode_hash_meta_value(&self, ttl: i64, version: u16, index_size: u16) -> Value {
         let dt = self.get_type_bytes(DataType::Hash);
         let mut val = Vec::with_capacity(13);
 
@@ -405,7 +396,7 @@ impl KeyEncoder {
         val
     }
 
-    pub fn encode_txn_kv_zset_meta_value(&self, ttl: i64, version: u16, index_size: u16) -> Value {
+    pub fn encode_zset_meta_value(&self, ttl: i64, version: u16, index_size: u16) -> Value {
         let dt = self.get_type_bytes(DataType::Zset);
         let mut val = Vec::with_capacity(13);
 
@@ -421,42 +412,42 @@ impl KeyEncoder {
         val
     }
 
-    pub fn encode_txn_kv_zset_data_key(&self, ukey: &str, member: &str, version: u16) -> Key {
+    pub fn encode_zset_data_key(&self, ukey: &str, member: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len() + member.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_ZSET, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_ZSET, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER);
         key.extend_from_slice(member.as_bytes());
         key.into()
     }
 
-    pub fn encode_txn_kv_zset_data_key_start(&self, ukey: &str, version: u16) -> Key {
+    pub fn encode_zset_data_key_start(&self, ukey: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_ZSET, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_ZSET, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER);
         key.into()
     }
 
-    pub fn encode_txn_kv_zset_data_key_end(&self, ukey: &str, version: u16) -> Key {
+    pub fn encode_zset_data_key_end(&self, ukey: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_ZSET, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_ZSET, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER + 1);
         key.into()
     }
 
-    pub fn encode_txn_kv_zset_data_key_range(&self, ukey: &str, version: u16) -> BoundRange {
-        let data_key_start = self.encode_txn_kv_zset_data_key_start(ukey, version);
-        let data_key_end = self.encode_txn_kv_zset_data_key_end(ukey, version);
+    pub fn encode_zset_data_key_range(&self, ukey: &str, version: u16) -> BoundRange {
+        let data_key_start = self.encode_zset_data_key_start(ukey, version);
+        let data_key_end = self.encode_zset_data_key_end(ukey, version);
         let range: Range<Key> = data_key_start..data_key_end;
         range.into()
     }
 
-    pub fn encode_txn_kv_zset_data_value(&self, score: f64) -> Value {
+    pub fn encode_zset_data_value(&self, score: f64) -> Value {
         self.encode_f64_to_cmp_uint64(score).to_be_bytes().to_vec()
     }
 
@@ -472,18 +463,12 @@ impl KeyEncoder {
     }
 
     // encode the member to score key
-    pub fn encode_txn_kv_zset_score_key(
-        &self,
-        ukey: &str,
-        score: f64,
-        member: &str,
-        version: u16,
-    ) -> Key {
+    pub fn encode_zset_score_key(&self, ukey: &str, score: f64, member: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(17 + enc_ukey.len() + member.len());
         let score = self.encode_f64_to_cmp_uint64(score);
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER);
         key.extend_from_slice(&score.to_be_bytes());
         key.push(PLACE_HOLDER);
@@ -491,32 +476,32 @@ impl KeyEncoder {
         key.into()
     }
 
-    pub fn encode_txn_kv_zset_score_key_start(&self, ukey: &str, version: u16) -> Key {
+    pub fn encode_zset_score_key_start(&self, ukey: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER);
         key.into()
     }
 
-    pub fn encode_txn_kv_zset_score_key_end(&self, ukey: &str, version: u16) -> Key {
+    pub fn encode_zset_score_key_end(&self, ukey: &str, version: u16) -> Key {
         let enc_ukey = self.encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER + 1);
         key.into()
     }
 
-    pub fn encode_txn_kv_zset_score_key_range(&self, ukey: &str, version: u16) -> BoundRange {
-        let range_start = self.encode_txn_kv_zset_score_key_start(ukey, version);
-        let range_end = self.encode_txn_kv_zset_score_key_end(ukey, version);
+    pub fn encode_zset_score_key_range(&self, ukey: &str, version: u16) -> BoundRange {
+        let range_start = self.encode_zset_score_key_start(ukey, version);
+        let range_end = self.encode_zset_score_key_end(ukey, version);
         let range: Range<Key> = range_start..range_end;
         range.into()
     }
 
-    pub fn encode_txn_kv_zset_score_key_score_start(
+    pub fn encode_zset_score_key_score_start(
         &self,
         ukey: &str,
         score: f64,
@@ -530,7 +515,7 @@ impl KeyEncoder {
             score += 1;
         }
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
 
         key.push(PLACE_HOLDER);
         key.extend_from_slice(&score.to_be_bytes());
@@ -538,7 +523,7 @@ impl KeyEncoder {
         key.into()
     }
 
-    pub fn encode_txn_kv_zset_score_key_score_end(
+    pub fn encode_zset_score_key_score_end(
         &self,
         ukey: &str,
         score: f64,
@@ -552,7 +537,7 @@ impl KeyEncoder {
             score -= 1;
         }
 
-        self.encode_txn_kv_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
+        self.encode_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
         key.push(PLACE_HOLDER);
         key.extend_from_slice(&score.to_be_bytes());
         key.push(PLACE_HOLDER + 1);

@@ -114,7 +114,7 @@ impl GcMaster {
                 continue;
             }
 
-            let bound_range = KEY_ENCODER.encode_txn_kv_gc_version_key_range();
+            let bound_range = KEY_ENCODER.encode_gc_version_key_range();
 
             // TODO scan speed throttling
             let iter_res = client.scan(gc_cfs.gc_version_cf.clone(), bound_range, u32::MAX);
@@ -235,7 +235,7 @@ impl GcWorker {
                 }
             }
             // delete gc version key
-            let gc_version_key = KEY_ENCODER.encode_txn_kv_gc_version_key(&user_key, version);
+            let gc_version_key = KEY_ENCODER.encode_gc_version_key(&user_key, version);
             txn.del(gc_cfs.gc_version_cf.clone(), gc_version_key)?;
             Ok(())
         })?;
@@ -245,7 +245,7 @@ impl GcWorker {
             let task = task.clone();
             let user_key = String::from_utf8_lossy(&task.user_key);
             // also delete gc key if version in gc key is same as task.version
-            let gc_key = KEY_ENCODER.encode_txn_kv_gc_key(&user_key);
+            let gc_key = KEY_ENCODER.encode_gc_key(&user_key);
             let version = task.version;
             if let Some(v) = txn.get(gc_cfs.gc_cf.clone(), gc_key.clone())? {
                 let ver = u16::from_be_bytes(v[..2].try_into().unwrap());

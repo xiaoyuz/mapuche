@@ -176,7 +176,7 @@ pub fn get_version_for_new(
         return Ok(0);
     }
 
-    let gc_key = KEY_ENCODER.encode_txn_kv_gc_key(key);
+    let gc_key = KEY_ENCODER.encode_gc_key(key);
     let next_version = txn.get(gc_cf.clone(), gc_key)?.map_or_else(
         || 0,
         |v| {
@@ -189,7 +189,7 @@ pub fn get_version_for_new(
         },
     );
     // check next version available
-    let gc_version_key = KEY_ENCODER.encode_txn_kv_gc_version_key(key, next_version);
+    let gc_version_key = KEY_ENCODER.encode_gc_version_key(key, next_version);
     txn.get(gc_version_cf, gc_version_key)?
         .map_or_else(|| Ok(next_version), |_| Err(KEY_VERSION_EXHUSTED_ERR))
 }

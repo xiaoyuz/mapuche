@@ -44,7 +44,7 @@ impl StringCommand {
     pub async fn get(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = StringCF::new(&client);
-        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
+        let ekey = KEY_ENCODER.encode_string(key);
         match client.get(cfs.data_cf.clone(), ekey.clone())? {
             Some(val) => {
                 let dt = KeyDecoder::decode_key_type(&val);
@@ -68,7 +68,7 @@ impl StringCommand {
     pub async fn get_type(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = StringCF::new(&client);
-        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
+        let ekey = KEY_ENCODER.encode_string(key);
         match client.get(cfs.data_cf.clone(), ekey.clone())? {
             Some(val) => {
                 // ttl saved in milliseconds
@@ -87,7 +87,7 @@ impl StringCommand {
     pub async fn strlen(&self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = StringCF::new(&client);
-        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
+        let ekey = KEY_ENCODER.encode_string(key);
         match client.get(cfs.data_cf.clone(), ekey.clone())? {
             Some(val) => {
                 let dt = KeyDecoder::decode_key_type(&val);
@@ -111,8 +111,8 @@ impl StringCommand {
     pub async fn put(self, key: &str, val: &Bytes, timestamp: i64) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = StringCF::new(&client);
-        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut val.to_vec(), timestamp);
+        let ekey = KEY_ENCODER.encode_string(key);
+        let eval = KEY_ENCODER.encode_string_value(&mut val.to_vec(), timestamp);
         client.put(cfs.data_cf, ekey, eval)?;
         Ok(resp_ok())
     }
@@ -120,7 +120,7 @@ impl StringCommand {
     pub async fn batch_get(self, keys: &[String]) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = StringCF::new(&client);
-        let ekeys = KEY_ENCODER.encode_raw_kv_strings(keys);
+        let ekeys = KEY_ENCODER.encode_strings(keys);
         let result = client.batch_get(cfs.data_cf.clone(), ekeys.clone())?;
         let ret: HashMap<Key, Value> = result.into_iter().map(|pair| (pair.0, pair.1)).collect();
 
@@ -160,8 +160,8 @@ impl StringCommand {
     pub async fn put_not_exists(self, key: &str, value: &Bytes) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = StringCF::new(&client);
-        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
-        let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut value.to_vec(), -1);
+        let ekey = KEY_ENCODER.encode_string(key);
+        let eval = KEY_ENCODER.encode_string_value(&mut value.to_vec(), -1);
 
         let resp = client.exec_txn(|txn| {
             match txn.get(cfs.data_cf.clone(), ekey.clone())? {
@@ -197,7 +197,7 @@ impl StringCommand {
     pub async fn exists(self, keys: &[String]) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = StringCF::new(&client);
-        let ekeys = KEY_ENCODER.encode_raw_kv_strings(keys);
+        let ekeys = KEY_ENCODER.encode_strings(keys);
         let result = client.batch_get(cfs.data_cf.clone(), ekeys.clone())?;
         let ret: HashMap<Key, Value> = result.into_iter().map(|pair| (pair.0, pair.1)).collect();
         let mut nums = 0;
@@ -221,7 +221,7 @@ impl StringCommand {
     pub async fn incr(self, key: &str, step: i64) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = StringCF::new(&client);
-        let ekey = KEY_ENCODER.encode_txn_kv_string(key);
+        let ekey = KEY_ENCODER.encode_string(key);
         let the_key = ekey.clone();
 
         let resp = client.exec_txn(|txn| {
@@ -254,7 +254,7 @@ impl StringCommand {
 
         let new_int = prev_int + step;
         let new_val = new_int.to_string();
-        let eval = KEY_ENCODER.encode_txn_kv_string_value(&mut new_val.as_bytes().to_vec(), 0);
+        let eval = KEY_ENCODER.encode_string_value(&mut new_val.as_bytes().to_vec(), 0);
         client.put(cfs.data_cf, ekey, eval)?;
         Ok(resp_int(new_int))
     }
@@ -264,7 +264,7 @@ impl StringCommand {
         let cfs = StringCF::new(&client);
         let key = key.to_owned();
         let timestamp = timestamp;
-        let ekey = KEY_ENCODER.encode_txn_kv_string(&key);
+        let ekey = KEY_ENCODER.encode_string(&key);
         let resp = client.exec_txn(|txn| {
             match txn.get(cfs.data_cf.clone(), ekey.clone())? {
                 Some(meta_value) => {
@@ -281,8 +281,7 @@ impl StringCommand {
                                 return Ok(0);
                             }
                             let value = KeyDecoder::decode_key_string_slice(&meta_value);
-                            let new_meta_value =
-                                KEY_ENCODER.encode_txn_kv_string_slice(value, timestamp);
+                            let new_meta_value = KEY_ENCODER.encode_string_slice(value, timestamp);
                             txn.put(cfs.data_cf.clone(), ekey, new_meta_value)?;
                             Ok(1)
                         }
@@ -314,7 +313,7 @@ impl StringCommand {
         let client = get_client();
         let cfs = StringCF::new(&client);
         let key = key.to_owned();
-        let ekey = KEY_ENCODER.encode_txn_kv_string(&key);
+        let ekey = KEY_ENCODER.encode_string(&key);
         client.exec_txn(|txn| match txn.get(cfs.data_cf.clone(), ekey.clone())? {
             Some(meta_value) => {
                 let dt = KeyDecoder::decode_key_type(&meta_value);
@@ -359,7 +358,7 @@ impl StringCommand {
         let cfs = StringCF::new(&client);
         let keys = keys.to_owned();
         let resp = client.exec_txn(|txn| {
-            let ekeys = KEY_ENCODER.encode_raw_kv_strings(&keys);
+            let ekeys = KEY_ENCODER.encode_strings(&keys);
             let ekey_map: HashMap<Key, String> = ekeys.clone().into_iter().zip(keys).collect();
             let cf = cfs.data_cf.clone();
             let pairs = txn.batch_get(cf, ekeys.clone())?;

@@ -54,7 +54,7 @@ impl SetCommand {
         let cfs = SetCF::new(&client);
         let key = key.to_owned();
         let members = members.to_owned();
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let rand_idx = gen_next_meta_index();
 
         let resp = client.exec_txn(|txn| {
@@ -78,7 +78,7 @@ impl SetCommand {
                     }
                     let mut member_data_keys = Vec::with_capacity(members.len());
                     for m in &members {
-                        let data_key = KEY_ENCODER.encode_txn_kv_set_data_key(&key, m, version);
+                        let data_key = KEY_ENCODER.encode_set_data_key(&key, m, version);
                         member_data_keys.push(data_key);
                     }
                     // batch get
@@ -87,13 +87,12 @@ impl SetCommand {
                     let values_count = txn.batch_get(cfs.data_cf.clone(), member_data_keys)?.len();
                     let added = real_member_count as i64 - values_count as i64;
                     for m in &members {
-                        let data_key = KEY_ENCODER.encode_txn_kv_set_data_key(&key, m, version);
+                        let data_key = KEY_ENCODER.encode_set_data_key(&key, m, version);
                         txn.put(cfs.data_cf.clone(), data_key, vec![0])?;
                     }
 
                     // choose a random sub meta key for update, create if not exists
-                    let sub_meta_key =
-                        KEY_ENCODER.encode_txn_kv_sub_meta_key(&key, version, rand_idx);
+                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
                     let new_sub_meta_value = txn
                         .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
                         .map_or_else(
@@ -112,8 +111,7 @@ impl SetCommand {
 
                     // create a new meta key if key already expired above
                     if expired {
-                        let new_meta_value =
-                            KEY_ENCODER.encode_txn_kv_set_meta_value(0, version, 0);
+                        let new_meta_value = KEY_ENCODER.encode_set_meta_value(0, version, 0);
                         txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
                     }
 
@@ -129,19 +127,18 @@ impl SetCommand {
                     // create new meta key and meta value
                     for m in &members {
                         // check member already exists
-                        let data_key = KEY_ENCODER.encode_txn_kv_set_data_key(&key, m, version);
+                        let data_key = KEY_ENCODER.encode_set_data_key(&key, m, version);
                         // value can not be vec![] if use cse as backend
                         txn.put(cfs.data_cf.clone(), data_key, vec![0])?;
                     }
                     // create meta key
-                    let meta_value = KEY_ENCODER.encode_txn_kv_set_meta_value(0, version, 0);
+                    let meta_value = KEY_ENCODER.encode_set_meta_value(0, version, 0);
                     txn.put(cfs.meta_cf.clone(), meta_key, meta_value)?;
 
                     let added = count_unique_keys(&members) as i64;
 
                     // create sub meta key with a random index
-                    let sub_meta_key =
-                        KEY_ENCODER.encode_txn_kv_sub_meta_key(&key, version, rand_idx);
+                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
                     txn.put(
                         cfs.sub_meta_cf.clone(),
                         sub_meta_key,
@@ -161,7 +158,7 @@ impl SetCommand {
     pub async fn scard(self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = SetCF::new(&client);
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(key);
+        let meta_key = KEY_ENCODER.encode_meta_key(key);
         let key = key.to_owned();
 
         client.exec_txn(|txn| {
@@ -195,7 +192,7 @@ impl SetCommand {
         let client = get_client();
         let cfs = SetCF::new(&client);
         let member_len = members.len();
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(key);
+        let meta_key = KEY_ENCODER.encode_meta_key(key);
         let key = key.to_owned();
         let members = members.to_owned();
 
@@ -217,8 +214,7 @@ impl SetCommand {
                         }
                     }
                     if !resp_in_arr {
-                        let data_key =
-                            KEY_ENCODER.encode_txn_kv_set_data_key(&key, &members[0], version);
+                        let data_key = KEY_ENCODER.encode_set_data_key(&key, &members[0], version);
                         if txn.get(cfs.data_cf.clone(), data_key)?.is_some() {
                             Ok(resp_int(1))
                         } else {
@@ -228,7 +224,7 @@ impl SetCommand {
                         let mut resp = vec![];
                         let mut member_data_keys = Vec::with_capacity(members.len());
                         for m in &members {
-                            let data_key = KEY_ENCODER.encode_txn_kv_set_data_key(&key, m, version);
+                            let data_key = KEY_ENCODER.encode_set_data_key(&key, m, version);
                             member_data_keys.push(data_key);
                         }
 
@@ -240,7 +236,7 @@ impl SetCommand {
                             .collect();
 
                         for m in &members {
-                            let data_key = KEY_ENCODER.encode_txn_kv_set_data_key(&key, m, version);
+                            let data_key = KEY_ENCODER.encode_set_data_key(&key, m, version);
                             match member_result.get(&data_key) {
                                 Some(_) => resp.push(resp_int(1)),
                                 None => resp.push(resp_int(0)),
@@ -270,7 +266,7 @@ impl SetCommand {
     ) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = SetCF::new(&client);
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(key);
+        let meta_key = KEY_ENCODER.encode_meta_key(key);
         let key = key.to_owned();
 
         client.exec_txn(|txn| {
@@ -294,7 +290,7 @@ impl SetCommand {
                         ele_count = count;
                     }
 
-                    let bound_range = KEY_ENCODER.encode_txn_kv_set_data_key_range(&key, version);
+                    let bound_range = KEY_ENCODER.encode_set_data_key_range(&key, version);
                     let iter = txn.scan_keys(
                         cfs.data_cf.clone(),
                         bound_range,
@@ -346,7 +342,7 @@ impl SetCommand {
     pub async fn smembers(self, key: &str) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = SetCF::new(&client);
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(key);
+        let meta_key = KEY_ENCODER.encode_meta_key(key);
         let key = key.to_owned();
 
         client.exec_txn(|txn| {
@@ -363,7 +359,7 @@ impl SetCommand {
                         return Ok(resp_array(vec![]));
                     }
 
-                    let bound_range = KEY_ENCODER.encode_txn_kv_set_data_key_range(&key, version);
+                    let bound_range = KEY_ENCODER.encode_set_data_key_range(&key, version);
                     let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
 
                     let resp = iter
@@ -383,7 +379,7 @@ impl SetCommand {
     pub async fn srem(self, key: &str, members: &Vec<String>) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = SetCF::new(&client);
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(key);
+        let meta_key = KEY_ENCODER.encode_meta_key(key);
         let key = key.to_owned();
         let members = members.to_owned();
         let rand_idx = gen_next_meta_index();
@@ -405,7 +401,7 @@ impl SetCommand {
                     let size = self.sum_key_size(&key, version)?;
                     let data_keys: Vec<Key> = members
                         .iter()
-                        .map(|member| KEY_ENCODER.encode_txn_kv_set_data_key(&key, member, version))
+                        .map(|member| KEY_ENCODER.encode_set_data_key(&key, member, version))
                         .collect();
                     let mut removed: i64 = 0;
 
@@ -417,8 +413,7 @@ impl SetCommand {
                     // check if all items cleared, delete meta key and all sub meta keys if needed
                     if removed >= size {
                         txn.del(cfs.meta_cf, meta_key)?;
-                        let meta_bound_range =
-                            KEY_ENCODER.encode_txn_kv_sub_meta_key_range(&key, version);
+                        let meta_bound_range = KEY_ENCODER.encode_sub_meta_key_range(&key, version);
                         let iter =
                             txn.scan_keys(cfs.sub_meta_cf.clone(), meta_bound_range, u32::MAX)?;
                         for k in iter {
@@ -426,8 +421,7 @@ impl SetCommand {
                         }
                     } else {
                         // choose a random sub meta key, update it
-                        let sub_meta_key =
-                            KEY_ENCODER.encode_txn_kv_sub_meta_key(&key, version, rand_idx);
+                        let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
                         let new_sub_meta_value = txn
                             .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
                             .map_or_else(
@@ -460,7 +454,7 @@ impl SetCommand {
     pub async fn spop(self, key: &str, count: u64) -> RocksResult<Frame> {
         let client = get_client();
         let cfs = SetCF::new(&client);
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(key);
+        let meta_key = KEY_ENCODER.encode_meta_key(key);
         let key = key.to_owned();
         let rand_idx = gen_next_meta_index();
 
@@ -478,7 +472,7 @@ impl SetCommand {
                         return Ok(vec![]);
                     }
 
-                    let bound_range = KEY_ENCODER.encode_txn_kv_set_data_key_range(&key, version);
+                    let bound_range = KEY_ENCODER.encode_set_data_key_range(&key, version);
                     let iter =
                         txn.scan_keys(cfs.data_cf.clone(), bound_range, count.try_into().unwrap())?;
 
@@ -505,8 +499,7 @@ impl SetCommand {
                         // delete meta key
                         txn.del(cfs.meta_cf, meta_key)?;
                         // delete all sub meta keys
-                        let meta_bound_range =
-                            KEY_ENCODER.encode_txn_kv_sub_meta_key_range(&key, version);
+                        let meta_bound_range = KEY_ENCODER.encode_sub_meta_key_range(&key, version);
                         let iter =
                             txn.scan_keys(cfs.sub_meta_cf.clone(), meta_bound_range, u32::MAX)?;
                         for k in iter {
@@ -514,8 +507,7 @@ impl SetCommand {
                         }
                     } else {
                         // update random meta key
-                        let sub_meta_key =
-                            KEY_ENCODER.encode_txn_kv_sub_meta_key(&key, version, rand_idx);
+                        let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
                         let new_sub_meta_value = txn
                             .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
                             .map_or_else(
@@ -560,13 +552,13 @@ impl SetCommand {
 
         client.exec_txn(move |txn| {
             // check if meta key exists or already expired
-            let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+            let meta_key = KEY_ENCODER.encode_meta_key(&key);
             match txn.get(cfs.meta_cf, meta_key)? {
                 Some(meta_value) => {
                     if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::Set) {
                         return Err(REDIS_WRONG_TYPE_ERR);
                     }
-                    let bound_range = KEY_ENCODER.encode_txn_kv_sub_meta_key_range(&key, version);
+                    let bound_range = KEY_ENCODER.encode_sub_meta_key_range(&key, version);
                     let iter = txn.scan(cfs.sub_meta_cf.clone(), bound_range, u32::MAX)?;
                     let sum = iter
                         .map(|kv| i64::from_be_bytes(kv.1.try_into().unwrap()))
@@ -587,7 +579,7 @@ impl RocksCommand for SetCommand {
         key: &str,
     ) -> RocksResult<()> {
         let key = key.to_owned();
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let cfs = SetCF::new(client);
 
         match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -599,25 +591,23 @@ impl RocksCommand for SetCommand {
                     // async del set
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
 
-                    let gc_key = KEY_ENCODER.encode_txn_kv_gc_key(&key);
+                    let gc_key = KEY_ENCODER.encode_gc_key(&key);
                     txn.put(cfs.gc_cf.clone(), gc_key, version.to_be_bytes().to_vec())?;
 
-                    let gc_version_key = KEY_ENCODER.encode_txn_kv_gc_version_key(&key, version);
+                    let gc_version_key = KEY_ENCODER.encode_gc_version_key(&key, version);
                     txn.put(
                         cfs.gc_version_cf.clone(),
                         gc_version_key,
                         vec![KEY_ENCODER.get_type_bytes(DataType::Set)],
                     )?;
                 } else {
-                    let sub_meta_range =
-                        KEY_ENCODER.encode_txn_kv_sub_meta_key_range(&key, version);
+                    let sub_meta_range = KEY_ENCODER.encode_sub_meta_key_range(&key, version);
                     let iter = txn.scan_keys(cfs.sub_meta_cf.clone(), sub_meta_range, u32::MAX)?;
                     for k in iter {
                         txn.del(cfs.sub_meta_cf.clone(), k)?;
                     }
 
-                    let data_bound_range =
-                        KEY_ENCODER.encode_txn_kv_set_data_key_range(&key, version);
+                    let data_bound_range = KEY_ENCODER.encode_set_data_key_range(&key, version);
                     let iter = txn.scan_keys(cfs.data_cf.clone(), data_bound_range, u32::MAX)?;
                     for k in iter {
                         txn.del(cfs.data_cf.clone(), k)?;
@@ -638,7 +628,7 @@ impl RocksCommand for SetCommand {
         key: &str,
     ) -> RocksResult<i64> {
         let key = key.to_owned();
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let cfs = SetCF::new(client);
 
         match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -652,26 +642,24 @@ impl RocksCommand for SetCommand {
                     // async del set
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
 
-                    let gc_key = KEY_ENCODER.encode_txn_kv_gc_key(&key);
+                    let gc_key = KEY_ENCODER.encode_gc_key(&key);
                     txn.put(cfs.gc_cf.clone(), gc_key, version.to_be_bytes().to_vec())?;
 
-                    let gc_version_key = KEY_ENCODER.encode_txn_kv_gc_version_key(&key, version);
+                    let gc_version_key = KEY_ENCODER.encode_gc_version_key(&key, version);
                     txn.put(
                         cfs.gc_version_cf.clone(),
                         gc_version_key,
                         vec![KEY_ENCODER.get_type_bytes(DataType::Set)],
                     )?;
                 } else {
-                    let sub_meta_range =
-                        KEY_ENCODER.encode_txn_kv_sub_meta_key_range(&key, version);
+                    let sub_meta_range = KEY_ENCODER.encode_sub_meta_key_range(&key, version);
 
                     let iter = txn.scan_keys(cfs.sub_meta_cf.clone(), sub_meta_range, u32::MAX)?;
                     for k in iter {
                         txn.del(cfs.sub_meta_cf.clone(), k)?;
                     }
 
-                    let data_bound_range =
-                        KEY_ENCODER.encode_txn_kv_set_data_key_range(&key, version);
+                    let data_bound_range = KEY_ENCODER.encode_set_data_key_range(&key, version);
                     let iter = txn.scan_keys(cfs.data_cf.clone(), data_bound_range, u32::MAX)?;
                     for k in iter {
                         txn.del(cfs.data_cf.clone(), k)?;
@@ -697,14 +685,14 @@ impl RocksCommand for SetCommand {
         meta_value: &Value,
     ) -> RocksResult<i64> {
         let cfs = SetCF::new(client);
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(key);
+        let meta_key = KEY_ENCODER.encode_meta_key(key);
         let ttl = KeyDecoder::decode_key_ttl(meta_value);
         if key_is_expired(ttl) {
             self.txn_expire_if_needed(txn, client, key)?;
             return Ok(0);
         }
         let version = KeyDecoder::decode_key_version(meta_value);
-        let new_meta_value = KEY_ENCODER.encode_txn_kv_set_meta_value(timestamp, version, 0);
+        let new_meta_value = KEY_ENCODER.encode_set_meta_value(timestamp, version, 0);
         txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
         Ok(1)
     }
@@ -718,14 +706,14 @@ impl RocksCommand for SetCommand {
     ) -> RocksResult<()> {
         let cfs = SetCF::new(client);
         // delete all sub meta key of this key and version
-        let bound_range = KEY_ENCODER.encode_txn_kv_sub_meta_key_range(key, version);
+        let bound_range = KEY_ENCODER.encode_sub_meta_key_range(key, version);
         let iter = txn.scan_keys(cfs.sub_meta_cf.clone(), bound_range, u32::MAX)?;
         for k in iter {
             info!(LOGGER, "Set found meta to gc, {}", k.clone().len());
             txn.del(cfs.sub_meta_cf.clone(), k)?;
         }
         // delete all data key of this key and version
-        let bound_range = KEY_ENCODER.encode_txn_kv_set_data_key_range(key, version);
+        let bound_range = KEY_ENCODER.encode_set_data_key_range(key, version);
         let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
         for k in iter {
             info!(LOGGER, "Set found data to gc, {}", k.clone().len());

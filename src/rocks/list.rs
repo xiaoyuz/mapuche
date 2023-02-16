@@ -53,7 +53,7 @@ impl ListCommand {
         let key = key.to_owned();
         let values = values.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
 
         let resp = client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -86,13 +86,13 @@ impl ListCommand {
                             right += 1;
                         }
 
-                        let data_key = KEY_ENCODER.encode_txn_kv_list_data_key(&key, idx, version);
+                        let data_key = KEY_ENCODER.encode_list_data_key(&key, idx, version);
                         txn.put(cfs.data_cf.clone(), data_key, value.to_vec())?;
                     }
 
                     // update meta key
                     let new_meta_value =
-                        KEY_ENCODER.encode_txn_kv_list_meta_value(ttl, version, left, right);
+                        KEY_ENCODER.encode_list_meta_value(ttl, version, left, right);
                     txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
 
                     Ok(right - left)
@@ -120,13 +120,12 @@ impl ListCommand {
                         }
 
                         // add data key
-                        let data_key = KEY_ENCODER.encode_txn_kv_list_data_key(&key, idx, version);
+                        let data_key = KEY_ENCODER.encode_list_data_key(&key, idx, version);
                         txn.put(cfs.data_cf.clone(), data_key, value.to_vec())?;
                     }
 
                     // add meta key
-                    let meta_value =
-                        KEY_ENCODER.encode_txn_kv_list_meta_value(0, version, left, right);
+                    let meta_value = KEY_ENCODER.encode_list_meta_value(0, version, left, right);
                     txn.put(cfs.meta_cf.clone(), meta_key, meta_value)?;
 
                     Ok(right - left)
@@ -145,7 +144,7 @@ impl ListCommand {
         let cfs = ListCF::new(&client);
         let key = key.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
             let mut values = Vec::new();
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -170,7 +169,7 @@ impl ListCommand {
                             right -= 1;
                             idx = right;
                         }
-                        let data_key = KEY_ENCODER.encode_txn_kv_list_data_key(&key, idx, version);
+                        let data_key = KEY_ENCODER.encode_list_data_key(&key, idx, version);
                         // get data and delete
                         let value = txn
                             .get(cfs.data_cf.clone(), data_key.clone())
@@ -185,8 +184,8 @@ impl ListCommand {
                             txn.del(cfs.meta_cf.clone(), meta_key)?;
                         } else {
                             // update meta key
-                            let new_meta_value = KEY_ENCODER
-                                .encode_txn_kv_list_meta_value(ttl, version, left, right);
+                            let new_meta_value =
+                                KEY_ENCODER.encode_list_meta_value(ttl, version, left, right);
                             txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
                         }
                         Ok(values)
@@ -205,8 +204,7 @@ impl ListCommand {
                                 idx = right - 1;
                                 right -= 1;
                             }
-                            data_keys
-                                .push(KEY_ENCODER.encode_txn_kv_list_data_key(&key, idx, version));
+                            data_keys.push(KEY_ENCODER.encode_list_data_key(&key, idx, version));
                         }
                         for pair in txn.batch_get(cfs.data_cf.clone(), data_keys)? {
                             values.push(resp_bulk(pair.1));
@@ -218,8 +216,8 @@ impl ListCommand {
                             txn.del(cfs.meta_cf.clone(), meta_key)?;
                         } else {
                             // update meta key
-                            let new_meta_value = KEY_ENCODER
-                                .encode_txn_kv_list_meta_value(ttl, version, left, right);
+                            let new_meta_value =
+                                KEY_ENCODER.encode_list_meta_value(ttl, version, left, right);
                             txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
                         }
                         Ok(values)
@@ -248,7 +246,7 @@ impl ListCommand {
         let cfs = ListCF::new(&client);
         let key = key.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -292,7 +290,7 @@ impl ListCommand {
                     end += left as i64;
 
                     for idx in left..start as u64 {
-                        let data_key = KEY_ENCODER.encode_txn_kv_list_data_key(&key, idx, version);
+                        let data_key = KEY_ENCODER.encode_list_data_key(&key, idx, version);
                         txn.del(cfs.data_cf.clone(), data_key)?;
                     }
                     let left_trim = start - left as i64;
@@ -302,7 +300,7 @@ impl ListCommand {
 
                     // trim end+1->right
                     for idx in (end + 1) as u64..right {
-                        let data_key = KEY_ENCODER.encode_txn_kv_list_data_key(&key, idx, version);
+                        let data_key = KEY_ENCODER.encode_list_data_key(&key, idx, version);
                         txn.del(cfs.data_cf.clone(), data_key)?;
                     }
 
@@ -318,7 +316,7 @@ impl ListCommand {
                     } else {
                         // update meta key
                         let new_meta_value =
-                            KEY_ENCODER.encode_txn_kv_list_meta_value(ttl, version, left, right);
+                            KEY_ENCODER.encode_list_meta_value(ttl, version, left, right);
                         txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
                     }
                     Ok(())
@@ -338,7 +336,7 @@ impl ListCommand {
         let cfs = ListCF::new(&client);
         let key = key.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -372,7 +370,7 @@ impl ListCommand {
                     }
 
                     let data_key_start =
-                        KEY_ENCODER.encode_txn_kv_list_data_key(&key, real_left as u64, version);
+                        KEY_ENCODER.encode_list_data_key(&key, real_left as u64, version);
                     let range: RangeFrom<Key> = data_key_start..;
                     let from_range: BoundRange = range.into();
                     let iter = txn.scan(
@@ -394,7 +392,7 @@ impl ListCommand {
         let cfs = ListCF::new(&client);
         let key = key.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -422,7 +420,7 @@ impl ListCommand {
         let cfs = ListCF::new(&client);
         let key = key.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -445,8 +443,7 @@ impl ListCommand {
                     let real_idx = left as i64 + idx;
 
                     // get value from data key
-                    let data_key =
-                        KEY_ENCODER.encode_txn_kv_list_data_key(&key, real_idx as u64, version);
+                    let data_key = KEY_ENCODER.encode_list_data_key(&key, real_idx as u64, version);
                     if let Some(value) = txn.get(cfs.data_cf.clone(), data_key)? {
                         Ok(resp_bulk(value))
                     } else {
@@ -464,7 +461,7 @@ impl ListCommand {
         let key = key.to_owned();
         let ele = ele.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -488,8 +485,7 @@ impl ListCommand {
                         return Err(REDIS_INDEX_OUT_OF_RANGE_ERR);
                     }
 
-                    let data_key =
-                        KEY_ENCODER.encode_txn_kv_list_data_key(&key, uidx as u64, version);
+                    let data_key = KEY_ENCODER.encode_list_data_key(&key, uidx as u64, version);
                     // data keys exists, update it to new value
                     txn.put(cfs.data_cf.clone(), data_key, ele.to_vec())?;
                     Ok(())
@@ -517,7 +513,7 @@ impl ListCommand {
         let pivot = pivot.to_owned();
         let element = element.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -539,7 +535,7 @@ impl ListCommand {
                     }
 
                     // get list items bound range
-                    let bound_range = KEY_ENCODER.encode_txn_kv_list_data_key_range(&key, version);
+                    let bound_range = KEY_ENCODER.encode_list_data_key_range(&key, version);
 
                     // iter will only return the matched kvpair
                     let mut iter = txn
@@ -565,15 +561,14 @@ impl ListCommand {
                             // move data key from left to left-1
                             // move backwards for elements in idx [left, idx_op], add the new element to idx_op
                             if idx_op >= left {
-                                let left_range = KEY_ENCODER.encode_txn_kv_list_data_key_idx_range(
-                                    &key, left, idx_op, version,
-                                );
+                                let left_range = KEY_ENCODER
+                                    .encode_list_data_key_idx_range(&key, left, idx_op, version);
                                 let iter = txn.scan(cfs.data_cf.clone(), left_range, u32::MAX)?;
 
                                 for kv in iter {
                                     let key_idx =
                                         KeyDecoder::decode_key_list_idx_from_datakey(&key, kv.0);
-                                    let new_data_key = KEY_ENCODER.encode_txn_kv_list_data_key(
+                                    let new_data_key = KEY_ENCODER.encode_list_data_key(
                                         &key,
                                         key_idx - 1,
                                         version,
@@ -589,19 +584,18 @@ impl ListCommand {
                             // move forwards for elements in idx [idx_op, right-1], add the new element to idx_op
                             // if idx_op == right, no need to move data key
                             if idx_op < right {
-                                let right_range = KEY_ENCODER
-                                    .encode_txn_kv_list_data_key_idx_range(
-                                        &key,
-                                        idx_op,
-                                        right - 1,
-                                        version,
-                                    );
+                                let right_range = KEY_ENCODER.encode_list_data_key_idx_range(
+                                    &key,
+                                    idx_op,
+                                    right - 1,
+                                    version,
+                                );
                                 let iter = txn.scan(cfs.data_cf.clone(), right_range, u32::MAX)?;
 
                                 for kv in iter {
                                     let key_idx =
                                         KeyDecoder::decode_key_list_idx_from_datakey(&key, kv.0);
-                                    let new_data_key = KEY_ENCODER.encode_txn_kv_list_data_key(
+                                    let new_data_key = KEY_ENCODER.encode_list_data_key(
                                         &key,
                                         key_idx + 1,
                                         version,
@@ -615,12 +609,12 @@ impl ListCommand {
 
                         // fill the pivot
                         let pivot_data_key =
-                            KEY_ENCODER.encode_txn_kv_list_data_key(&key, idx_op, version);
+                            KEY_ENCODER.encode_list_data_key(&key, idx_op, version);
                         txn.put(cfs.data_cf.clone(), pivot_data_key, element.to_vec())?;
 
                         // update meta key
                         let new_meta_value =
-                            KEY_ENCODER.encode_txn_kv_list_meta_value(ttl, version, left, right);
+                            KEY_ENCODER.encode_list_meta_value(ttl, version, left, right);
                         txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
 
                         let len = (right - left) as i64;
@@ -652,7 +646,7 @@ impl ListCommand {
         let key = key.to_owned();
         let ele = ele.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -675,7 +669,7 @@ impl ListCommand {
                     }
 
                     // get list items bound range
-                    let bound_range = KEY_ENCODER.encode_txn_kv_list_data_key_range(&key, version);
+                    let bound_range = KEY_ENCODER.encode_list_data_key_range(&key, version);
 
                     // iter will only return the matched kvpair
                     let iter = txn
@@ -724,7 +718,7 @@ impl ListCommand {
 
                             // check if key idx need to be backward move
                             if removed_count > 0 {
-                                let new_data_key = KEY_ENCODER.encode_txn_kv_list_data_key(
+                                let new_data_key = KEY_ENCODER.encode_list_data_key(
                                     &key,
                                     key_idx - removed_count as u64,
                                     version,
@@ -738,7 +732,7 @@ impl ListCommand {
                         if len == removed_count as u64 {
                             txn.del(cfs.meta_cf.clone(), meta_key)?;
                         } else {
-                            let new_meta_value = KEY_ENCODER.encode_txn_kv_list_meta_value(
+                            let new_meta_value = KEY_ENCODER.encode_list_meta_value(
                                 ttl,
                                 version,
                                 left,
@@ -767,7 +761,7 @@ impl ListCommand {
 
                             // check if key idx need to be forward move
                             if removed_count > 0 {
-                                let new_data_key = KEY_ENCODER.encode_txn_kv_list_data_key(
+                                let new_data_key = KEY_ENCODER.encode_list_data_key(
                                     &key,
                                     key_idx + removed_count as u64,
                                     version,
@@ -781,7 +775,7 @@ impl ListCommand {
                         if len == removed_count as u64 {
                             txn.del(cfs.meta_cf.clone(), meta_key)?;
                         } else {
-                            let new_meta_value = KEY_ENCODER.encode_txn_kv_list_meta_value(
+                            let new_meta_value = KEY_ENCODER.encode_list_meta_value(
                                 ttl,
                                 version,
                                 left + removed_count as u64,
@@ -811,7 +805,7 @@ impl RocksCommand for ListCommand {
         key: &str,
     ) -> RocksResult<()> {
         let key = key.to_owned();
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let cfs = ListCF::new(client);
 
         match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -824,17 +818,17 @@ impl RocksCommand for ListCommand {
                     // delete meta key and create gc key and gc version key with the version
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
 
-                    let gc_key = KEY_ENCODER.encode_txn_kv_gc_key(&key);
+                    let gc_key = KEY_ENCODER.encode_gc_key(&key);
                     txn.put(cfs.gc_cf.clone(), gc_key, version.to_be_bytes().to_vec())?;
 
-                    let gc_version_key = KEY_ENCODER.encode_txn_kv_gc_version_key(&key, version);
+                    let gc_version_key = KEY_ENCODER.encode_gc_version_key(&key, version);
                     txn.put(
                         cfs.gc_version_cf.clone(),
                         gc_version_key,
                         vec![KEY_ENCODER.get_type_bytes(DataType::List)],
                     )?;
                 } else {
-                    let bound_range = KEY_ENCODER.encode_txn_kv_list_data_key_range(&key, version);
+                    let bound_range = KEY_ENCODER.encode_list_data_key_range(&key, version);
                     let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
 
                     for k in iter {
@@ -855,7 +849,7 @@ impl RocksCommand for ListCommand {
         key: &str,
     ) -> RocksResult<i64> {
         let key = key.to_owned();
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+        let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let cfs = ListCF::new(client);
 
         match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -871,17 +865,17 @@ impl RocksCommand for ListCommand {
                     // delete meta key and create gc key and gc version key with the version
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
 
-                    let gc_key = KEY_ENCODER.encode_txn_kv_gc_key(&key);
+                    let gc_key = KEY_ENCODER.encode_gc_key(&key);
                     txn.put(cfs.gc_cf.clone(), gc_key, version.to_be_bytes().to_vec())?;
 
-                    let gc_version_key = KEY_ENCODER.encode_txn_kv_gc_version_key(&key, version);
+                    let gc_version_key = KEY_ENCODER.encode_gc_version_key(&key, version);
                     txn.put(
                         cfs.gc_version_cf.clone(),
                         gc_version_key,
                         vec![KEY_ENCODER.get_type_bytes(DataType::List)],
                     )?;
                 } else {
-                    let bound_range = KEY_ENCODER.encode_txn_kv_list_data_key_range(&key, version);
+                    let bound_range = KEY_ENCODER.encode_list_data_key_range(&key, version);
                     let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
 
                     for k in iter {
@@ -908,15 +902,14 @@ impl RocksCommand for ListCommand {
         meta_value: &Value,
     ) -> RocksResult<i64> {
         let cfs = ListCF::new(client);
-        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(key);
+        let meta_key = KEY_ENCODER.encode_meta_key(key);
         let ttl = KeyDecoder::decode_key_ttl(meta_value);
         if key_is_expired(ttl) {
             self.txn_expire_if_needed(txn, client, key)?;
             return Ok(0);
         }
         let (_, version, left, right) = KeyDecoder::decode_key_list_meta(meta_value);
-        let new_meta_value =
-            KEY_ENCODER.encode_txn_kv_list_meta_value(timestamp, version, left, right);
+        let new_meta_value = KEY_ENCODER.encode_list_meta_value(timestamp, version, left, right);
         txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
         Ok(1)
     }
@@ -930,7 +923,7 @@ impl RocksCommand for ListCommand {
     ) -> RocksResult<()> {
         let cfs = ListCF::new(client);
         // delete all data key of this key and version
-        let bound_range = KEY_ENCODER.encode_txn_kv_list_data_key_range(key, version);
+        let bound_range = KEY_ENCODER.encode_list_data_key_range(key, version);
         let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
         for k in iter {
             txn.del(cfs.data_cf.clone(), k)?;
