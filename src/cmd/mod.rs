@@ -148,6 +148,27 @@ pub use zrange::Zrange;
 mod zrevrange;
 pub use zrevrange::Zrevrange;
 
+mod zrangebyscore;
+pub use zrangebyscore::Zrangebyscore;
+
+mod zpop;
+pub use zpop::Zpop;
+
+mod zrank;
+pub use zrank::Zrank;
+
+mod zincrby;
+pub use zincrby::Zincrby;
+
+mod zrem;
+pub use zrem::Zrem;
+
+mod zremrangebyrank;
+pub use zremrangebyrank::Zremrangebyrank;
+
+mod zremrangebyscore;
+pub use zremrangebyscore::Zremrangebyscore;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -219,9 +240,18 @@ pub enum Command {
     Zadd(Zadd),
     Zcard(Zcard),
     Zscore(Zscore),
+    Zrem(Zrem),
+    Zremrangebyscore(Zremrangebyscore),
+    Zremrangebyrank(Zremrangebyrank),
     Zrange(Zrange),
     Zrevrange(Zrevrange),
+    Zrangebyscore(Zrangebyscore),
+    Zrevrangebyscore(Zrangebyscore),
     Zcount(Zcount),
+    Zpopmin(Zpop),
+    Zpopmax(Zpop),
+    Zrank(Zrank),
+    Zincrby(Zincrby),
 
     Unknown(Unknown),
 }
@@ -369,6 +399,15 @@ impl Command {
                 Zscore::parse_frames(&mut parse),
                 &mut parse,
             )),
+            "zrem" => Command::Zrem(transform_parse(Zrem::parse_frames(&mut parse), &mut parse)),
+            "zremrangebyscore" => Command::Zremrangebyscore(transform_parse(
+                Zremrangebyscore::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "zremrangebyrank" => Command::Zremrangebyrank(transform_parse(
+                Zremrangebyrank::parse_frames(&mut parse),
+                &mut parse,
+            )),
             "zrange" => Command::Zrange(transform_parse(
                 Zrange::parse_frames(&mut parse),
                 &mut parse,
@@ -377,8 +416,27 @@ impl Command {
                 Zrevrange::parse_frames(&mut parse),
                 &mut parse,
             )),
+            "zrangebyscore" => Command::Zrangebyscore(transform_parse(
+                Zrangebyscore::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "zrevrangebyscore" => Command::Zrevrangebyscore(transform_parse(
+                Zrangebyscore::parse_frames(&mut parse),
+                &mut parse,
+            )),
             "zcount" => Command::Zcount(transform_parse(
                 Zcount::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "zpopmin" => {
+                Command::Zpopmin(transform_parse(Zpop::parse_frames(&mut parse), &mut parse))
+            }
+            "zpopmax" => {
+                Command::Zpopmax(transform_parse(Zpop::parse_frames(&mut parse), &mut parse))
+            }
+            "zrank" => Command::Zrank(transform_parse(Zrank::parse_frames(&mut parse), &mut parse)),
+            "zincrby" => Command::Zincrby(transform_parse(
+                Zincrby::parse_frames(&mut parse),
                 &mut parse,
             )),
 
@@ -470,9 +528,18 @@ impl Command {
             Zadd(cmd) => cmd.apply(dst).await,
             Zcard(cmd) => cmd.apply(dst).await,
             Zscore(cmd) => cmd.apply(dst).await,
+            Zrem(cmd) => cmd.apply(dst).await,
+            Zremrangebyscore(cmd) => cmd.apply(dst).await,
+            Zremrangebyrank(cmd) => cmd.apply(dst).await,
             Zrange(cmd) => cmd.apply(dst).await,
             Zrevrange(cmd) => cmd.apply(dst).await,
+            Zrangebyscore(cmd) => cmd.apply(dst, false).await,
+            Zrevrangebyscore(cmd) => cmd.apply(dst, true).await,
             Zcount(cmd) => cmd.apply(dst).await,
+            Zpopmin(cmd) => cmd.apply(dst, true).await,
+            Zpopmax(cmd) => cmd.apply(dst, false).await,
+            Zrank(cmd) => cmd.apply(dst).await,
+            Zincrby(cmd) => cmd.apply(dst).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
             // `Unsubscribe` cannot be applied. It may only be received from the
@@ -540,9 +607,18 @@ impl Command {
             Command::Zadd(_) => "zadd",
             Command::Zcard(_) => "zcard",
             Command::Zscore(_) => "zscore",
+            Command::Zrem(_) => "zrem",
+            Command::Zremrangebyscore(_) => "zremrangebyscore",
+            Command::Zremrangebyrank(_) => "zremrangebyrank",
             Command::Zrange(_) => "zrange",
             Command::Zrevrange(_) => "zrevrange",
+            Command::Zrangebyscore(_) => "zrangebyscore",
+            Command::Zrevrangebyscore(_) => "zrevrangebyscore",
             Command::Zcount(_) => "zcount",
+            Command::Zpopmin(_) => "zpopmin",
+            Command::Zpopmax(_) => "zpopmax",
+            Command::Zrank(_) => "zrank",
+            Command::Zincrby(_) => "zincrby",
 
             Command::Unknown(cmd) => cmd.get_name(),
         }

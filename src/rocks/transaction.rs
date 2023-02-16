@@ -130,7 +130,6 @@ impl<'a> RocksTransaction<'a> {
         let bound_range = range.into();
         let (start, end) = bound_range.into_keys();
         let start: Vec<u8> = start.into();
-
         let it = self
             .inner_txn
             .iterator_cf(&cf_handle, IteratorMode::From(&start, Direction::Reverse));
@@ -174,6 +173,43 @@ impl<'a> RocksTransaction<'a> {
             .map(|e| {
                 let e_vec: Vec<u8> = e.into();
                 self.inner_txn.prefix_iterator_cf(&cf_handle, e_vec)
+            })
+            .and_then(|mut it| it.next())
+            .and_then(|res| res.ok())
+            .map(|kv| kv.0);
+
+        let mut keys: Vec<Key> = Vec::new();
+        for inner in it {
+            if let Ok(kv_bytes) = inner {
+                if Some(&kv_bytes.0) == end_it_key.as_ref() {
+                    break;
+                }
+                keys.push(kv_bytes.0.to_vec().into());
+            }
+            if keys.len() >= limit as usize {
+                break;
+            }
+        }
+        Ok(keys.into_iter())
+    }
+
+    pub fn scan_keys_reverse(
+        &self,
+        cf_handle: ColumnFamilyRef,
+        range: impl Into<BoundRange>,
+        limit: u32,
+    ) -> RocksResult<impl Iterator<Item = Key>> {
+        let bound_range = range.into();
+        let (start, end) = bound_range.into_keys();
+        let start: Vec<u8> = start.into();
+        let it = self
+            .inner_txn
+            .iterator_cf(&cf_handle, IteratorMode::From(&start, Direction::Reverse));
+        let end_it_key = end
+            .map(|e| {
+                let e_vec: Vec<u8> = e.into();
+                self.inner_txn
+                    .iterator_cf(&cf_handle, IteratorMode::From(&e_vec, Direction::Reverse))
             })
             .and_then(|mut it| it.next())
             .and_then(|res| res.ok())
