@@ -5,7 +5,9 @@ use crate::config::{
 use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
 use crate::rocks::client::{get_version_for_new, RocksRawClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
-use crate::rocks::errors::REDIS_WRONG_TYPE_ERR;
+use crate::rocks::errors::{REDIS_VALUE_IS_NOT_INTEGER_ERR, REDIS_WRONG_TYPE_ERR};
+use crate::rocks::kv::bound_range::BoundRange;
+use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
@@ -14,11 +16,13 @@ use crate::rocks::{
     CF_NAME_GC_VERSION, CF_NAME_HASH_DATA, CF_NAME_HASH_SUB_META, CF_NAME_META, KEY_ENCODER,
 };
 use crate::utils::{
-    count_unique_keys, key_is_expired, resp_bulk, resp_err, resp_int, resp_nil, resp_ok,
+    count_unique_keys, key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil, resp_ok,
 };
 use crate::Frame;
 use rocksdb::ColumnFamilyRef;
 use slog::debug;
+use std::collections::HashMap;
+use std::ops::Range;
 
 pub struct HashCF<'a> {
     meta_cf: ColumnFamilyRef<'a>,
@@ -85,12 +89,12 @@ impl HashCommand {
                         // when is_nx == true, fvs_len must be 1
                         let kv = fvs_copy.get(0).unwrap();
                         let field: Vec<u8> = kv.clone().0.into();
-                        let datakey = KEY_ENCODER.encode_txn_kv_hash_data_key(
+                        let data_key = KEY_ENCODER.encode_txn_kv_hash_data_key(
                             &key,
                             &String::from_utf8_lossy(&field),
                             version,
                         );
-                        if txn.get(cfs.data_cf.clone(), datakey)?.is_some() {
+                        if txn.get(cfs.data_cf.clone(), data_key)?.is_some() {
                             return Ok(0);
                         }
                     }
@@ -271,6 +275,384 @@ impl HashCommand {
                 None => Ok(resp_int(0)),
             }
         })
+    }
+
+    pub async fn hexists(self, key: &str, field: &str) -> RocksResult<Frame> {
+        let client = get_client();
+        let cfs = HashCF::new(&client);
+        let key = key.to_owned();
+        let field = field.to_owned();
+        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+
+        client.exec_txn(|txn| {
+            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+                Some(meta_value) => {
+                    // check key type is hash
+                    if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::Hash) {
+                        return Err(REDIS_WRONG_TYPE_ERR);
+                    }
+
+                    let (ttl, version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
+
+                    if key_is_expired(ttl) {
+                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        return Ok(resp_int(0));
+                    }
+
+                    let data_key = KEY_ENCODER.encode_txn_kv_hash_data_key(&key, &field, version);
+
+                    if txn.get(cfs.data_cf.clone(), data_key)?.is_some() {
+                        Ok(resp_int(1))
+                    } else {
+                        Ok(resp_int(0))
+                    }
+                }
+                None => Ok(resp_int(0)),
+            }
+        })
+    }
+
+    pub async fn hmget(self, key: &str, fields: &[String]) -> RocksResult<Frame> {
+        let client = get_client();
+        let cfs = HashCF::new(&client);
+        let key = key.to_owned();
+        let fields = fields.to_owned();
+        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+
+        let mut resp = Vec::with_capacity(fields.len());
+
+        client.exec_txn(|txn| {
+            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+                Some(meta_value) => {
+                    // check key type is hash
+                    if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::Hash) {
+                        return Err(REDIS_WRONG_TYPE_ERR);
+                    }
+
+                    let (ttl, version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
+
+                    if key_is_expired(ttl) {
+                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        return Ok(resp_array(vec![]));
+                    }
+
+                    let mut field_data_keys = Vec::with_capacity(fields.len());
+                    for field in &fields {
+                        let data_key =
+                            KEY_ENCODER.encode_txn_kv_hash_data_key(&key, field, version);
+                        field_data_keys.push(data_key);
+                    }
+
+                    // batch get
+                    let fields_result = txn
+                        .batch_get(cfs.data_cf.clone(), field_data_keys)?
+                        .into_iter()
+                        .map(|kv| kv.into())
+                        .collect::<HashMap<Key, Value>>();
+
+                    for field in &fields {
+                        let data_key =
+                            KEY_ENCODER.encode_txn_kv_hash_data_key(&key, field, version);
+                        match fields_result.get(&data_key) {
+                            Some(data) => resp.push(resp_bulk(data.to_vec())),
+                            None => resp.push(resp_nil()),
+                        }
+                    }
+                }
+                None => {
+                    for _ in 0..fields.len() {
+                        resp.push(resp_nil());
+                    }
+                }
+            }
+            Ok(resp_array(resp))
+        })
+    }
+
+    pub async fn hlen(self, key: &str) -> RocksResult<Frame> {
+        let client = get_client();
+        let cfs = HashCF::new(&client);
+        let key = key.to_owned();
+        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+
+        client.exec_txn(|txn| {
+            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+                Some(meta_value) => {
+                    // check key type is hash
+                    if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::Hash) {
+                        return Err(REDIS_WRONG_TYPE_ERR);
+                    }
+
+                    let (ttl, version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
+
+                    if key_is_expired(ttl) {
+                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        return Ok(resp_int(0));
+                    }
+
+                    let meta_size = self.sum_key_size(&key, version)?;
+                    Ok(resp_int(meta_size as i64))
+                }
+                None => Ok(resp_int(0)),
+            }
+        })
+    }
+
+    pub async fn hgetall(
+        self,
+        key: &str,
+        with_field: bool,
+        with_value: bool,
+    ) -> RocksResult<Frame> {
+        let client = get_client();
+        let cfs = HashCF::new(&client);
+        let key = key.to_owned();
+        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+
+        client.exec_txn(|txn| {
+            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+                Some(meta_value) => {
+                    // check key type is hash
+                    if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::Hash) {
+                        return Err(REDIS_WRONG_TYPE_ERR);
+                    }
+
+                    let (ttl, version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
+
+                    if key_is_expired(ttl) {
+                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        return Ok(resp_nil());
+                    }
+
+                    let range: Range<Key> = KEY_ENCODER
+                        .encode_txn_kv_hash_data_key_start(&key, version)
+                        ..KEY_ENCODER.encode_txn_kv_hash_data_key_end(&key, version);
+                    let bound_range: BoundRange = range.into();
+                    // scan return iterator
+                    let iter = txn.scan(cfs.data_cf.clone(), bound_range, u32::MAX)?;
+
+                    let resp: Vec<Frame>;
+                    if with_field && with_value {
+                        resp = iter
+                            .flat_map(|kv| {
+                                let field: Vec<u8> =
+                                    KeyDecoder::decode_key_hash_userkey_from_datakey(&key, kv.0);
+                                [resp_bulk(field), resp_bulk(kv.1)]
+                            })
+                            .collect();
+                    } else if with_field {
+                        resp = iter
+                            .flat_map(|kv| {
+                                let field: Vec<u8> =
+                                    KeyDecoder::decode_key_hash_userkey_from_datakey(&key, kv.0);
+                                [resp_bulk(field)]
+                            })
+                            .collect();
+                    } else {
+                        resp = iter.flat_map(|kv| [resp_bulk(kv.1)]).collect();
+                    }
+                    Ok(resp_array(resp))
+                }
+                None => Ok(resp_array(vec![])),
+            }
+        })
+    }
+
+    pub async fn hdel(self, key: &str, fields: &[String]) -> RocksResult<Frame> {
+        let client = get_client();
+        let cfs = HashCF::new(&client);
+        let key = key.to_owned();
+        let fields = fields.to_vec();
+        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+
+        let resp = client.exec_txn(|txn| {
+            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+                Some(meta_value) => {
+                    // check key type is hash
+                    if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::Hash) {
+                        return Err(REDIS_WRONG_TYPE_ERR);
+                    }
+
+                    let (ttl, version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
+
+                    if key_is_expired(ttl) {
+                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        return Ok(0);
+                    }
+
+                    let mut deleted: i64 = 0;
+                    let data_keys: Vec<Key> = fields
+                        .iter()
+                        .map(|field| KEY_ENCODER.encode_txn_kv_hash_data_key(&key, field, version))
+                        .collect();
+                    for pair in txn.batch_get(cfs.data_cf.clone(), data_keys)? {
+                        txn.del(cfs.data_cf.clone(), pair.0)?;
+                        deleted += 1;
+                    }
+
+                    let idx = gen_next_meta_index();
+
+                    // txn lock will be called in txnkv_sum_key_size, so release txn lock first
+                    let old_size = self.sum_key_size(&key, version)?;
+
+                    // update sub meta key or clear all meta and sub meta key if needed
+                    if old_size <= deleted {
+                        txn.del(cfs.meta_cf.clone(), meta_key)?;
+                        let bound_range =
+                            KEY_ENCODER.encode_txn_kv_sub_meta_key_range(&key, version);
+                        let iter = txn.scan_keys(cfs.sub_meta_cf.clone(), bound_range, u32::MAX)?;
+                        for k in iter {
+                            txn.del(cfs.sub_meta_cf.clone(), k)?;
+                        }
+                    } else {
+                        // set sub meta key with a random index
+                        let sub_meta_key =
+                            KEY_ENCODER.encode_txn_kv_sub_meta_key(&key, version, idx);
+                        // create it with negtive value if sub meta key not exists
+                        let new_size = txn
+                            .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
+                            .map_or_else(
+                                || -deleted,
+                                |value| {
+                                    let sub_size = i64::from_be_bytes(value.try_into().unwrap());
+                                    sub_size - deleted
+                                },
+                            );
+                        // new_size may be negtive
+                        txn.put(
+                            cfs.sub_meta_cf.clone(),
+                            sub_meta_key,
+                            new_size.to_be_bytes().to_vec(),
+                        )?;
+                    }
+                    Ok(deleted)
+                }
+                None => Ok(0),
+            }
+        });
+        match resp {
+            Ok(n) => Ok(resp_int(n)),
+            Err(e) => Ok(resp_err(e)),
+        }
+    }
+
+    pub async fn hincrby(self, key: &str, field: &str, step: i64) -> RocksResult<Frame> {
+        let client = get_client();
+        let cfs = HashCF::new(&client);
+        let key = key.to_owned();
+        let field = field.to_owned();
+        let idx = gen_next_meta_index();
+        let meta_key = KEY_ENCODER.encode_txn_kv_meta_key(&key);
+
+        let resp = client.exec_txn(|txn| {
+            let prev_int;
+            let data_key;
+            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+                Some(meta_value) => {
+                    // check key type is hash
+                    if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::Hash) {
+                        return Err(REDIS_WRONG_TYPE_ERR);
+                    }
+
+                    let mut expired = false;
+                    let (ttl, mut version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
+
+                    if key_is_expired(ttl) {
+                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        expired = true;
+                        version = get_version_for_new(
+                            txn,
+                            cfs.gc_cf.clone(),
+                            cfs.gc_version_cf.clone(),
+                            &key,
+                        )?;
+                    }
+
+                    data_key = KEY_ENCODER.encode_txn_kv_hash_data_key(&key, &field, version);
+
+                    match txn.get(cfs.data_cf.clone(), data_key.clone())? {
+                        Some(data_value) => {
+                            // try to convert to int
+                            match String::from_utf8_lossy(&data_value).parse::<i64>() {
+                                Ok(ival) => {
+                                    prev_int = ival;
+                                }
+                                Err(_) => {
+                                    return Err(REDIS_VALUE_IS_NOT_INTEGER_ERR);
+                                }
+                            }
+                        }
+                        None => {
+                            // filed not exist
+                            prev_int = 0;
+                            // add size to a random sub meta key
+                            let sub_meta_key =
+                                KEY_ENCODER.encode_txn_kv_sub_meta_key(&key, version, idx);
+
+                            let sub_size = txn
+                                .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
+                                .map_or_else(
+                                    || 1,
+                                    |value| i64::from_be_bytes(value.try_into().unwrap()),
+                                );
+
+                            // add or update sub meta key
+                            txn.put(
+                                cfs.sub_meta_cf.clone(),
+                                sub_meta_key,
+                                sub_size.to_be_bytes().to_vec(),
+                            )?;
+
+                            // add meta key if needed
+                            if expired {
+                                // add meta key
+                                let meta_size = config_meta_key_number_or_default();
+                                let meta_value = KEY_ENCODER
+                                    .encode_txn_kv_hash_meta_value(ttl, version, meta_size);
+                                txn.put(cfs.meta_cf.clone(), meta_key, meta_value)?;
+                            }
+                        }
+                    }
+                }
+                None => {
+                    let version = get_version_for_new(
+                        txn,
+                        cfs.gc_cf.clone(),
+                        cfs.gc_version_cf.clone(),
+                        &key,
+                    )?;
+
+                    prev_int = 0;
+                    // create new meta key first
+                    let meta_size = config_meta_key_number_or_default();
+                    let meta_value =
+                        KEY_ENCODER.encode_txn_kv_hash_meta_value(0, version, meta_size);
+                    txn.put(cfs.meta_cf.clone(), meta_key, meta_value)?;
+
+                    // add a sub meta key with a random index
+                    let sub_meta_key = KEY_ENCODER.encode_txn_kv_sub_meta_key(&key, version, idx);
+                    txn.put(
+                        cfs.sub_meta_cf.clone(),
+                        sub_meta_key,
+                        1_i64.to_be_bytes().to_vec(),
+                    )?;
+                    data_key = KEY_ENCODER.encode_txn_kv_hash_data_key(&key, &field, version);
+                }
+            }
+            let new_int = prev_int + step;
+            // update data key
+            txn.put(
+                cfs.data_cf.clone(),
+                data_key,
+                new_int.to_string().as_bytes().to_vec(),
+            )?;
+
+            Ok(new_int)
+        });
+        match resp {
+            Ok(n) => Ok(resp_int(n)),
+            Err(e) => Ok(resp_err(e)),
+        }
     }
 
     fn sum_key_size(&self, key: &str, version: u16) -> RocksResult<i64> {

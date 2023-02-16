@@ -106,6 +106,30 @@ pub use hget::Hget;
 mod hstrlen;
 pub use hstrlen::Hstrlen;
 
+mod hexists;
+pub use hexists::Hexists;
+
+mod hmget;
+pub use hmget::Hmget;
+
+mod hlen;
+pub use hlen::Hlen;
+
+mod hgetall;
+pub use hgetall::Hgetall;
+
+mod hkeys;
+pub use hkeys::Hkeys;
+
+mod hvals;
+pub use hvals::Hvals;
+
+mod hdel;
+pub use hdel::Hdel;
+
+mod hincrby;
+pub use hincrby::Hincrby;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -163,6 +187,14 @@ pub enum Command {
     Hmset(Hset),
     Hsetnx(Hset),
     Hget(Hget),
+    Hmget(Hmget),
+    Hlen(Hlen),
+    Hgetall(Hgetall),
+    Hdel(Hdel),
+    Hkeys(Hkeys),
+    Hvals(Hvals),
+    Hincrby(Hincrby),
+    Hexists(Hexists),
     Hstrlen(Hstrlen),
 
     Unknown(Unknown),
@@ -284,6 +316,23 @@ impl Command {
             }
             "hmset" => Command::Hmset(transform_parse(Hset::parse_frames(&mut parse), &mut parse)),
             "hget" => Command::Hget(transform_parse(Hget::parse_frames(&mut parse), &mut parse)),
+            "hmget" => Command::Hmget(transform_parse(Hmget::parse_frames(&mut parse), &mut parse)),
+            "hlen" => Command::Hlen(transform_parse(Hlen::parse_frames(&mut parse), &mut parse)),
+            "hgetall" => Command::Hgetall(transform_parse(
+                Hgetall::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "hdel" => Command::Hdel(transform_parse(Hdel::parse_frames(&mut parse), &mut parse)),
+            "hkeys" => Command::Hkeys(transform_parse(Hkeys::parse_frames(&mut parse), &mut parse)),
+            "hvals" => Command::Hvals(transform_parse(Hvals::parse_frames(&mut parse), &mut parse)),
+            "hincrby" => Command::Hincrby(transform_parse(
+                Hincrby::parse_frames(&mut parse),
+                &mut parse,
+            )),
+            "hexists" => Command::Hexists(transform_parse(
+                Hexists::parse_frames(&mut parse),
+                &mut parse,
+            )),
             "hstrlen" => Command::Hstrlen(transform_parse(
                 Hstrlen::parse_frames(&mut parse),
                 &mut parse,
@@ -365,6 +414,14 @@ impl Command {
             Hmset(cmd) => cmd.apply(dst, true, false).await,
             Hsetnx(cmd) => cmd.apply(dst, false, true).await,
             Hget(cmd) => cmd.apply(dst).await,
+            Hmget(cmd) => cmd.apply(dst).await,
+            Hlen(cmd) => cmd.apply(dst).await,
+            Hgetall(cmd) => cmd.apply(dst).await,
+            Hdel(cmd) => cmd.apply(dst).await,
+            Hkeys(cmd) => cmd.apply(dst).await,
+            Hvals(cmd) => cmd.apply(dst).await,
+            Hincrby(cmd) => cmd.apply(dst).await,
+            Hexists(cmd) => cmd.apply(dst).await,
             Hstrlen(cmd) => cmd.apply(dst).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
@@ -421,6 +478,14 @@ impl Command {
             Command::Hmset(_) => "hmset",
             Command::Hsetnx(_) => "hsetnx",
             Command::Hget(_) => "hget",
+            Command::Hmget(_) => "hmget",
+            Command::Hlen(_) => "hlen",
+            Command::Hgetall(_) => "hgetall",
+            Command::Hdel(_) => "hdel",
+            Command::Hkeys(_) => "hkeys",
+            Command::Hvals(_) => "hvals",
+            Command::Hincrby(_) => "hincrby",
+            Command::Hexists(_) => "hexists",
             Command::Hstrlen(_) => "hstrlen",
 
             Command::Unknown(cmd) => cmd.get_name(),

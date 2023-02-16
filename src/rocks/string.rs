@@ -7,6 +7,7 @@ use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{RError, REDIS_WRONG_TYPE_ERR};
+use crate::rocks::hash::HashCommand;
 use crate::rocks::{get_client, RocksCommand, CF_NAME_META, KEY_ENCODER};
 use crate::Frame;
 use rocksdb::ColumnFamilyRef;
@@ -290,6 +291,9 @@ impl StringCommand {
                         DataType::List => {
                             ListCommand.txn_expire(txn, &client, &key, timestamp, &meta_value)
                         }
+                        DataType::Hash => {
+                            HashCommand.txn_expire(txn, &client, &key, timestamp, &meta_value)
+                        }
                         _ => {
                             // TODO: add all types
                             Ok(0)
@@ -325,6 +329,9 @@ impl StringCommand {
                             }
                             DataType::List => {
                                 ListCommand.txn_expire_if_needed(txn, &client, &key)?;
+                            }
+                            DataType::Hash => {
+                                HashCommand.txn_expire_if_needed(txn, &client, &key)?;
                             }
                             _ => {
                                 // TODO: add all types
