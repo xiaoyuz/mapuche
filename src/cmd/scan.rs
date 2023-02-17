@@ -6,7 +6,7 @@ use bytes::Bytes;
 use slog::debug;
 
 use crate::rocks::string::StringCommand;
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -108,7 +108,7 @@ impl Scan {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand
+        StringCommand::new(get_client())
             .scan(&self.start, self.count.try_into().unwrap(), &self.regex)
             .await
     }

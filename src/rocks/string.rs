@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::str;
+use std::sync::Arc;
 
 use bytes::Bytes;
 
@@ -37,12 +38,19 @@ impl<'a> StringCF<'a> {
     }
 }
 
-#[derive(Clone)]
-pub struct StringCommand;
+pub struct StringCommand {
+    client: RocksRawClient,
+}
 
 impl StringCommand {
+    pub fn new(client: RocksRawClient) -> Self {
+        Self {
+            client
+        }
+    }
+
     pub async fn get(&self, key: &str) -> RocksResult<Frame> {
-        let client = get_client();
+        let client = &self.client;
         let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_string(key);
         match client.get(cfs.data_cf.clone(), ekey.clone())? {
@@ -66,7 +74,7 @@ impl StringCommand {
     }
 
     pub async fn get_type(&self, key: &str) -> RocksResult<Frame> {
-        let client = get_client();
+        let client = &self.client;
         let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_string(key);
         match client.get(cfs.data_cf.clone(), ekey.clone())? {
@@ -85,7 +93,7 @@ impl StringCommand {
     }
 
     pub async fn strlen(&self, key: &str) -> RocksResult<Frame> {
-        let client = get_client();
+        let client = &self.client;
         let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_string(key);
         match client.get(cfs.data_cf.clone(), ekey.clone())? {
@@ -109,7 +117,7 @@ impl StringCommand {
     }
 
     pub async fn put(self, key: &str, val: &Bytes, timestamp: i64) -> RocksResult<Frame> {
-        let client = get_client();
+        let client = &self.client;
         let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_string(key);
         let eval = KEY_ENCODER.encode_string_value(&mut val.to_vec(), timestamp);
@@ -118,7 +126,7 @@ impl StringCommand {
     }
 
     pub async fn batch_get(self, keys: &[String]) -> RocksResult<Frame> {
-        let client = get_client();
+        let client = &self.client;
         let cfs = StringCF::new(&client);
         let ekeys = KEY_ENCODER.encode_strings(keys);
         let result = client.batch_get(cfs.data_cf.clone(), ekeys.clone())?;
@@ -151,14 +159,14 @@ impl StringCommand {
     }
 
     pub async fn batch_put(self, kvs: Vec<KvPair>) -> RocksResult<Frame> {
-        let client = get_client();
+        let client = &self.client;
         let cfs = StringCF::new(&client);
         client.batch_put(cfs.data_cf, kvs)?;
         Ok(resp_ok())
     }
 
     pub async fn put_not_exists(self, key: &str, value: &Bytes) -> RocksResult<Frame> {
-        let client = get_client();
+        let client = &self.client;
         let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_string(key);
         let eval = KEY_ENCODER.encode_string_value(&mut value.to_vec(), -1);
@@ -195,7 +203,7 @@ impl StringCommand {
     }
 
     pub async fn exists(self, keys: &[String]) -> RocksResult<Frame> {
-        let client = get_client();
+        let client = &self.client;
         let cfs = StringCF::new(&client);
         let ekeys = KEY_ENCODER.encode_strings(keys);
         let result = client.batch_get(cfs.data_cf.clone(), ekeys.clone())?;
@@ -219,7 +227,7 @@ impl StringCommand {
 
     // TODO: All actions should in txn
     pub async fn incr(self, key: &str, step: i64) -> RocksResult<Frame> {
-        let client = get_client();
+        let client = &self.client;
         let cfs = StringCF::new(&client);
         let ekey = KEY_ENCODER.encode_string(key);
         let the_key = ekey.clone();
@@ -260,7 +268,7 @@ impl StringCommand {
     }
 
     pub async fn expire(self, key: &str, timestamp: i64) -> RocksResult<Frame> {
-        let client = get_client();
+        let client = &self.client;
         let cfs = StringCF::new(&client);
         let key = key.to_owned();
         let timestamp = timestamp;
@@ -310,7 +318,7 @@ impl StringCommand {
     }
 
     pub async fn ttl(self, key: &str, is_millis: bool) -> RocksResult<Frame> {
-        let client = get_client();
+        let client = &self.client;
         let cfs = StringCF::new(&client);
         let key = key.to_owned();
         let ekey = KEY_ENCODER.encode_string(&key);
@@ -354,7 +362,7 @@ impl StringCommand {
     }
 
     pub async fn del(self, keys: &Vec<String>) -> RocksResult<Frame> {
-        let client = get_client();
+        let client = &self.client;
         let cfs = StringCF::new(&client);
         let keys = keys.to_owned();
         let resp = client.exec_txn(|txn| {

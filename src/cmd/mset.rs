@@ -3,7 +3,7 @@ use crate::config::LOGGER;
 use crate::parse::Parse;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::string::StringCommand;
-use crate::rocks::KEY_ENCODER;
+use crate::rocks::{get_client, KEY_ENCODER};
 use crate::utils::resp_invalid_arguments;
 use crate::{Connection, Frame};
 use bytes::Bytes;
@@ -86,7 +86,7 @@ impl Mset {
             let kvpair = KvPair::from((ekey, eval));
             kvs.push(kvpair);
         }
-        StringCommand.batch_put(kvs).await
+        StringCommand::new(get_client()).batch_put(kvs).await
     }
 }
 

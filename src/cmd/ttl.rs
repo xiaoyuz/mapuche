@@ -6,7 +6,7 @@ use bytes::Bytes;
 use slog::debug;
 
 use crate::rocks::string::StringCommand;
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -59,7 +59,7 @@ impl TTL {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand.ttl(&self.key, is_millis).await
+        StringCommand::new(get_client()).ttl(&self.key, is_millis).await
     }
 }
 

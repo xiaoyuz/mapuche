@@ -7,7 +7,7 @@ use bytes::Bytes;
 use slog::debug;
 
 use crate::rocks::string::StringCommand;
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::{resp_err, resp_invalid_arguments};
 
 #[derive(Debug, Clone)]
@@ -80,7 +80,7 @@ impl IncrDecr {
             self.step = -self.step;
         }
 
-        StringCommand.incr(&self.key, self.step).await
+        StringCommand::new(get_client()).incr(&self.key, self.step).await
     }
 }
 

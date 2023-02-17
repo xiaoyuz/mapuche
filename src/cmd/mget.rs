@@ -7,7 +7,7 @@ use crate::{Connection, Frame};
 use bytes::Bytes;
 use slog::debug;
 
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 
 #[derive(Debug, Clone)]
 pub struct Mget {
@@ -66,7 +66,7 @@ impl Mget {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand.batch_get(&self.keys).await
+        StringCommand::new(get_client()).batch_get(&self.keys).await
     }
 }
 

@@ -6,7 +6,7 @@ use bytes::Bytes;
 use slog::debug;
 
 use crate::rocks::string::StringCommand;
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::{resp_invalid_arguments, timestamp_from_ttl};
 
 #[derive(Debug, Clone)]
@@ -85,7 +85,7 @@ impl Expire {
         if !expire_at {
             ttl = timestamp_from_ttl(ttl);
         }
-        StringCommand.expire(&self.key, ttl).await
+        StringCommand::new(get_client()).expire(&self.key, ttl).await
     }
 }
 

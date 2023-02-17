@@ -8,7 +8,7 @@ use slog::debug;
 use crate::rocks::string::StringCommand;
 use crate::utils::{resp_invalid_arguments, timestamp_from_ttl};
 
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 
 /// Set `key` to hold the string `value`.
 ///
@@ -214,12 +214,12 @@ impl Set {
     }
 
     async fn put_not_exists(&self) -> RocksResult<Frame> {
-        StringCommand.put_not_exists(&self.key, &self.value).await
+        StringCommand::new(get_client()).put_not_exists(&self.key, &self.value).await
     }
 
     async fn put(&self) -> RocksResult<Frame> {
         let ttl = self.expire.map_or(-1, timestamp_from_ttl);
-        StringCommand.put(&self.key, &self.value, ttl).await
+        StringCommand::new(get_client()).put(&self.key, &self.value, ttl).await
     }
 }
 
