@@ -65,6 +65,7 @@ impl Get {
         Ok(Get { key, valid: true })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Get> {
         if argv.len() != 1 {
             return Ok(Get::new_invalid());

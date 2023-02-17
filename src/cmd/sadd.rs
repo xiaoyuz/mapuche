@@ -47,6 +47,7 @@ impl Sadd {
         Ok(sadd)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Sadd> {
         if argv.len() < 2 {
             return Ok(Sadd::new_invalid());

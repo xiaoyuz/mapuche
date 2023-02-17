@@ -39,6 +39,7 @@ impl Srandmember {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Srandmember> {
         if argv.is_empty() || argv.len() > 2 {
             return Ok(Srandmember::new_invalid());

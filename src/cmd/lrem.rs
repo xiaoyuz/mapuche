@@ -40,6 +40,7 @@ impl Lrem {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Lrem> {
         if argv.len() != 3 {
             return Ok(Lrem::new_invalid());

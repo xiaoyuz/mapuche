@@ -53,6 +53,7 @@ impl Hset {
         Ok(hset)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Hset> {
         if argv.len() % 2 != 1 {
             return Ok(Hset::new_invalid());

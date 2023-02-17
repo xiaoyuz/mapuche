@@ -33,6 +33,7 @@ impl Type {
         Ok(Type::new(key))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Type> {
         if argv.len() != 1 {
             return Ok(Type::new_invalid());

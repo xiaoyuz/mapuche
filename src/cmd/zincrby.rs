@@ -37,6 +37,7 @@ impl Zincrby {
         Ok(Zincrby::new(&key, step, &member))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zincrby> {
         if argv.len() != 3 {
             return Ok(Zincrby::new_invalid());

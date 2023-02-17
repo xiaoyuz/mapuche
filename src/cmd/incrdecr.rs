@@ -40,6 +40,7 @@ impl IncrDecr {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>, single_step: bool) -> crate::Result<IncrDecr> {
         if (single_step && argv.len() != 1) || (!single_step && argv.len() != 2) {
             return Ok(IncrDecr::new_invalid());

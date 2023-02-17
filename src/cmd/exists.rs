@@ -35,6 +35,7 @@ impl Exists {
         Ok(exists)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Exists> {
         if argv.is_empty() {
             return Ok(Exists {

@@ -39,6 +39,7 @@ impl Mget {
         Ok(mget)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Mget> {
         if argv.is_empty() {
             return Ok(Mget::new_invalid());

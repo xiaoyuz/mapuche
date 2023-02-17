@@ -124,6 +124,7 @@ impl Zadd {
         Ok(zadd)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zadd> {
         if argv.is_empty() {
             return Ok(Zadd::new_invalid());

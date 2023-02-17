@@ -39,6 +39,7 @@ impl Zremrangebyscore {
         Ok(z)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zremrangebyscore> {
         if argv.len() != 3 {
             return Ok(Zremrangebyscore::new_invalid());

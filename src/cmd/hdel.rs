@@ -42,6 +42,7 @@ impl Hdel {
         Ok(hdel)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Hdel> {
         if argv.len() < 2 {
             return Ok(Hdel::new_invalid());

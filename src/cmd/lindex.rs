@@ -40,6 +40,7 @@ impl Lindex {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Lindex> {
         if argv.len() != 2 {
             return Ok(Lindex::new_invalid());

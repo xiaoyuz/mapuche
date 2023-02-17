@@ -29,6 +29,7 @@ impl Pop {
         &self.key
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Pop> {
         if argv.is_empty() || argv.len() > 2 {
             return Ok(Pop::new_invalid());

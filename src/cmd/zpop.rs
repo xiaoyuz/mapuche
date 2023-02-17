@@ -39,6 +39,7 @@ impl Zpop {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zpop> {
         if argv.is_empty() || argv.len() > 2 {
             return Ok(Zpop::new_invalid());

@@ -51,6 +51,7 @@ impl Linsert {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Linsert> {
         if argv.len() != 4 {
             return Ok(Linsert::new_invalid());

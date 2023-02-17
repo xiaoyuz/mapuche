@@ -37,6 +37,7 @@ impl Smembers {
         Ok(Smembers::new(&key))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Smembers> {
         if argv.len() != 1 {
             return Ok(Smembers {

@@ -47,6 +47,7 @@ impl Smismember {
         Ok(smismember)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Smismember> {
         if argv.len() < 2 {
             return Ok(Smismember::new_invalid());

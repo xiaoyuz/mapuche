@@ -37,6 +37,7 @@ impl Hlen {
         Ok(Hlen { key, valid: true })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Hlen> {
         if argv.len() != 1 {
             return Ok(Hlen::new_invalid());

@@ -48,6 +48,7 @@ impl Push {
         Ok(push)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Push> {
         if argv.len() < 2 {
             return Ok(Push::new_invalid());

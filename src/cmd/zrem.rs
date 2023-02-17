@@ -50,6 +50,7 @@ impl Zrem {
         Ok(zrem)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zrem> {
         if argv.len() < 2 {
             return Ok(Zrem::new_invalid());

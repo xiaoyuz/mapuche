@@ -46,6 +46,7 @@ impl Hmget {
         Ok(hmget)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Hmget> {
         if argv.len() < 2 {
             return Ok(Hmget::new_invalid());

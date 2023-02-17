@@ -37,6 +37,7 @@ impl Hgetall {
         Ok(Hgetall { key, valid: true })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Hgetall> {
         if argv.len() != 1 {
             return Ok(Hgetall::new_invalid());

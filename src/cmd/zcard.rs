@@ -37,6 +37,7 @@ impl Zcard {
         Ok(Zcard { key, valid: true })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zcard> {
         if argv.len() != 1 {
             return Ok(Zcard::new_invalid());

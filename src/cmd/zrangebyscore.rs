@@ -97,6 +97,7 @@ impl Zrangebyscore {
         Ok(z)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zrangebyscore> {
         if argv.len() < 3 {
             return Ok(Zrangebyscore::new_invalid());

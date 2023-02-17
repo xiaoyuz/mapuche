@@ -44,6 +44,7 @@ impl Ltrim {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Ltrim> {
         if argv.len() != 3 {
             return Ok(Ltrim::new_invalid());

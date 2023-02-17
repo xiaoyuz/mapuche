@@ -38,6 +38,7 @@ impl Zremrangebyrank {
         Ok(z)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zremrangebyrank> {
         if argv.len() != 3 {
             return Ok(Zremrangebyrank::new_invalid());

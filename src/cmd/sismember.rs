@@ -35,6 +35,7 @@ impl Sismember {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Sismember> {
         if argv.len() != 2 {
             return Ok(Sismember::new_invalid());

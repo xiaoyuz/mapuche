@@ -56,6 +56,7 @@ impl Hincrby {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Hincrby> {
         if argv.len() != 3 {
             return Ok(Hincrby::new_invalid());

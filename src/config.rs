@@ -334,6 +334,21 @@ pub fn cmd_lrem_length_limit_or_default() -> u32 {
     0
 }
 
+pub fn async_expire_list_threshold_or_default() -> u32 {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(b) = c.backend.async_expire_list_threshold {
+                return b;
+            }
+        }
+    }
+    if async_deletion_enabled_or_default() {
+        1000
+    } else {
+        u32::MAX
+    }
+}
+
 pub fn async_expire_hash_threshold_or_default() -> u32 {
     unsafe {
         if let Some(c) = &SERVER_CONFIG {

@@ -49,6 +49,7 @@ impl Zrevrange {
         Ok(z)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zrevrange> {
         if argv.len() < 3 {
             return Ok(Zrevrange::new_invalid());

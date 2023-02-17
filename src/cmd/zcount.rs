@@ -58,6 +58,7 @@ impl Zcount {
         Ok(z)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zcount> {
         if argv.len() < 3 {
             return Ok(Zcount::new_invalid());

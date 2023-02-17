@@ -62,6 +62,7 @@ impl Zrange {
         Ok(z)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zrange> {
         if argv.len() < 3 {
             return Ok(Zrange::new_invalid());

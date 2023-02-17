@@ -37,6 +37,7 @@ impl Hkeys {
         Ok(Hkeys { key, valid: true })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Hkeys> {
         if argv.len() != 1 {
             return Ok(Hkeys::new_invalid());

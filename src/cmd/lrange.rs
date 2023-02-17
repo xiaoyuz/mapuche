@@ -44,6 +44,7 @@ impl Lrange {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Lrange> {
         if argv.len() != 3 {
             return Ok(Lrange::new_invalid());

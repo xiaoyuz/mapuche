@@ -33,6 +33,7 @@ impl Strlen {
         Ok(Strlen { key, valid: true })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Strlen> {
         if argv.len() != 1 {
             return Ok(Strlen::new_invalid());

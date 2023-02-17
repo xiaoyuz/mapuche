@@ -47,6 +47,7 @@ impl Hstrlen {
         Ok(Hstrlen::new(&key, &field))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Hstrlen> {
         if argv.len() != 2 {
             return Ok(Hstrlen::new_invalid());

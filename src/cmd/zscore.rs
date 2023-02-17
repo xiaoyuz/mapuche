@@ -36,6 +36,7 @@ impl Zscore {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zscore> {
         if argv.len() != 2 {
             return Ok(Zscore::new_invalid());

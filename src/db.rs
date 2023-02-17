@@ -151,6 +151,7 @@ impl Db {
     /// Returns `None` if there is no value associated with the key. This may be
     /// due to never having assigned a value to the key or a previously assigned
     /// value expired.
+    #[allow(dead_code)]
     pub(crate) fn get(&self, key: &str) -> Option<Bytes> {
         // Acquire the lock, get the entry and clone the value.
         //
@@ -164,6 +165,7 @@ impl Db {
     /// Duration.
     ///
     /// If a value is already associated with the key, it is removed.
+    #[allow(dead_code)]
     pub(crate) fn set(&self, key: String, value: Bytes, expire: Option<Duration>) {
         let mut state = self.shared.state.lock().unwrap();
 

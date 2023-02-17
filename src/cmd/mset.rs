@@ -50,6 +50,7 @@ impl Mset {
         Ok(mset)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Mset> {
         if argv.len() % 2 != 0 {
             return Ok(Mset::new_invalid());

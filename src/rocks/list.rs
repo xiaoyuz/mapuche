@@ -1,7 +1,4 @@
-use crate::config::{
-    async_del_list_threshold_or_default, cmd_linsert_length_limit_or_default,
-    cmd_lrem_length_limit_or_default,
-};
+use crate::config::{async_del_list_threshold_or_default, async_expire_list_threshold_or_default, cmd_linsert_length_limit_or_default, cmd_lrem_length_limit_or_default};
 use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
 use crate::rocks::client::{get_version_for_new, RocksRawClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
@@ -860,7 +857,7 @@ impl RocksCommand for ListCommand {
                 }
 
                 let len = right - left;
-                if len >= async_del_list_threshold_or_default() as u64 {
+                if len >= async_expire_list_threshold_or_default() as u64 {
                     // async delete
                     // delete meta key and create gc key and gc version key with the version
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
