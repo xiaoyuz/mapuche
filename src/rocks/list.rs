@@ -1,4 +1,7 @@
-use crate::config::{async_del_list_threshold_or_default, async_expire_list_threshold_or_default, cmd_linsert_length_limit_or_default, cmd_lrem_length_limit_or_default};
+use crate::config::{
+    async_del_list_threshold_or_default, async_expire_list_threshold_or_default,
+    cmd_linsert_length_limit_or_default, cmd_lrem_length_limit_or_default,
+};
 use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
 use crate::rocks::client::{get_version_for_new, RocksRawClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
