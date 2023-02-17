@@ -33,6 +33,7 @@ pub struct Unsubscribe {
 type Messages = Pin<Box<dyn Stream<Item = Bytes> + Send>>;
 
 impl Subscribe {
+    #[allow(dead_code)]
     /// Creates a new `Subscribe` command to listen on the specified channels.
     pub(crate) fn new(channels: &[String]) -> Subscribe {
         Subscribe {
@@ -154,19 +155,6 @@ impl Subscribe {
             };
         }
     }
-
-    /// Converts the command into an equivalent `Frame`.
-    ///
-    /// This is called by the client when encoding a `Subscribe` command to send
-    /// to the server.
-    pub(crate) fn into_frame(self) -> Frame {
-        let mut frame = Frame::array();
-        frame.push_bulk(Bytes::from("subscribe".as_bytes()));
-        for channel in self.channels {
-            frame.push_bulk(Bytes::from(channel.into_bytes()));
-        }
-        frame
-    }
 }
 
 async fn subscribe_to_channel(
@@ -281,6 +269,7 @@ fn make_message_frame(channel_name: String, msg: Bytes) -> Frame {
 }
 
 impl Unsubscribe {
+    #[allow(dead_code)]
     /// Create a new `Unsubscribe` command with the given `channels`.
     pub(crate) fn new(channels: &[String]) -> Unsubscribe {
         Unsubscribe {
@@ -332,20 +321,5 @@ impl Unsubscribe {
         }
 
         Ok(Unsubscribe { channels })
-    }
-
-    /// Converts the command into an equivalent `Frame`.
-    ///
-    /// This is called by the client when encoding an `Unsubscribe` command to
-    /// send to the server.
-    pub(crate) fn into_frame(self) -> Frame {
-        let mut frame = Frame::array();
-        frame.push_bulk(Bytes::from("unsubscribe".as_bytes()));
-
-        for channel in self.channels {
-            frame.push_bulk(Bytes::from(channel.into_bytes()));
-        }
-
-        frame
     }
 }

@@ -164,11 +164,6 @@ impl Frame {
             _ => unimplemented!(),
         }
     }
-
-    /// Converts the frame to an "unexpected frame" error
-    pub(crate) fn to_error(&self) -> crate::Error {
-        format!("unexpected frame: {self}").into()
-    }
 }
 
 impl PartialEq<&str> for Frame {
@@ -213,7 +208,7 @@ impl From<RError> for Frame {
         match e {
             RError::Owned(s) => Frame::Error(s),
             RError::String(s) => Frame::Error(s.to_string()),
-            RError::RocksClient(_) => Frame::Error("ERR tikv client error".to_string()),
+            RError::RocksClient(e) => Frame::Error(format!("ERR rocksdb client error: {}", e)),
         }
     }
 }

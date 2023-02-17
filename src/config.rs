@@ -46,6 +46,8 @@ struct Server {
 
 #[derive(Debug, Deserialize, Clone)]
 struct Backend {
+    local_pool_number: Option<usize>,
+
     data_store_dir: Option<String>,
 
     cmd_lrem_length_limit: Option<u32>,
@@ -407,4 +409,16 @@ pub fn async_del_zset_threshold_or_default() -> u32 {
     } else {
         u32::MAX
     }
+}
+
+pub fn config_local_pool_number() -> usize {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.backend.local_pool_number {
+                return s;
+            }
+        }
+    }
+    // default use 8 localset pool to handle connections
+    100
 }

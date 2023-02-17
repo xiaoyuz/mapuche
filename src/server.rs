@@ -1,6 +1,8 @@
 use crate::{Command, Connection, Db, DbDropGuard, Shutdown};
+use std::collections::HashMap;
 
-use crate::config::{async_gc_worker_number_or_default, LOGGER};
+use crate::client::Client;
+use crate::config::{async_gc_worker_number_or_default, config_local_pool_number, LOGGER};
 use crate::gc::GcMaster;
 use crate::metrics::{
     CURRENT_CONNECTION_COUNTER, REQUEST_CMD_COUNTER, REQUEST_CMD_FINISH_COUNTER,
@@ -10,8 +12,9 @@ use slog::{debug, error, info};
 use std::future::Future;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, mpsc, Semaphore};
+use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::time::{self, Duration, Instant};
+use tokio_util::task::LocalPoolHandle;
 
 /// Server listener state. Created in the `run` call. It includes a `run` method
 /// which performs the TCP listening and initialization of per-connection state.
@@ -29,15 +32,7 @@ struct Listener {
     /// TCP listener supplied by the `run` caller.
     listener: TcpListener,
 
-    /// Limit the max number of connections.
-    ///
-    /// A `Semaphore` is used to limit the max number of connections. Before
-    /// attempting to accept a new connection, a permit is acquired from the
-    /// semaphore. If none are available, the listener waits for one.
-    ///
-    /// When handlers complete processing a connection, the permit is returned
-    /// to the semaphore.
-    limit_connections: Arc<Semaphore>,
+    clients: Arc<Mutex<HashMap<u64, Arc<Mutex<Client>>>>>,
 
     /// Broadcasts a shutdown signal to all active connections.
     ///
@@ -69,49 +64,13 @@ struct Listener {
 /// commands to `db`.
 #[derive(Debug)]
 struct Handler {
-    /// Shared database handle.
-    ///
-    /// When a command is received from `connection`, it is applied with `db`.
-    /// The implementation of the command is in the `cmd` module. Each command
-    /// will need to interact with `db` in order to complete the work.
     db: Db,
-
-    /// The TCP connection decorated with the redis protocol encoder / decoder
-    /// implemented using a buffered `TcpStream`.
-    ///
-    /// When `Listener` receives an inbound connection, the `TcpStream` is
-    /// passed to `Connection::new`, which initializes the associated buffers.
-    /// `Connection` allows the handler to operate at the "frame" level and keep
-    /// the byte level protocol parsing details encapsulated in `Connection`.
+    cur_client: Arc<Mutex<Client>>,
+    clients: Arc<Mutex<HashMap<u64, Arc<Mutex<Client>>>>>,
     connection: Connection,
-
-    /// Listen for shutdown notifications.
-    ///
-    /// A wrapper around the `broadcast::Receiver` paired with the sender in
-    /// `Listener`. The connection handler processes requests from the
-    /// connection until the peer disconnects **or** a shutdown notification is
-    /// received from `shutdown`. In the latter case, any in-flight work being
-    /// processed for the peer is continued until it reaches a safe state, at
-    /// which point the connection is terminated.
     shutdown: Shutdown,
-
-    /// Not used directly. Instead, when `Handler` is dropped...?
     _shutdown_complete: mpsc::Sender<()>,
 }
-
-/// Maximum number of concurrent connections the redis server will accept.
-///
-/// When this limit is reached, the server will stop accepting connections until
-/// an active connection terminates.
-///
-/// A real application will want to make this value configurable, but for this
-/// example, it is hard coded.
-///
-/// This is also set to a pretty low value to discourage using this in
-/// production (you'd think that all the disclaimers would make it obvious that
-/// this is not a serious project... but I thought that about mini-http as
-/// well).
-const MAX_CONNECTIONS: usize = 3000;
 
 /// Run the mapuche server.
 ///
@@ -130,12 +89,13 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) {
     // one.
     let (notify_shutdown, _) = broadcast::channel(1);
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
+    let db_holder = DbDropGuard::new();
 
     // Initialize the listener state
     let mut server = Listener {
         listener,
-        db_holder: DbDropGuard::new(),
-        limit_connections: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
+        db_holder: db_holder.clone(),
+        clients: Arc::new(Mutex::new(HashMap::new())),
         notify_shutdown,
         shutdown_complete_tx,
         shutdown_complete_rx,
@@ -226,56 +186,40 @@ impl Listener {
     async fn run(&mut self) -> crate::Result<()> {
         info!(LOGGER, "accepting inbound connections");
 
+        let local_pool_number = config_local_pool_number();
+        let local_pool = LocalPoolHandle::new(local_pool_number);
         loop {
-            // Wait for a permit to become available
-            //
-            // `acquire_owned` returns a permit that is bound to the semaphore.
-            // When the permit value is dropped, it is automatically returned
-            // to the semaphore.
-            //
-            // `acquire_owned()` returns `Err` when the semaphore has been
-            // closed. We don't ever close the semaphore, so `unwrap()` is safe.
-            let permit = self
-                .limit_connections
-                .clone()
-                .acquire_owned()
-                .await
-                .unwrap();
-
-            // Accept a new socket. This will attempt to perform error handling.
-            // The `accept` method internally attempts to recover errors, so an
-            // error here is non-recoverable.
             let socket = self.accept().await?;
+            let (kill_tx, kill_rx) = mpsc::channel(1);
+            let client = Client::new(&socket, kill_tx);
+            let client_id = client.id();
+            let arc_client = Arc::new(Mutex::new(client));
+            self.clients
+                .lock()
+                .await
+                .insert(client_id, arc_client.clone());
 
             // Create the necessary per-connection handler state.
             let mut handler = Handler {
-                // Get a handle to the shared database.
                 db: self.db_holder.db(),
-
-                // Initialize the connection state. This allocates read/write
-                // buffers to perform redis protocol frame parsing.
+                cur_client: arc_client.clone(),
+                clients: self.clients.clone(),
                 connection: Connection::new(socket),
-
-                // Receive shutdown notifications.
-                shutdown: Shutdown::new(self.notify_shutdown.subscribe()),
-
-                // Notifies the receiver half once all clones are
-                // dropped.
+                shutdown: Shutdown::new(self.notify_shutdown.subscribe(), kill_rx),
                 _shutdown_complete: self.shutdown_complete_tx.clone(),
             };
-
-            // Spawn a new task to process the connections. Tokio tasks are like
-            // asynchronous green threads and are executed concurrently.
-            tokio::spawn(async move {
+            local_pool.spawn_pinned(|| async move {
                 // Process the connection. If an error is encountered, log it.
                 CURRENT_CONNECTION_COUNTER.inc();
                 TOTAL_CONNECTION_PROCESSED.inc();
                 if let Err(err) = handler.run().await {
-                    error!(LOGGER, "connection error, case {}", err.to_string());
+                    error!(LOGGER, "connection error {:?}", err);
                 }
-                // Move the permit into the task and drop it after completion.
-                // This returns the permit back to the semaphore.
-                drop(permit);
+                handler
+                    .clients
+                    .lock()
+                    .await
+                    .remove(&handler.cur_client.lock().await.id());
                 CURRENT_CONNECTION_COUNTER.dec();
             });
         }
@@ -298,6 +242,7 @@ impl Listener {
             match self.listener.accept().await {
                 Ok((socket, _)) => return Ok(socket),
                 Err(err) => {
+                    error!(LOGGER, "Accept Error! {:?}", &err);
                     if backoff > 64 {
                         // Accept has failed too many times. Return the error.
                         return Err(err.into());
@@ -353,13 +298,19 @@ impl Handler {
             // Convert the redis frame into a command struct. This returns an
             // error if the frame is not a valid redis command or it is an
             // unsupported command.
-            let start_at = Instant::now();
             let cmd = Command::from_frame(frame)?;
             let cmd_name = cmd.get_name().to_owned();
+
+            {
+                let mut w_client = self.cur_client.lock().await;
+                w_client.interact(&cmd_name);
+            }
+
+            let start_at = Instant::now();
             REQUEST_COUNTER.inc();
             REQUEST_CMD_COUNTER.with_label_values(&[&cmd_name]).inc();
 
-            debug!(LOGGER, "req {:?}", cmd);
+            debug!(LOGGER, "req, {:?}", cmd);
 
             // Perform the work needed to apply the command. This may mutate the
             // database state as a result.

@@ -72,6 +72,7 @@ pub trait RocksCommand {
 fn new_db() -> Result<TransactionDB<MultiThreaded>> {
     let mut opts = Options::default();
     let transaction_opts = TransactionDBOptions::default();
+    opts.set_max_open_files(200);
     opts.create_if_missing(true);
     opts.create_missing_column_families(true);
 

@@ -31,10 +31,6 @@ use parse::{Parse, ParseError};
 
 pub mod server;
 
-mod buffer;
-
-pub use buffer::{buffer, Buffer};
-
 pub mod gc;
 pub mod metrics;
 pub mod rocks;
