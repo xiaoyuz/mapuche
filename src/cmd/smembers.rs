@@ -6,7 +6,7 @@ use bytes::Bytes;
 use slog::debug;
 
 use crate::rocks::set::SetCommand;
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -60,7 +60,7 @@ impl Smembers {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        SetCommand.smembers(&self.key).await
+        SetCommand::new(&get_client()).smembers(&self.key).await
     }
 }
 

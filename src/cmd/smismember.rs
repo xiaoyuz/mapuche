@@ -6,7 +6,7 @@ use bytes::Bytes;
 use slog::debug;
 
 use crate::rocks::set::SetCommand;
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -71,7 +71,7 @@ impl Smismember {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        SetCommand.sismember(&self.key, &self.members, true).await
+        SetCommand::new(&get_client()).sismember(&self.key, &self.members, true).await
     }
 }
 

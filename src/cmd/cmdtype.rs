@@ -56,7 +56,7 @@ impl Type {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand::new(get_client()).get_type(&self.key).await
+        StringCommand::new(&get_client()).get_type(&self.key).await
     }
 }
 

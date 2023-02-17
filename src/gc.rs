@@ -207,7 +207,7 @@ impl GcWorker {
                         LOGGER,
                         "[GC] async delete set key {} with version {}", user_key, version
                     );
-                    SetCommand.txn_gc(txn, &client, &user_key, version)?;
+                    SetCommand::new(&get_client()).txn_gc(txn, &client, &user_key, version)?;
                 }
                 DataType::List => {
                     debug!(

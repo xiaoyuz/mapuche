@@ -94,7 +94,7 @@ impl Get {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand::new(get_client()).get(&self.key).await
+        StringCommand::new(&get_client()).get(&self.key).await
     }
 }
 

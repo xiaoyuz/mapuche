@@ -6,7 +6,7 @@ use bytes::Bytes;
 use slog::debug;
 
 use crate::rocks::set::SetCommand;
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -83,7 +83,7 @@ impl Srandmember {
                 count = -count;
             }
         }
-        SetCommand
+        SetCommand::new(&get_client())
             .srandmemeber(&self.key, count, repeatable, array_resp)
             .await
     }
