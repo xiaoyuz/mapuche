@@ -46,33 +46,7 @@ struct Server {
 
 #[derive(Debug, Deserialize, Clone)]
 struct Backend {
-    timeout: Option<u64>,
-    ca_file: Option<String>,
-    cert_file: Option<String>,
-    key_file: Option<String>,
-    conn_concurrency: Option<usize>,
-    use_txn_api: Option<bool>,
-    use_async_commit: Option<bool>,
-    try_one_pc_commit: Option<bool>,
-    use_pessimistic_txn: Option<bool>,
-    local_pool_number: Option<usize>,
-
-    // kv client config
-    completion_queue_size: Option<usize>,
-    grpc_keepalive_time: Option<u64>,
-    grpc_keepalive_timeout: Option<u64>,
-    allow_batch: Option<bool>,
-    overload_threshold: Option<u64>,
-    max_batch_wait_time: Option<u64>,
-    max_batch_size: Option<usize>,
-    max_inflight_requests: Option<usize>,
     data_store_dir: Option<String>,
-
-    txn_retry_count: Option<u32>,
-    txn_region_backoff_delay_ms: Option<u64>,
-    txn_region_backoff_delay_attemps: Option<u32>,
-    txn_lock_backoff_delay_ms: Option<u64>,
-    txn_lock_backoff_delay_attemps: Option<u32>,
 
     cmd_lrem_length_limit: Option<u32>,
     cmd_linsert_length_limit: Option<u32>,
