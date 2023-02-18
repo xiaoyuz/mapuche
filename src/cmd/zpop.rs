@@ -6,7 +6,7 @@ use bytes::Bytes;
 use slog::debug;
 
 use crate::rocks::zset::ZsetCommand;
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -66,7 +66,7 @@ impl Zpop {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand
+        ZsetCommand::new(&get_client())
             .zpop(&self.key, from_min, self.count as u64)
             .await
     }

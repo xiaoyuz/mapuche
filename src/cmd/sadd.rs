@@ -72,7 +72,9 @@ impl Sadd {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        SetCommand::new(&get_client()).sadd(&self.key, &self.members).await
+        SetCommand::new(&get_client())
+            .sadd(&self.key, &self.members)
+            .await
     }
 }
 

@@ -12,8 +12,8 @@ use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
 use crate::rocks::{
-    gen_next_meta_index, get_client, Result as RocksResult, RocksCommand, CF_NAME_GC,
-    CF_NAME_GC_VERSION, CF_NAME_HASH_DATA, CF_NAME_HASH_SUB_META, CF_NAME_META, KEY_ENCODER,
+    gen_next_meta_index, Result as RocksResult, RocksCommand, CF_NAME_GC, CF_NAME_GC_VERSION,
+    CF_NAME_HASH_DATA, CF_NAME_HASH_SUB_META, CF_NAME_META, KEY_ENCODER,
 };
 use crate::utils::{
     count_unique_keys, key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil, resp_ok,
@@ -44,10 +44,15 @@ impl<'a> HashCF<'a> {
     }
 }
 
-#[derive(Clone)]
-pub struct HashCommand;
+pub struct HashCommand<'a> {
+    client: &'a RocksRawClient,
+}
 
-impl HashCommand {
+impl<'a> HashCommand<'a> {
+    pub fn new(client: &'a RocksRawClient) -> Self {
+        Self { client }
+    }
+
     pub async fn hset(
         self,
         key: &str,
@@ -55,8 +60,8 @@ impl HashCommand {
         is_hmset: bool,
         is_nx: bool,
     ) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = HashCF::new(&client);
+        let client = self.client;
+        let cfs = HashCF::new(client);
         let key = key.to_owned();
         let fvs_copy = fvs.to_vec();
         let fvs_len = fvs_copy.len();
@@ -77,7 +82,7 @@ impl HashCommand {
                     let mut expired = false;
 
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         expired = true;
                         version = get_version_for_new(
                             txn,
@@ -213,8 +218,8 @@ impl HashCommand {
     }
 
     pub async fn hget(self, key: &str, field: &str) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = HashCF::new(&client);
+        let client = self.client;
+        let cfs = HashCF::new(client);
         let key = key.to_owned();
         let field = field.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -230,7 +235,7 @@ impl HashCommand {
                     let (ttl, version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
 
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_nil());
                     }
 
@@ -245,8 +250,8 @@ impl HashCommand {
     }
 
     pub async fn hstrlen(self, key: &str, field: &str) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = HashCF::new(&client);
+        let client = self.client;
+        let cfs = HashCF::new(client);
         let key = key.to_owned();
         let field = field.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -262,7 +267,7 @@ impl HashCommand {
                     let (ttl, version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
 
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_int(0));
                     }
 
@@ -277,8 +282,8 @@ impl HashCommand {
     }
 
     pub async fn hexists(self, key: &str, field: &str) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = HashCF::new(&client);
+        let client = self.client;
+        let cfs = HashCF::new(client);
         let key = key.to_owned();
         let field = field.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -294,7 +299,7 @@ impl HashCommand {
                     let (ttl, version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
 
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_int(0));
                     }
 
@@ -312,8 +317,8 @@ impl HashCommand {
     }
 
     pub async fn hmget(self, key: &str, fields: &[String]) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = HashCF::new(&client);
+        let client = self.client;
+        let cfs = HashCF::new(client);
         let key = key.to_owned();
         let fields = fields.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -331,7 +336,7 @@ impl HashCommand {
                     let (ttl, version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
 
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_array(vec![]));
                     }
 
@@ -367,8 +372,8 @@ impl HashCommand {
     }
 
     pub async fn hlen(self, key: &str) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = HashCF::new(&client);
+        let client = self.client;
+        let cfs = HashCF::new(client);
         let key = key.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
 
@@ -383,7 +388,7 @@ impl HashCommand {
                     let (ttl, version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
 
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_int(0));
                     }
 
@@ -401,8 +406,8 @@ impl HashCommand {
         with_field: bool,
         with_value: bool,
     ) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = HashCF::new(&client);
+        let client = self.client;
+        let cfs = HashCF::new(client);
         let key = key.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
 
@@ -417,7 +422,7 @@ impl HashCommand {
                     let (ttl, version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
 
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_nil());
                     }
 
@@ -455,8 +460,8 @@ impl HashCommand {
     }
 
     pub async fn hdel(self, key: &str, fields: &[String]) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = HashCF::new(&client);
+        let client = self.client;
+        let cfs = HashCF::new(client);
         let key = key.to_owned();
         let fields = fields.to_vec();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -472,7 +477,7 @@ impl HashCommand {
                     let (ttl, version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
 
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(0);
                     }
 
@@ -531,8 +536,8 @@ impl HashCommand {
     }
 
     pub async fn hincrby(self, key: &str, field: &str, step: i64) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = HashCF::new(&client);
+        let client = self.client;
+        let cfs = HashCF::new(client);
         let key = key.to_owned();
         let field = field.to_owned();
         let idx = gen_next_meta_index();
@@ -552,7 +557,7 @@ impl HashCommand {
                     let (ttl, mut version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
 
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         expired = true;
                         version = get_version_for_new(
                             txn,
@@ -648,8 +653,8 @@ impl HashCommand {
     }
 
     fn sum_key_size(&self, key: &str, version: u16) -> RocksResult<i64> {
-        let client = get_client();
-        let cfs = HashCF::new(&client);
+        let client = self.client;
+        let cfs = HashCF::new(client);
         let key = key.to_owned();
 
         client.exec_txn(move |txn| {
@@ -675,7 +680,7 @@ impl HashCommand {
     }
 }
 
-impl RocksCommand for HashCommand {
+impl RocksCommand for HashCommand<'_> {
     fn txn_del(
         &self,
         txn: &RocksTransaction,

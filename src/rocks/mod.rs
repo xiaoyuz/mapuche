@@ -117,7 +117,7 @@ pub fn get_client() -> RocksRawClient {
 }
 
 pub async fn get_client_from_pool() -> RocksRawClient {
-    let permit = LIMIT_DB_CON.clone().acquire_owned().await.unwrap();
+    let _permit = LIMIT_DB_CON.clone().acquire_owned().await.unwrap();
 
     let db = ROCKS_DB.clone();
     RocksRawClient::new(db)

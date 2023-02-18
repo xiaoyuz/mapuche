@@ -6,7 +6,7 @@ use bytes::Bytes;
 use slog::debug;
 
 use crate::rocks::zset::ZsetCommand;
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -74,7 +74,9 @@ impl Zrem {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand.zrem(&self.key, &self.members).await
+        ZsetCommand::new(&get_client())
+            .zrem(&self.key, &self.members)
+            .await
     }
 }
 

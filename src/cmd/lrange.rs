@@ -6,7 +6,7 @@ use crate::rocks::list::ListCommand;
 use bytes::Bytes;
 use slog::debug;
 
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -74,7 +74,9 @@ impl Lrange {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ListCommand.lrange(&self.key, self.left, self.right).await
+        ListCommand::new(&get_client())
+            .lrange(&self.key, self.left, self.right)
+            .await
     }
 }
 

@@ -7,7 +7,7 @@ use crate::rocks::kv::kvpair::KvPair;
 use bytes::Bytes;
 use slog::debug;
 
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -89,7 +89,7 @@ impl Hset {
             return Ok(resp_invalid_arguments());
         }
 
-        HashCommand
+        HashCommand::new(&get_client())
             .hset(&self.key, &self.field_and_value, is_hmset, is_nx)
             .await
     }

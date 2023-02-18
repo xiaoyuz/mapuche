@@ -207,28 +207,28 @@ impl GcWorker {
                         LOGGER,
                         "[GC] async delete set key {} with version {}", user_key, version
                     );
-                    SetCommand::new(&get_client()).txn_gc(txn, &client, &user_key, version)?;
+                    SetCommand::new(&client).txn_gc(txn, &client, &user_key, version)?;
                 }
                 DataType::List => {
                     debug!(
                         LOGGER,
                         "[GC] async delete list key {} with version {}", user_key, version
                     );
-                    ListCommand.txn_gc(txn, &client, &user_key, version)?;
+                    ListCommand::new(&client).txn_gc(txn, &client, &user_key, version)?;
                 }
                 DataType::Hash => {
                     debug!(
                         LOGGER,
                         "[GC] async delete hash key {} with version {}", user_key, version
                     );
-                    HashCommand.txn_gc(txn, &client, &user_key, version)?;
+                    HashCommand::new(&client).txn_gc(txn, &client, &user_key, version)?;
                 }
                 DataType::Zset => {
                     debug!(
                         LOGGER,
                         "[GC] async delete zset key {} with version {}", user_key, version
                     );
-                    ZsetCommand.txn_gc(txn, &client, &user_key, version)?;
+                    ZsetCommand::new(&client).txn_gc(txn, &client, &user_key, version)?;
                 }
                 DataType::Null => {
                     panic!("unknown data type to do async deletion");

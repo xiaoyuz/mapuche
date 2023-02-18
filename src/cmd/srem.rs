@@ -71,7 +71,9 @@ impl Srem {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        SetCommand::new(&get_client()).srem(&self.key, &self.members).await
+        SetCommand::new(&get_client())
+            .srem(&self.key, &self.members)
+            .await
     }
 }
 

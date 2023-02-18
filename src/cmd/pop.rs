@@ -6,7 +6,7 @@ use crate::rocks::list::ListCommand;
 use bytes::Bytes;
 use slog::debug;
 
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -72,7 +72,9 @@ impl Pop {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ListCommand.pop(&self.key, op_left, self.count).await
+        ListCommand::new(&get_client())
+            .pop(&self.key, op_left, self.count)
+            .await
     }
 }
 

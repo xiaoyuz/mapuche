@@ -8,9 +8,8 @@ use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
 use crate::rocks::{
-    gen_next_meta_index, get_client, Result as RocksResult, RocksCommand, CF_NAME_GC,
-    CF_NAME_GC_VERSION, CF_NAME_META, CF_NAME_ZSET_DATA, CF_NAME_ZSET_SCORE, CF_NAME_ZSET_SUB_META,
-    KEY_ENCODER,
+    gen_next_meta_index, Result as RocksResult, RocksCommand, CF_NAME_GC, CF_NAME_GC_VERSION,
+    CF_NAME_META, CF_NAME_ZSET_DATA, CF_NAME_ZSET_SCORE, CF_NAME_ZSET_SUB_META, KEY_ENCODER,
 };
 use crate::utils::{key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil};
 use crate::Frame;
@@ -39,10 +38,15 @@ impl<'a> ZsetCF<'a> {
     }
 }
 
-#[derive(Clone)]
-pub struct ZsetCommand;
+pub struct ZsetCommand<'a> {
+    client: &'a RocksRawClient,
+}
 
-impl ZsetCommand {
+impl<'a> ZsetCommand<'a> {
+    pub fn new(client: &'a RocksRawClient) -> Self {
+        Self { client }
+    }
+
     pub async fn zadd(
         self,
         key: &str,
@@ -52,8 +56,8 @@ impl ZsetCommand {
         changed_only: bool,
         _incr: bool,
     ) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
         let members = members.to_owned();
         let scores = scores.to_owned();
@@ -71,7 +75,7 @@ impl ZsetCommand {
                     let (ttl, mut version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     let mut expired = false;
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         expired = true;
                         version = get_version_for_new(
                             txn,
@@ -276,8 +280,8 @@ impl ZsetCommand {
     }
 
     pub async fn zcard(self, key: &str) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
 
@@ -291,7 +295,7 @@ impl ZsetCommand {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_int(0));
                     }
 
@@ -304,8 +308,8 @@ impl ZsetCommand {
     }
 
     pub async fn zscore(self, key: &str, member: &str) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
         let member = member.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -320,7 +324,7 @@ impl ZsetCommand {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_nil());
                     }
 
@@ -346,8 +350,8 @@ impl ZsetCommand {
         max: f64,
         max_inclusive: bool,
     ) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
 
@@ -361,7 +365,7 @@ impl ZsetCommand {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_int(0));
                     }
 
@@ -400,8 +404,8 @@ impl ZsetCommand {
         with_scores: bool,
         reverse: bool,
     ) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
 
@@ -416,7 +420,7 @@ impl ZsetCommand {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_array(resp));
                     }
 
@@ -486,8 +490,8 @@ impl ZsetCommand {
         with_scores: bool,
         reverse: bool,
     ) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
 
@@ -502,7 +506,7 @@ impl ZsetCommand {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_array(resp));
                     }
 
@@ -559,8 +563,8 @@ impl ZsetCommand {
     }
 
     pub async fn zpop(self, key: &str, from_min: bool, count: u64) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let rand_idx = gen_next_meta_index();
@@ -575,7 +579,7 @@ impl ZsetCommand {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(vec![]);
                     }
 
@@ -679,8 +683,8 @@ impl ZsetCommand {
     }
 
     pub async fn zrank(self, key: &str, member: &str) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
         let member = member.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -695,7 +699,7 @@ impl ZsetCommand {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_nil());
                     }
 
@@ -734,8 +738,8 @@ impl ZsetCommand {
             return Ok(resp_err(REDIS_VALUE_IS_NOT_VALID_FLOAT_ERR));
         }
 
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
         let member = member.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -756,7 +760,7 @@ impl ZsetCommand {
                     let (ttl, ver, _) = KeyDecoder::decode_key_meta(&meta_value);
                     version = ver;
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         expired = true;
                         version = get_version_for_new(
                             txn,
@@ -844,8 +848,8 @@ impl ZsetCommand {
     }
 
     pub async fn zrem(self, key: &str, members: &Vec<String>) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
         let members = members.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -861,7 +865,7 @@ impl ZsetCommand {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(0);
                     }
 
@@ -938,8 +942,8 @@ impl ZsetCommand {
         mut min: i64,
         mut max: i64,
     ) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let rand_idx = gen_next_meta_index();
@@ -955,7 +959,7 @@ impl ZsetCommand {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(0);
                     }
 
@@ -1034,8 +1038,8 @@ impl ZsetCommand {
     }
 
     pub async fn zremrange_by_score(self, key: &str, min: f64, max: f64) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let rand_idx = gen_next_meta_index();
@@ -1050,7 +1054,7 @@ impl ZsetCommand {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(0);
                     }
 
@@ -1128,8 +1132,8 @@ impl ZsetCommand {
     }
 
     fn sum_key_size(&self, key: &str, version: u16) -> RocksResult<i64> {
-        let client = get_client();
-        let cfs = ZsetCF::new(&client);
+        let client = self.client;
+        let cfs = ZsetCF::new(client);
         let key = key.to_owned();
 
         client.exec_txn(move |txn| {
@@ -1154,7 +1158,7 @@ impl ZsetCommand {
     }
 }
 
-impl RocksCommand for ZsetCommand {
+impl RocksCommand for ZsetCommand<'_> {
     fn txn_del(
         &self,
         txn: &RocksTransaction,

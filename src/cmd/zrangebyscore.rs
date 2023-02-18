@@ -6,7 +6,7 @@ use bytes::{Buf, Bytes};
 use slog::debug;
 
 use crate::rocks::zset::ZsetCommand;
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -176,7 +176,7 @@ impl Zrangebyscore {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand
+        ZsetCommand::new(&get_client())
             .zrange_by_score(
                 &self.key,
                 self.min,

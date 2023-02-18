@@ -14,8 +14,8 @@ use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
 use crate::rocks::{
-    get_client, Result as RocksResult, RocksCommand, CF_NAME_GC, CF_NAME_GC_VERSION,
-    CF_NAME_LIST_DATA, CF_NAME_META, KEY_ENCODER,
+    Result as RocksResult, RocksCommand, CF_NAME_GC, CF_NAME_GC_VERSION, CF_NAME_LIST_DATA,
+    CF_NAME_META, KEY_ENCODER,
 };
 use crate::utils::{key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil, resp_ok};
 use crate::Frame;
@@ -43,13 +43,18 @@ impl<'a> ListCF<'a> {
     }
 }
 
-#[derive(Clone)]
-pub struct ListCommand;
+pub struct ListCommand<'a> {
+    client: &'a RocksRawClient,
+}
 
-impl ListCommand {
+impl<'a> ListCommand<'a> {
+    pub fn new(client: &'a RocksRawClient) -> Self {
+        Self { client }
+    }
+
     pub async fn push(self, key: &str, values: &Vec<Bytes>, op_left: bool) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ListCF::new(&client);
+        let client = self.client;
+        let cfs = ListCF::new(client);
         let key = key.to_owned();
         let values = values.to_owned();
 
@@ -65,7 +70,7 @@ impl ListCommand {
                     let (ttl, mut version, mut left, mut right) =
                         KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         left = INIT_INDEX;
                         right = INIT_INDEX;
                         version = get_version_for_new(
@@ -140,8 +145,8 @@ impl ListCommand {
     }
 
     pub async fn pop(self, key: &str, op_left: bool, count: i64) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ListCF::new(&client);
+        let client = self.client;
+        let cfs = ListCF::new(client);
         let key = key.to_owned();
 
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -156,7 +161,7 @@ impl ListCommand {
                     let (ttl, version, mut left, mut right) =
                         KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(values);
                     }
 
@@ -242,8 +247,8 @@ impl ListCommand {
     }
 
     pub async fn ltrim(self, key: &str, mut start: i64, mut end: i64) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ListCF::new(&client);
+        let client = self.client;
+        let cfs = ListCF::new(client);
         let key = key.to_owned();
 
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -257,7 +262,7 @@ impl ListCommand {
                     let (ttl, version, mut left, mut right) =
                         KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(());
                     }
 
@@ -332,8 +337,8 @@ impl ListCommand {
     }
 
     pub async fn lrange(self, key: &str, mut r_left: i64, mut r_right: i64) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ListCF::new(&client);
+        let client = self.client;
+        let cfs = ListCF::new(client);
         let key = key.to_owned();
 
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -346,7 +351,7 @@ impl ListCommand {
                     }
                     let (ttl, version, left, right) = KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_array(vec![]));
                     }
 
@@ -388,8 +393,8 @@ impl ListCommand {
     }
 
     pub async fn llen(self, key: &str) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ListCF::new(&client);
+        let client = self.client;
+        let cfs = ListCF::new(client);
         let key = key.to_owned();
 
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -403,7 +408,7 @@ impl ListCommand {
                     let (ttl, _version, left, right) =
                         KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_int(0));
                     }
 
@@ -416,8 +421,8 @@ impl ListCommand {
     }
 
     pub async fn lindex(self, key: &str, mut idx: i64) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ListCF::new(&client);
+        let client = self.client;
+        let cfs = ListCF::new(client);
         let key = key.to_owned();
 
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -430,7 +435,7 @@ impl ListCommand {
                     }
                     let (ttl, version, left, right) = KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_nil());
                     }
 
@@ -456,8 +461,8 @@ impl ListCommand {
     }
 
     pub async fn lset(self, key: &str, mut idx: i64, ele: &Bytes) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ListCF::new(&client);
+        let client = self.client;
+        let cfs = ListCF::new(client);
         let key = key.to_owned();
         let ele = ele.to_owned();
 
@@ -471,7 +476,7 @@ impl ListCommand {
                     }
                     let (ttl, version, left, right) = KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Err(REDIS_NO_SUCH_KEY_ERR);
                     }
 
@@ -507,8 +512,8 @@ impl ListCommand {
         pivot: &Bytes,
         element: &Bytes,
     ) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ListCF::new(&client);
+        let client = self.client;
+        let cfs = ListCF::new(client);
         let key = key.to_owned();
         let pivot = pivot.to_owned();
         let element = element.to_owned();
@@ -524,7 +529,7 @@ impl ListCommand {
                     let (ttl, version, mut left, mut right) =
                         KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(0);
                     }
 
@@ -641,8 +646,8 @@ impl ListCommand {
         from_head: bool,
         ele: &Bytes,
     ) -> RocksResult<Frame> {
-        let client = get_client();
-        let cfs = ListCF::new(&client);
+        let client = self.client;
+        let cfs = ListCF::new(client);
         let key = key.to_owned();
         let ele = ele.to_owned();
 
@@ -656,7 +661,7 @@ impl ListCommand {
                     }
                     let (ttl, version, left, right) = KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.clone().txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(0);
                     }
 
@@ -797,7 +802,7 @@ impl ListCommand {
     }
 }
 
-impl RocksCommand for ListCommand {
+impl RocksCommand for ListCommand<'_> {
     fn txn_del(
         &self,
         txn: &RocksTransaction,

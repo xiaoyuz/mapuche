@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::str;
-use std::sync::Arc;
 
 use bytes::Bytes;
 
@@ -9,7 +8,7 @@ use crate::rocks::client::RocksRawClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{RError, REDIS_WRONG_TYPE_ERR};
 use crate::rocks::hash::HashCommand;
-use crate::rocks::{get_client, RocksCommand, CF_NAME_META, KEY_ENCODER};
+use crate::rocks::{RocksCommand, CF_NAME_META, KEY_ENCODER};
 use crate::Frame;
 use rocksdb::ColumnFamilyRef;
 
@@ -44,14 +43,12 @@ pub struct StringCommand<'a> {
 
 impl<'a> StringCommand<'a> {
     pub fn new(client: &'a RocksRawClient) -> Self {
-        Self {
-            client
-        }
+        Self { client }
     }
 
     pub async fn get(&self, key: &str) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = StringCF::new(&client);
+        let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_string(key);
         match client.get(cfs.data_cf.clone(), ekey.clone())? {
             Some(val) => {
@@ -75,7 +72,7 @@ impl<'a> StringCommand<'a> {
 
     pub async fn get_type(&self, key: &str) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = StringCF::new(&client);
+        let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_string(key);
         match client.get(cfs.data_cf.clone(), ekey.clone())? {
             Some(val) => {
@@ -94,7 +91,7 @@ impl<'a> StringCommand<'a> {
 
     pub async fn strlen(&self, key: &str) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = StringCF::new(&client);
+        let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_string(key);
         match client.get(cfs.data_cf.clone(), ekey.clone())? {
             Some(val) => {
@@ -118,7 +115,7 @@ impl<'a> StringCommand<'a> {
 
     pub async fn put(self, key: &str, val: &Bytes, timestamp: i64) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = StringCF::new(&client);
+        let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_string(key);
         let eval = KEY_ENCODER.encode_string_value(&mut val.to_vec(), timestamp);
         client.put(cfs.data_cf, ekey, eval)?;
@@ -127,7 +124,7 @@ impl<'a> StringCommand<'a> {
 
     pub async fn batch_get(self, keys: &[String]) -> RocksResult<Frame> {
         let client = &self.client;
-        let cfs = StringCF::new(&client);
+        let cfs = StringCF::new(client);
         let ekeys = KEY_ENCODER.encode_strings(keys);
         let result = client.batch_get(cfs.data_cf.clone(), ekeys.clone())?;
         let ret: HashMap<Key, Value> = result.into_iter().map(|pair| (pair.0, pair.1)).collect();
@@ -160,14 +157,14 @@ impl<'a> StringCommand<'a> {
 
     pub async fn batch_put(self, kvs: Vec<KvPair>) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = StringCF::new(&client);
+        let cfs = StringCF::new(client);
         client.batch_put(cfs.data_cf, kvs)?;
         Ok(resp_ok())
     }
 
     pub async fn put_not_exists(self, key: &str, value: &Bytes) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = StringCF::new(&client);
+        let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_string(key);
         let eval = KEY_ENCODER.encode_string_value(&mut value.to_vec(), -1);
 
@@ -204,7 +201,7 @@ impl<'a> StringCommand<'a> {
 
     pub async fn exists(self, keys: &[String]) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = StringCF::new(&client);
+        let cfs = StringCF::new(client);
         let ekeys = KEY_ENCODER.encode_strings(keys);
         let result = client.batch_get(cfs.data_cf.clone(), ekeys.clone())?;
         let ret: HashMap<Key, Value> = result.into_iter().map(|pair| (pair.0, pair.1)).collect();
@@ -228,7 +225,7 @@ impl<'a> StringCommand<'a> {
     // TODO: All actions should in txn
     pub async fn incr(self, key: &str, step: i64) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = StringCF::new(&client);
+        let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_string(key);
         let the_key = ekey.clone();
 
@@ -269,7 +266,7 @@ impl<'a> StringCommand<'a> {
 
     pub async fn expire(self, key: &str, timestamp: i64) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = StringCF::new(&client);
+        let cfs = StringCF::new(client);
         let key = key.to_owned();
         let timestamp = timestamp;
         let ekey = KEY_ENCODER.encode_string(&key);
@@ -285,7 +282,7 @@ impl<'a> StringCommand<'a> {
                             let ttl = KeyDecoder::decode_key_ttl(&meta_value);
                             // check key expired
                             if key_is_expired(ttl) {
-                                self.txn_expire_if_needed(txn, &client, &ekey, &meta_value)?;
+                                self.txn_expire_if_needed(txn, client, &ekey, &meta_value)?;
                                 return Ok(0);
                             }
                             let value = KeyDecoder::decode_key_string_slice(&meta_value);
@@ -293,18 +290,34 @@ impl<'a> StringCommand<'a> {
                             txn.put(cfs.data_cf.clone(), ekey, new_meta_value)?;
                             Ok(1)
                         }
-                        DataType::Set => {
-                            SetCommand::new(client).txn_expire(txn, &client, &key, timestamp, &meta_value)
-                        }
-                        DataType::List => {
-                            ListCommand.txn_expire(txn, &client, &key, timestamp, &meta_value)
-                        }
-                        DataType::Hash => {
-                            HashCommand.txn_expire(txn, &client, &key, timestamp, &meta_value)
-                        }
-                        DataType::Zset => {
-                            ZsetCommand.txn_expire(txn, &client, &key, timestamp, &meta_value)
-                        }
+                        DataType::Set => SetCommand::new(client).txn_expire(
+                            txn,
+                            client,
+                            &key,
+                            timestamp,
+                            &meta_value,
+                        ),
+                        DataType::List => ListCommand::new(client).txn_expire(
+                            txn,
+                            client,
+                            &key,
+                            timestamp,
+                            &meta_value,
+                        ),
+                        DataType::Hash => HashCommand::new(client).txn_expire(
+                            txn,
+                            client,
+                            &key,
+                            timestamp,
+                            &meta_value,
+                        ),
+                        DataType::Zset => ZsetCommand::new(client).txn_expire(
+                            txn,
+                            client,
+                            &key,
+                            timestamp,
+                            &meta_value,
+                        ),
                         _ => Ok(0),
                     }
                 }
@@ -319,7 +332,7 @@ impl<'a> StringCommand<'a> {
 
     pub async fn ttl(self, key: &str, is_millis: bool) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = StringCF::new(&client);
+        let cfs = StringCF::new(client);
         let key = key.to_owned();
         let ekey = KEY_ENCODER.encode_string(&key);
         client.exec_txn(|txn| match txn.get(cfs.data_cf.clone(), ekey.clone())? {
@@ -329,19 +342,19 @@ impl<'a> StringCommand<'a> {
                 if key_is_expired(ttl) {
                     match dt {
                         DataType::String => {
-                            self.txn_expire_if_needed(txn, &client, &ekey, &meta_value)?;
+                            self.txn_expire_if_needed(txn, client, &ekey, &meta_value)?;
                         }
                         DataType::Set => {
-                            SetCommand::new(client).txn_expire_if_needed(txn, &client, &key)?;
+                            SetCommand::new(client).txn_expire_if_needed(txn, client, &key)?;
                         }
                         DataType::List => {
-                            ListCommand.txn_expire_if_needed(txn, &client, &key)?;
+                            ListCommand::new(client).txn_expire_if_needed(txn, client, &key)?;
                         }
                         DataType::Hash => {
-                            HashCommand.txn_expire_if_needed(txn, &client, &key)?;
+                            HashCommand::new(client).txn_expire_if_needed(txn, client, &key)?;
                         }
                         DataType::Zset => {
-                            ZsetCommand.txn_expire_if_needed(txn, &client, &key)?;
+                            ZsetCommand::new(client).txn_expire_if_needed(txn, client, &key)?;
                         }
                         _ => {}
                     }
@@ -363,7 +376,7 @@ impl<'a> StringCommand<'a> {
 
     pub async fn del(self, keys: &Vec<String>) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = StringCF::new(&client);
+        let cfs = StringCF::new(client);
         let keys = keys.to_owned();
         let resp = client.exec_txn(|txn| {
             let ekeys = KEY_ENCODER.encode_strings(&keys);
@@ -383,19 +396,19 @@ impl<'a> StringCommand<'a> {
                         resp += 1;
                     }
                     Some(DataType::Set) => {
-                        SetCommand::new(client).txn_del(txn, &client, &ekey_map[&ekey])?;
+                        SetCommand::new(client).txn_del(txn, client, &ekey_map[&ekey])?;
                         resp += 1;
                     }
                     Some(DataType::List) => {
-                        ListCommand.txn_del(txn, &client, &ekey_map[&ekey])?;
+                        ListCommand::new(client).txn_del(txn, client, &ekey_map[&ekey])?;
                         resp += 1;
                     }
                     Some(DataType::Hash) => {
-                        HashCommand.txn_del(txn, &client, &ekey_map[&ekey])?;
+                        HashCommand::new(client).txn_del(txn, client, &ekey_map[&ekey])?;
                         resp += 1;
                     }
                     Some(DataType::Zset) => {
-                        ZsetCommand.txn_del(txn, &client, &ekey_map[&ekey])?;
+                        ZsetCommand::new(client).txn_del(txn, client, &ekey_map[&ekey])?;
                         resp += 1;
                     }
                     _ => {}

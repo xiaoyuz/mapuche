@@ -6,7 +6,7 @@ use crate::rocks::hash::HashCommand;
 use bytes::Bytes;
 use slog::debug;
 
-use crate::rocks::Result as RocksResult;
+use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Debug, Clone)]
@@ -58,7 +58,9 @@ impl Hkeys {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        HashCommand.hgetall(&self.key, true, false).await
+        HashCommand::new(&get_client())
+            .hgetall(&self.key, true, false)
+            .await
     }
 }
 

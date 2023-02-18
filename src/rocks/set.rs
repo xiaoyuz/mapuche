@@ -9,8 +9,8 @@ use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
 use crate::rocks::{
-    gen_next_meta_index, get_client, Result as RocksResult, RocksCommand, CF_NAME_GC,
-    CF_NAME_GC_VERSION, CF_NAME_META, CF_NAME_SET_DATA, CF_NAME_SET_SUB_META, KEY_ENCODER,
+    gen_next_meta_index, Result as RocksResult, RocksCommand, CF_NAME_GC, CF_NAME_GC_VERSION,
+    CF_NAME_META, CF_NAME_SET_DATA, CF_NAME_SET_SUB_META, KEY_ENCODER,
 };
 use crate::utils::{
     count_unique_keys, key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil,
@@ -51,14 +51,12 @@ pub struct SetCommand<'a> {
 
 impl<'a> SetCommand<'a> {
     pub fn new(client: &'a RocksRawClient) -> Self {
-        Self {
-            client
-        }
+        Self { client }
     }
 
     pub async fn sadd(self, key: &str, members: &Vec<String>) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = SetCF::new(&client);
+        let cfs = SetCF::new(client);
         let key = key.to_owned();
         let members = members.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
@@ -74,7 +72,7 @@ impl<'a> SetCommand<'a> {
                     let mut expired = false;
                     let (ttl, mut version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        SetCommand::new(client).txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         expired = true;
                         version = get_version_for_new(
                             txn,
@@ -164,7 +162,7 @@ impl<'a> SetCommand<'a> {
 
     pub async fn scard(self, key: &str) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = SetCF::new(&client);
+        let cfs = SetCF::new(client);
         let meta_key = KEY_ENCODER.encode_meta_key(key);
         let key = key.to_owned();
 
@@ -178,7 +176,7 @@ impl<'a> SetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        SetCommand::new(client).txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_int(0));
                     }
 
@@ -197,7 +195,7 @@ impl<'a> SetCommand<'a> {
         resp_in_arr: bool,
     ) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = SetCF::new(&client);
+        let cfs = SetCF::new(client);
         let member_len = members.len();
         let meta_key = KEY_ENCODER.encode_meta_key(key);
         let key = key.to_owned();
@@ -213,7 +211,7 @@ impl<'a> SetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        SetCommand::new(client).txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         if !resp_in_arr {
                             return Ok(resp_int(0));
                         } else {
@@ -272,7 +270,7 @@ impl<'a> SetCommand<'a> {
         array_resp: bool,
     ) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = SetCF::new(&client);
+        let cfs = SetCF::new(client);
         let meta_key = KEY_ENCODER.encode_meta_key(key);
         let key = key.to_owned();
 
@@ -286,7 +284,7 @@ impl<'a> SetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        SetCommand::new(client).txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_array(vec![]));
                     }
 
@@ -348,7 +346,7 @@ impl<'a> SetCommand<'a> {
 
     pub async fn smembers(self, key: &str) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = SetCF::new(&client);
+        let cfs = SetCF::new(client);
         let meta_key = KEY_ENCODER.encode_meta_key(key);
         let key = key.to_owned();
 
@@ -362,7 +360,7 @@ impl<'a> SetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        SetCommand::new(client).txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(resp_array(vec![]));
                     }
 
@@ -385,7 +383,7 @@ impl<'a> SetCommand<'a> {
 
     pub async fn srem(self, key: &str, members: &Vec<String>) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = SetCF::new(&client);
+        let cfs = SetCF::new(client);
         let meta_key = KEY_ENCODER.encode_meta_key(key);
         let key = key.to_owned();
         let members = members.to_owned();
@@ -401,7 +399,7 @@ impl<'a> SetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        SetCommand::new(client).txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(0);
                     }
 
@@ -460,7 +458,7 @@ impl<'a> SetCommand<'a> {
     /// spop will pop members by alphabetical order
     pub async fn spop(self, key: &str, count: u64) -> RocksResult<Frame> {
         let client = self.client;
-        let cfs = SetCF::new(&client);
+        let cfs = SetCF::new(client);
         let meta_key = KEY_ENCODER.encode_meta_key(key);
         let key = key.to_owned();
         let rand_idx = gen_next_meta_index();
@@ -475,7 +473,7 @@ impl<'a> SetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        SetCommand::new(client).txn_expire_if_needed(txn, &client, &key)?;
+                        self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(vec![]);
                     }
 
@@ -554,7 +552,7 @@ impl<'a> SetCommand<'a> {
 
     fn sum_key_size(&self, key: &str, version: u16) -> RocksResult<i64> {
         let client = self.client;
-        let cfs = SetCF::new(&client);
+        let cfs = SetCF::new(client);
         let key = key.to_owned();
 
         client.exec_txn(move |txn| {
