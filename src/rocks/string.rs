@@ -433,7 +433,6 @@ impl<'a> StringCommand<'a> {
 
         client.exec_txn(|txn| {
             let mut keys = vec![];
-            let mut retrieved_key_count = 0;
             let mut last_round_iter_count = 1;
 
             let mut left_bound = ekey.clone();
@@ -469,7 +468,6 @@ impl<'a> StringCommand<'a> {
                     if key_is_expired(ttl) {
                         continue;
                     }
-                    retrieved_key_count += 1;
                     if re.matches(str::from_utf8(&userkey).unwrap()) {
                         keys.push(resp_bulk(userkey));
                     }
