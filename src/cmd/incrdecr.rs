@@ -80,7 +80,7 @@ impl IncrDecr {
             self.step = -self.step;
         }
 
-        StringCommand::new(&get_client())
+        StringCommand::new(&get_client().await)
             .incr(&self.key, self.step)
             .await
     }

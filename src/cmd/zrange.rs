@@ -116,7 +116,7 @@ impl Zrange {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand::new(&get_client())
+        ZsetCommand::new(&get_client().await)
             .zrange(&self.key, self.min, self.max, self.withscores, self.reverse)
             .await
     }

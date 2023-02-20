@@ -2,7 +2,9 @@ use crate::{Command, Connection, Db, DbDropGuard, Shutdown};
 use std::collections::HashMap;
 
 use crate::client::Client;
-use crate::config::{async_gc_worker_number_or_default, config_local_pool_number, LOGGER};
+use crate::config::{
+    async_gc_worker_number_or_default, config_local_pool_number, config_max_connection, LOGGER,
+};
 use crate::gc::GcMaster;
 use crate::metrics::{
     CURRENT_CONNECTION_COUNTER, REQUEST_CMD_COUNTER, REQUEST_CMD_FINISH_COUNTER,
@@ -12,7 +14,7 @@ use slog::{debug, error, info};
 use std::future::Future;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
 use tokio::time::{self, Duration, Instant};
 use tokio_util::task::LocalPoolHandle;
 
@@ -32,6 +34,7 @@ struct Listener {
     /// TCP listener supplied by the `run` caller.
     listener: TcpListener,
 
+    limit_connections: Arc<Semaphore>,
     clients: Arc<Mutex<HashMap<u64, Arc<Mutex<Client>>>>>,
 
     /// Broadcasts a shutdown signal to all active connections.
@@ -95,6 +98,7 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) {
     let mut server = Listener {
         listener,
         db_holder: db_holder.clone(),
+        limit_connections: Arc::new(Semaphore::new(config_max_connection())),
         clients: Arc::new(Mutex::new(HashMap::new())),
         notify_shutdown,
         shutdown_complete_tx,
@@ -189,6 +193,13 @@ impl Listener {
         let local_pool_number = config_local_pool_number();
         let local_pool = LocalPoolHandle::new(local_pool_number);
         loop {
+            let permit = self
+                .limit_connections
+                .clone()
+                .acquire_owned()
+                .await
+                .unwrap();
+
             let socket = self.accept().await?;
             let (kill_tx, kill_rx) = mpsc::channel(1);
             let client = Client::new(&socket, kill_tx);
@@ -221,6 +232,7 @@ impl Listener {
                     .await
                     .remove(&handler.cur_client.lock().await.id());
                 CURRENT_CONNECTION_COUNTER.dec();
+                drop(permit)
             });
         }
     }

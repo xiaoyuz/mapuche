@@ -105,7 +105,7 @@ impl Zcount {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand::new(&get_client())
+        ZsetCommand::new(&get_client().await)
             .zcount(
                 &self.key,
                 self.min,

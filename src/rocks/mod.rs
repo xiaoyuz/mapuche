@@ -8,7 +8,6 @@ use crate::rocks::transaction::RocksTransaction;
 use lazy_static::lazy_static;
 use rocksdb::{MultiThreaded, Options, TransactionDB, TransactionDBOptions};
 use std::sync::Arc;
-use tokio::sync::Semaphore;
 
 pub mod client;
 pub mod encoding;
@@ -40,7 +39,6 @@ pub static mut INSTANCE_ID: u64 = 0;
 lazy_static! {
     pub static ref KEY_ENCODER: KeyEncoder = KeyEncoder::new();
     pub static ref ROCKS_DB: Arc<TransactionDB> = Arc::new(new_db().unwrap());
-    pub static ref LIMIT_DB_CON: Arc<Semaphore> = Arc::new(Semaphore::new(100));
 }
 
 pub trait RocksCommand {
@@ -111,16 +109,9 @@ pub fn get_instance_id() -> u64 {
     unsafe { INSTANCE_ID }
 }
 
-pub fn get_client() -> RocksRawClient {
+pub async fn get_client() -> RocksRawClient {
     let db = ROCKS_DB.clone();
-    RocksRawClient::new(db)
-}
-
-pub async fn get_client_from_pool() -> RocksRawClient {
-    let _permit = LIMIT_DB_CON.clone().acquire_owned().await.unwrap();
-
-    let db = ROCKS_DB.clone();
-    RocksRawClient::new(db)
+    RocksRawClient::new(db).await
 }
 
 pub fn gen_next_meta_index() -> u16 {

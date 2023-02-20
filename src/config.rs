@@ -47,6 +47,7 @@ struct Server {
 #[derive(Debug, Deserialize, Clone)]
 struct Backend {
     local_pool_number: Option<usize>,
+    max_connection: Option<usize>,
 
     data_store_dir: Option<String>,
 
@@ -420,5 +421,17 @@ pub fn config_local_pool_number() -> usize {
         }
     }
     // default use 8 localset pool to handle connections
-    100
+    8
+}
+
+pub fn config_max_connection() -> usize {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.backend.max_connection {
+                return s;
+            }
+        }
+    }
+    // default use 8 localset pool to handle connections
+    10000
 }

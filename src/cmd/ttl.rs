@@ -59,7 +59,7 @@ impl TTL {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand::new(&get_client())
+        StringCommand::new(&get_client().await)
             .ttl(&self.key, is_millis)
             .await
     }

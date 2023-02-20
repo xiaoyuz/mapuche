@@ -2,13 +2,14 @@ use mapuche::server;
 use std::process::exit;
 
 use clap::Parser;
+use sysinfo::set_open_files_limit;
 use tokio::net::TcpListener;
 use tokio::{fs, signal};
 
 use mapuche::config::{
-    config_instance_id_or_default, config_listen_or_default, config_port_or_default,
-    config_prometheus_listen_or_default, config_prometheus_port_or_default, set_global_config,
-    Config,
+    config_instance_id_or_default, config_listen_or_default, config_max_connection,
+    config_port_or_default, config_prometheus_listen_or_default, config_prometheus_port_or_default,
+    set_global_config, Config,
 };
 use mapuche::metrics::PrometheusServer;
 use mapuche::rocks::set_instance_id;
@@ -60,6 +61,10 @@ pub async fn main() -> mapuche::Result<()> {
         }
         Err(_) => set_instance_id(0),
     };
+
+    if !set_open_files_limit((config_max_connection() * 2) as isize) {
+        println!("failed to update the open files limit...");
+    }
 
     let pmt_server = PrometheusServer::new(
         format!("{}:{}", &prom_listen, prom_port),

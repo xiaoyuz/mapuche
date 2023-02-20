@@ -74,7 +74,7 @@ impl Lrange {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ListCommand::new(&get_client())
+        ListCommand::new(&get_client().await)
             .lrange(&self.key, self.left, self.right)
             .await
     }

@@ -83,7 +83,7 @@ impl Srandmember {
                 count = -count;
             }
         }
-        SetCommand::new(&get_client())
+        SetCommand::new(&get_client().await)
             .srandmemeber(&self.key, count, repeatable, array_resp)
             .await
     }

@@ -2,6 +2,7 @@ use crate::config::async_deletion_enabled_or_default;
 use crate::metrics::{ROCKS_ERR_COUNTER, TXN_COUNTER, TXN_DURATION};
 use rocksdb::{ColumnFamilyRef, TransactionDB, WriteBatchWithTransaction};
 use std::sync::Arc;
+
 use tokio::time::Instant;
 
 use crate::rocks::errors::{CF_NOT_EXISTS_ERR, KEY_VERSION_EXHUSTED_ERR, TXN_ERROR};
@@ -18,7 +19,7 @@ pub struct RocksRawClient {
 }
 
 impl RocksRawClient {
-    pub fn new(client: Arc<TransactionDB>) -> Self {
+    pub async fn new(client: Arc<TransactionDB>) -> Self {
         Self { client }
     }
 

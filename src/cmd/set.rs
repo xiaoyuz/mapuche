@@ -214,14 +214,14 @@ impl Set {
     }
 
     async fn put_not_exists(&self) -> RocksResult<Frame> {
-        StringCommand::new(&get_client())
+        StringCommand::new(&get_client().await)
             .put_not_exists(&self.key, &self.value)
             .await
     }
 
     async fn put(&self) -> RocksResult<Frame> {
         let ttl = self.expire.map_or(-1, timestamp_from_ttl);
-        StringCommand::new(&get_client())
+        StringCommand::new(&get_client().await)
             .put(&self.key, &self.value, ttl)
             .await
     }

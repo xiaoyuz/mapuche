@@ -223,7 +223,7 @@ impl Zadd {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand::new(&get_client())
+        ZsetCommand::new(&get_client().await)
             .zadd(
                 &self.key,
                 &self.members,

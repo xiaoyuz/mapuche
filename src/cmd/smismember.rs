@@ -71,7 +71,7 @@ impl Smismember {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        SetCommand::new(&get_client())
+        SetCommand::new(&get_client().await)
             .sismember(&self.key, &self.members, true)
             .await
     }

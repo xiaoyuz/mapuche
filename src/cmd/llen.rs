@@ -54,7 +54,7 @@ impl Llen {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ListCommand::new(&get_client()).llen(&self.key).await
+        ListCommand::new(&get_client().await).llen(&self.key).await
     }
 }
 

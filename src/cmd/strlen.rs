@@ -56,7 +56,9 @@ impl Strlen {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand::new(&get_client()).strlen(&self.key).await
+        StringCommand::new(&get_client().await)
+            .strlen(&self.key)
+            .await
     }
 }
 

@@ -89,7 +89,7 @@ impl Hset {
             return Ok(resp_invalid_arguments());
         }
 
-        HashCommand::new(&get_client())
+        HashCommand::new(&get_client().await)
             .hset(&self.key, &self.field_and_value, is_hmset, is_nx)
             .await
     }

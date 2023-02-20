@@ -58,7 +58,7 @@ impl Hvals {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        HashCommand::new(&get_client())
+        HashCommand::new(&get_client().await)
             .hgetall(&self.key, false, true)
             .await
     }

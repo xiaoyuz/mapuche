@@ -57,7 +57,7 @@ impl Zcard {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand::new(&get_client()).zcard(&self.key).await
+        ZsetCommand::new(&get_client().await).zcard(&self.key).await
     }
 }
 

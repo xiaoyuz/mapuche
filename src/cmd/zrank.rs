@@ -59,7 +59,7 @@ impl Zrank {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand::new(&get_client())
+        ZsetCommand::new(&get_client().await)
             .zrank(&self.key, &self.member)
             .await
     }

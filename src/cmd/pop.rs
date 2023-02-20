@@ -72,7 +72,7 @@ impl Pop {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ListCommand::new(&get_client())
+        ListCommand::new(&get_client().await)
             .pop(&self.key, op_left, self.count)
             .await
     }

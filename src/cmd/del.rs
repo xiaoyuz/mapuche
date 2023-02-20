@@ -64,7 +64,9 @@ impl Del {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand::new(&get_client()).del(&self.keys).await
+        StringCommand::new(&get_client().await)
+            .del(&self.keys)
+            .await
     }
 }
 
