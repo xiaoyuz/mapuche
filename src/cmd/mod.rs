@@ -169,6 +169,9 @@ pub use zremrangebyrank::Zremrangebyrank;
 mod zremrangebyscore;
 pub use zremrangebyscore::Zremrangebyscore;
 
+mod keys;
+pub use keys::Keys;
+
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
@@ -197,6 +200,7 @@ pub enum Command {
     TTL(TTL),
     PTTL(TTL),
     Scan(Scan),
+    Keys(Keys),
 
     // set
     Sadd(Sadd),
@@ -326,6 +330,7 @@ impl Command {
             "ttl" => Command::TTL(transform_parse(TTL::parse_frames(&mut parse), &mut parse)),
             "pttl" => Command::PTTL(transform_parse(TTL::parse_frames(&mut parse), &mut parse)),
             "scan" => Command::Scan(transform_parse(Scan::parse_frames(&mut parse), &mut parse)),
+            "keys" => Command::Keys(transform_parse(Keys::parse_frames(&mut parse), &mut parse)),
             "sadd" => Command::Sadd(transform_parse(Sadd::parse_frames(&mut parse), &mut parse)),
             "scard" => Command::Scard(transform_parse(Scard::parse_frames(&mut parse), &mut parse)),
             "sismember" => Command::Sismember(transform_parse(
@@ -493,6 +498,7 @@ impl Command {
             TTL(cmd) => cmd.apply(dst, false).await,
             PTTL(cmd) => cmd.apply(dst, true).await,
             Scan(cmd) => cmd.apply(dst).await,
+            Keys(cmd) => cmd.apply(dst).await,
             Sadd(cmd) => cmd.apply(dst).await,
             Scard(cmd) => cmd.apply(dst).await,
             Sismember(cmd) => cmd.apply(dst).await,
@@ -572,6 +578,7 @@ impl Command {
             Command::TTL(_) => "ttl",
             Command::PTTL(_) => "pttl",
             Command::Scan(_) => "scan",
+            Command::Keys(_) => "keys",
             Command::Sadd(_) => "sadd",
             Command::Scard(_) => "scard",
             Command::Sismember(_) => "sismember",

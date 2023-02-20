@@ -2,12 +2,15 @@ use std::collections::HashMap;
 use std::str;
 
 use bytes::Bytes;
+use glob::Pattern;
+use regex::bytes::Regex;
 
 use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
 use crate::rocks::client::RocksRawClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{RError, REDIS_WRONG_TYPE_ERR};
 use crate::rocks::hash::HashCommand;
+use crate::rocks::kv::bound_range::BoundRange;
 use crate::rocks::{RocksCommand, CF_NAME_META, KEY_ENCODER};
 use crate::Frame;
 use rocksdb::ColumnFamilyRef;
@@ -422,9 +425,129 @@ impl<'a> StringCommand<'a> {
         }
     }
 
-    // TODO
-    pub async fn scan(self, _start: &str, _count: u32, _regex: &str) -> RocksResult<Frame> {
-        Ok(resp_array(vec![]))
+    pub async fn keys(self, regex: &str) -> RocksResult<Frame> {
+        let client = self.client;
+        let cfs = StringCF::new(client);
+        let ekey = KEY_ENCODER.encode_string("");
+        let re = Pattern::new(regex).unwrap();
+
+        client.exec_txn(|txn| {
+            let mut keys = vec![];
+            let mut retrieved_key_count = 0;
+            let mut last_round_iter_count = 1;
+
+            let mut left_bound = ekey.clone();
+
+            loop {
+                if last_round_iter_count == 0 {
+                    break;
+                }
+                let range = left_bound.clone()..KEY_ENCODER.encode_keyspace_end();
+                let bound_range: BoundRange = range.into();
+
+                let iter = txn.scan(cfs.data_cf.clone(), bound_range, 100)?;
+                // reset count to zero
+                last_round_iter_count = 0;
+                for kv in iter {
+                    // skip the left bound key, this should be exclusive
+                    if kv.0 == left_bound {
+                        continue;
+                    }
+                    left_bound = kv.0.clone();
+                    // left bound key is exclusive
+                    last_round_iter_count += 1;
+
+                    let (userkey, is_meta_key) = KeyDecoder::decode_key_userkey_from_metakey(&kv.0);
+
+                    // skip it if it is not a meta key
+                    if !is_meta_key {
+                        continue;
+                    }
+
+                    let ttl = KeyDecoder::decode_key_ttl(&kv.1);
+                    // delete it if it is expired
+                    if key_is_expired(ttl) {
+                        continue;
+                    }
+                    retrieved_key_count += 1;
+                    if re.matches(str::from_utf8(&userkey).unwrap()) {
+                        keys.push(resp_bulk(userkey));
+                    }
+                }
+            }
+            Ok(resp_array(keys))
+        })
+    }
+
+    pub async fn scan(self, start: &str, count: u32, regex: &str) -> RocksResult<Frame> {
+        let client = self.client;
+        let cfs = StringCF::new(client);
+        let ekey = KEY_ENCODER.encode_string(start);
+        let re = Regex::new(regex).unwrap();
+
+        client.exec_txn(|txn| {
+            let mut keys = vec![];
+            let mut retrieved_key_count = 0;
+            let mut next_key = vec![];
+
+            let mut left_bound = ekey.clone();
+
+            // set to a non-zore value before loop
+            let mut last_round_iter_count = 1;
+            while retrieved_key_count < count as usize {
+                if last_round_iter_count == 0 {
+                    next_key = vec![];
+                    break;
+                }
+
+                let range = left_bound.clone()..KEY_ENCODER.encode_keyspace_end();
+                let bound_range: BoundRange = range.into();
+
+                // the iterator will scan all keyspace include sub metakey and datakey
+                let iter = txn.scan(cfs.data_cf.clone(), bound_range, 100)?;
+
+                // reset count to zero
+                last_round_iter_count = 0;
+                for kv in iter {
+                    // skip the left bound key, this should be exclusive
+                    if kv.0 == left_bound {
+                        continue;
+                    }
+                    left_bound = kv.0.clone();
+                    // left bound key is exclusive
+                    last_round_iter_count += 1;
+
+                    let (userkey, is_meta_key) = KeyDecoder::decode_key_userkey_from_metakey(&kv.0);
+
+                    // skip it if it is not a meta key
+                    if !is_meta_key {
+                        continue;
+                    }
+
+                    let ttl = KeyDecoder::decode_key_ttl(&kv.1);
+                    // delete it if it is expired
+                    if key_is_expired(ttl) {
+                        continue;
+                    }
+                    if retrieved_key_count == (count - 1) as usize {
+                        next_key = userkey.clone();
+                        retrieved_key_count += 1;
+                        if re.is_match(&userkey) {
+                            keys.push(resp_bulk(userkey));
+                        }
+                        break;
+                    }
+                    retrieved_key_count += 1;
+                    if re.is_match(&userkey) {
+                        keys.push(resp_bulk(userkey));
+                    }
+                }
+            }
+            let resp_next_key = resp_bulk(next_key);
+            let resp_keys = resp_array(keys);
+
+            Ok(resp_array(vec![resp_next_key, resp_keys]))
+        })
     }
 
     fn txn_expire_if_needed(
