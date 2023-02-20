@@ -37,8 +37,6 @@ struct Server {
     instance_id: Option<String>,
     prometheus_listen: Option<String>,
     prometheus_port: Option<u16>,
-    // username: Option<String>,
-    password: Option<String>,
     log_level: Option<String>,
     log_file: Option<String>,
     meta_key_number: Option<u16>,
@@ -78,29 +76,6 @@ pub fn set_global_config(config: Config) {
     unsafe {
         SERVER_CONFIG.replace(config);
     }
-}
-
-pub fn is_auth_enabled() -> bool {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if c.server.password.clone().is_some() {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-// return false only if auth is enabled and password mismatch
-pub fn is_auth_matched(password: &str) -> bool {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if let Some(s) = c.server.password.clone() {
-                return s == password;
-            }
-        }
-    }
-    true
 }
 
 pub fn config_listen_or_default() -> String {
