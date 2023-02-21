@@ -45,7 +45,7 @@ impl TTL {
         })
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection, is_millis: bool) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection, is_millis: bool) -> crate::Result<()> {
         let response = self.ttl(is_millis).await.unwrap_or_else(Into::into);
 
         debug!(LOGGER, "res, {:?}", response);
@@ -55,7 +55,7 @@ impl TTL {
         Ok(())
     }
 
-    pub async fn ttl(self, is_millis: bool) -> RocksResult<Frame> {
+    pub async fn ttl(&self, is_millis: bool) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }

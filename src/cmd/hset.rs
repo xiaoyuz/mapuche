@@ -72,7 +72,7 @@ impl Hset {
     }
 
     pub(crate) async fn apply(
-        self,
+        &self,
         dst: &mut Connection,
         is_hmset: bool,
         is_nx: bool,

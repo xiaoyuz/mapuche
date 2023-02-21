@@ -42,7 +42,7 @@ impl Strlen {
         Ok(Strlen::new(key))
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.strlen().await.unwrap_or_else(Into::into);
 
         debug!(LOGGER, "res, {:?}", response);

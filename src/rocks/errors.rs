@@ -9,6 +9,8 @@ pub enum RError {
     #[error("{0}")]
     String(&'static str),
     #[error("{0}")]
+    Txn(&'static str),
+    #[error("{0}")]
     Owned(String),
 }
 
@@ -62,6 +64,6 @@ pub const REDIS_NO_SUCH_KEY_ERR: RError = RError::String("ERR no such key");
 pub const REDIS_INDEX_OUT_OF_RANGE_ERR: RError = RError::String("ERR index out of range");
 pub const REDIS_LIST_TOO_LARGE_ERR: RError = RError::String("ERR list is too large to execute");
 pub const DECREMENT_OVERFLOW: RError = RError::String("Decrement would overflow");
-pub const TXN_ERROR: RError = RError::String("Txn commit failed");
+pub const TXN_ERROR: RError = RError::Txn("Txn commit failed");
 pub const KEY_VERSION_EXHUSTED_ERR: RError = RError::String("ERR key version exhausted");
 pub const CF_NOT_EXISTS_ERR: RError = RError::String("Column family not existed");

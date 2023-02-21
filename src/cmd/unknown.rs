@@ -25,7 +25,7 @@ impl Unknown {
     /// Responds to the client, indicating the command is not recognized.
     ///
     /// This usually means the command is not yet implemented by `mapuche`.
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = Frame::Error(format!("ERR unknown command '{}'", self.command_name));
 
         debug!(LOGGER, "res, {:?}", response);

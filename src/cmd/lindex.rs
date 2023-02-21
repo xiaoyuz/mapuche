@@ -53,7 +53,7 @@ impl Lindex {
         Ok(Lindex::new(key, idx))
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.lindex().await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;
@@ -61,7 +61,7 @@ impl Lindex {
         Ok(())
     }
 
-    pub async fn lindex(self) -> RocksResult<Frame> {
+    pub async fn lindex(&self) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }

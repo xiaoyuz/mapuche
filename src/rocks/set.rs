@@ -89,7 +89,7 @@ impl<'a> SetCommand<'a> {
                     // batch get
                     // count the unique members
                     let real_member_count = count_unique_keys(&member_data_keys);
-                    let values_count = txn.batch_get(cfs.data_cf.clone(), member_data_keys)?.len();
+                    let values_count = txn.batch_get_for_update(cfs.data_cf.clone(), member_data_keys)?.len();
                     let added = real_member_count as i64 - values_count as i64;
                     for m in &members {
                         let data_key = KEY_ENCODER.encode_set_data_key(&key, m, version);
@@ -410,7 +410,7 @@ impl<'a> SetCommand<'a> {
                         .collect();
                     let mut removed: i64 = 0;
 
-                    for pair in txn.batch_get(cfs.data_cf.clone(), data_keys)? {
+                    for pair in txn.batch_get_for_update(cfs.data_cf.clone(), data_keys)? {
                         txn.del(cfs.data_cf.clone(), pair.0)?;
                         removed += 1;
                     }

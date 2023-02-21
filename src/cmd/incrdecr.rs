@@ -58,7 +58,7 @@ impl IncrDecr {
         }
     }
 
-    pub(crate) async fn apply(mut self, dst: &mut Connection, inc: bool) -> crate::Result<()> {
+    pub(crate) async fn apply(&mut self, dst: &mut Connection, inc: bool) -> crate::Result<()> {
         let response = self.incr_by(inc).await.unwrap_or_else(Into::into);
 
         debug!(LOGGER, "res, {:?}", response);

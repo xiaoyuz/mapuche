@@ -42,7 +42,7 @@ impl Llen {
         Ok(Llen::new(key))
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.llen().await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;
@@ -50,7 +50,7 @@ impl Llen {
         Ok(())
     }
 
-    pub async fn llen(self) -> RocksResult<Frame> {
+    pub async fn llen(&self) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }

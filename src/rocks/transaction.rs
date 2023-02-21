@@ -1,5 +1,6 @@
 use crate::metrics::ROCKS_ERR_COUNTER;
 use rocksdb::{ColumnFamilyRef, Direction, IteratorMode, Transaction, TransactionDB};
+use crate::rocks::errors::RError::Txn;
 
 use crate::rocks::errors::TXN_ERROR;
 use crate::rocks::kv::bound_range::BoundRange;
@@ -19,32 +20,32 @@ impl<'a> RocksTransaction<'a> {
 
     pub fn get(&self, cf: ColumnFamilyRef, key: Key) -> RocksResult<Option<Value>> {
         let key: Vec<u8> = key.into();
-        self.inner_txn.get_cf(&cf, key).map_err(|e| {
+        self.inner_txn.get_for_update_cf(&cf, key, false).map_err(|_| {
             ROCKS_ERR_COUNTER
                 .with_label_values(&["txn_client_error"])
                 .inc();
-            e.into()
+            TXN_ERROR
         })
     }
 
     pub fn put(&self, cf: ColumnFamilyRef, key: Key, value: impl Into<Value>) -> RocksResult<()> {
         let key: Vec<u8> = key.into();
         let value: Vec<u8> = value.into();
-        self.inner_txn.put_cf(&cf, key, value).map_err(|e| {
+        self.inner_txn.put_cf(&cf, key, value).map_err(|_| {
             ROCKS_ERR_COUNTER
                 .with_label_values(&["txn_client_error"])
                 .inc();
-            e.into()
+            TXN_ERROR
         })
     }
 
     pub fn del(&self, cf: ColumnFamilyRef, key: Key) -> RocksResult<()> {
         let key: Vec<u8> = key.into();
-        self.inner_txn.delete_cf(&cf, key).map_err(|e| {
+        self.inner_txn.delete_cf(&cf, key).map_err(|_| {
             ROCKS_ERR_COUNTER
                 .with_label_values(&["txn_client_error"])
                 .inc();
-            e.into()
+            TXN_ERROR
         })
     }
 
@@ -72,6 +73,32 @@ impl<'a> RocksTransaction<'a> {
                         .with_label_values(&["txn_client_error"])
                         .inc();
                 }
+            }
+        }
+        Ok(kvpairs)
+    }
+
+    pub fn batch_get_for_update(&self, cf: ColumnFamilyRef, keys: Vec<Key>) -> RocksResult<Vec<KvPair>> {
+        let cf_key_pairs = keys
+            .clone()
+            .into_iter()
+            .map(|k| (&cf, k))
+            .collect::<Vec<(&ColumnFamilyRef, Key)>>();
+
+        let mut results = Vec::new();
+        for cf_key_pair in cf_key_pairs {
+            let res = self.inner_txn.get_for_update_cf(cf_key_pair.0, cf_key_pair.1, false)?;
+            results.push(res);
+        }
+
+        let mut kvpairs = Vec::new();
+        for i in 0..results.len() {
+            let opt = results.get(i).unwrap();
+            let key = keys.get(i).unwrap().clone();
+            let value = opt.clone();
+            if let Some(val) = value {
+                let kvpair = KvPair::from((key, val));
+                kvpairs.push(kvpair);
             }
         }
         Ok(kvpairs)

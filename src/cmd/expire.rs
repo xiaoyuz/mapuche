@@ -58,7 +58,7 @@ impl Expire {
     }
 
     pub(crate) async fn apply(
-        self,
+        &self,
         dst: &mut Connection,
         is_millis: bool,
         expire_at: bool,
@@ -74,7 +74,7 @@ impl Expire {
         Ok(())
     }
 
-    pub async fn expire(self, is_millis: bool, expire_at: bool) -> RocksResult<Frame> {
+    pub async fn expire(&self, is_millis: bool, expire_at: bool) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }

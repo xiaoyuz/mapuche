@@ -29,7 +29,7 @@ impl Keys {
         Ok(Keys { regex, valid: true })
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.keys().await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;

@@ -51,7 +51,7 @@ impl Mget {
         Ok(mget)
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.batch_get().await.unwrap_or_else(Into::into);
 
         debug!(LOGGER, "res, {:?}", response);

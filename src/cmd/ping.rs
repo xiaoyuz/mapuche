@@ -50,8 +50,8 @@ impl Ping {
     ///
     /// The response is written to `dst`. This is called by the server in order
     /// to execute a received command.
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
-        let response = match self.msg {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
+        let response = match self.msg.clone() {
             None => Frame::Simple("PONG".to_string()),
             Some(msg) => Frame::Bulk(Bytes::from(msg)),
         };

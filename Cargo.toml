@@ -42,3 +42,4 @@ glob = "0.3.1"
 [dev-dependencies]
 # Enable test-utilities in dev mode only. This is mostly for tests.
 tokio = { version = "1", features = ["test-util"] }
+redis = { version = "0.22.1", features = ["tokio-comp"] }

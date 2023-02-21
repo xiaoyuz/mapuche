@@ -207,7 +207,7 @@ impl From<RError> for Frame {
     fn from(e: RError) -> Self {
         match e {
             RError::Owned(s) => Frame::Error(s),
-            RError::String(s) => Frame::Error(s.to_string()),
+            RError::String(s) | RError::Txn(s) => Frame::Error(s.to_string()),
             RError::RocksClient(e) => Frame::Error(format!("ERR rocksdb client error: {}", e)),
         }
     }

@@ -193,7 +193,7 @@ impl Set {
     ///
     /// The response is written to `dst`. This is called by the server in order
     /// to execute a received command.
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.set().await?;
 
         debug!(LOGGER, "res, {:?}", response);
@@ -202,7 +202,7 @@ impl Set {
         Ok(())
     }
 
-    pub(crate) async fn set(self) -> RocksResult<Frame> {
+    pub(crate) async fn set(&self) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }

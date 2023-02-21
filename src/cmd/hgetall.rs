@@ -46,7 +46,7 @@ impl Hgetall {
         Ok(Hgetall::new(key))
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.hgetall().await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;

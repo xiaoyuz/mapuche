@@ -164,7 +164,7 @@ impl Zrangebyscore {
         Ok(z)
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection, reverse: bool) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection, reverse: bool) -> crate::Result<()> {
         let response = self.zrangebyscore(reverse).await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;

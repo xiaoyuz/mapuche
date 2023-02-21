@@ -101,7 +101,7 @@ impl Subscribe {
     ///
     /// [here]: https://redis.io/topics/pubsub
     pub(crate) async fn apply(
-        mut self,
+        &mut self,
         db: &Db,
         dst: &mut Connection,
         shutdown: &mut Shutdown,

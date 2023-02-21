@@ -59,7 +59,7 @@ impl Srem {
         Ok(srem)
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.srem().await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;

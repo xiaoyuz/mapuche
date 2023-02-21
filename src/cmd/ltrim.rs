@@ -62,7 +62,7 @@ impl Ltrim {
         Ok(Ltrim::new(key, start, end))
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.ltrim().await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;

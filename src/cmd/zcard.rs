@@ -45,7 +45,7 @@ impl Zcard {
         Ok(Zcard::new(&String::from_utf8_lossy(&argv[0])))
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.zcard().await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;

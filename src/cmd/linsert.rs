@@ -70,7 +70,7 @@ impl Linsert {
         Ok(Linsert::new(key, before_pivot, pivot, element))
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.linsert().await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;

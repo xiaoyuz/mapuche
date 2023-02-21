@@ -62,7 +62,7 @@ impl Push {
         Ok(push)
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection, op_left: bool) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection, op_left: bool) -> crate::Result<()> {
         let response = self.push(op_left).await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;

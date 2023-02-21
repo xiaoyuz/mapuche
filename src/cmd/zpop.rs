@@ -54,7 +54,7 @@ impl Zpop {
         Ok(Zpop::new(&String::from_utf8_lossy(&argv[0]), count))
     }
 
-    pub(crate) async fn apply(self, dst: &mut Connection, from_min: bool) -> crate::Result<()> {
+    pub(crate) async fn apply(&self, dst: &mut Connection, from_min: bool) -> crate::Result<()> {
         let response = self.zpop(from_min).await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;
