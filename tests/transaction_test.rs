@@ -42,7 +42,7 @@ async fn sadd_txn() {
     let t6 = spawn(async move {
         let client = Client::open("redis://127.0.0.1:6380").unwrap();
         let mut con = client.get_async_connection().await.unwrap();
-        for i in 2000..3000 {
+        for i in 4000..5000 {
             let _res: RedisResult<String> = con.srem("testttt", i).await;
         }
     });
