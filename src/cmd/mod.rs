@@ -172,9 +172,9 @@ pub use zremrangebyscore::Zremrangebyscore;
 mod keys;
 pub use keys::Keys;
 
-use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 use crate::metrics::ROCKS_ERR_COUNTER;
 use crate::rocks::errors::RError;
+use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 /// Enumeration of supported Redis commands.
 ///

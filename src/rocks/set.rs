@@ -71,6 +71,12 @@ impl<'a> SetCommand<'a> {
 
                     let mut expired = false;
                     let (ttl, mut version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
+
+                    // choose a random sub meta key for update, create if not exists
+                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
+                    let sub_meta_value_res =
+                        txn.get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?;
+
                     if key_is_expired(ttl) {
                         self.txn_expire_if_needed(txn, client, &key)?;
                         expired = true;
@@ -89,25 +95,22 @@ impl<'a> SetCommand<'a> {
                     // batch get
                     // count the unique members
                     let real_member_count = count_unique_keys(&member_data_keys);
-                    let values_count = txn.batch_get_for_update(cfs.data_cf.clone(), member_data_keys)?.len();
+                    let values_count = txn
+                        .batch_get_for_update(cfs.data_cf.clone(), member_data_keys)?
+                        .len();
                     let added = real_member_count as i64 - values_count as i64;
                     for m in &members {
                         let data_key = KEY_ENCODER.encode_set_data_key(&key, m, version);
                         txn.put(cfs.data_cf.clone(), data_key, vec![0])?;
                     }
 
-                    // choose a random sub meta key for update, create if not exists
-                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
-                    let new_sub_meta_value = txn
-                        .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
-                        .map_or_else(
-                            || added,
-                            |value| {
-                                let old_sub_meta_value =
-                                    i64::from_be_bytes(value.try_into().unwrap());
-                                old_sub_meta_value + added
-                            },
-                        );
+                    let new_sub_meta_value = sub_meta_value_res.map_or_else(
+                        || added,
+                        |value| {
+                            let old_sub_meta_value = i64::from_be_bytes(value.try_into().unwrap());
+                            old_sub_meta_value + added
+                        },
+                    );
                     txn.put(
                         cfs.sub_meta_cf.clone(),
                         sub_meta_key,
@@ -129,6 +132,11 @@ impl<'a> SetCommand<'a> {
                         cfs.gc_version_cf.clone(),
                         &key,
                     )?;
+                    // create sub meta key with a random index
+                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
+                    // lock sub meta key
+                    txn.get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?;
+
                     // create new meta key and meta value
                     for m in &members {
                         // check member already exists
@@ -142,8 +150,6 @@ impl<'a> SetCommand<'a> {
 
                     let added = count_unique_keys(&members) as i64;
 
-                    // create sub meta key with a random index
-                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
                     txn.put(
                         cfs.sub_meta_cf.clone(),
                         sub_meta_key,
@@ -398,6 +404,7 @@ impl<'a> SetCommand<'a> {
                     }
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
+
                     if key_is_expired(ttl) {
                         self.txn_expire_if_needed(txn, client, &key)?;
                         return Ok(0);
@@ -428,7 +435,7 @@ impl<'a> SetCommand<'a> {
                         // choose a random sub meta key, update it
                         let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
                         let new_sub_meta_value = txn
-                            .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
+                            .get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
                             .map_or_else(
                                 || -removed,
                                 |v| {
@@ -514,7 +521,7 @@ impl<'a> SetCommand<'a> {
                         // update random meta key
                         let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
                         let new_sub_meta_value = txn
-                            .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
+                            .get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
                             .map_or_else(
                                 || -poped_count,
                                 |v| {

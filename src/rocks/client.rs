@@ -1,6 +1,8 @@
 use crate::config::async_deletion_enabled_or_default;
 use crate::metrics::{ROCKS_ERR_COUNTER, TXN_COUNTER, TXN_DURATION};
-use rocksdb::{ColumnFamilyRef, TransactionDB, WriteBatchWithTransaction};
+use rocksdb::{
+    ColumnFamilyRef, TransactionDB, TransactionOptions, WriteBatchWithTransaction, WriteOptions,
+};
 use std::sync::Arc;
 
 use tokio::time::Instant;
@@ -148,7 +150,9 @@ impl RocksRawClient {
         F: FnOnce(&RocksTransaction) -> RocksResult<T>,
     {
         let client = self.client.as_ref();
-        let txn = client.transaction();
+        let txn_opts = TransactionOptions::new();
+        // txn_opts.set_lock_timeout(50);
+        let txn = client.transaction_opt(&WriteOptions::default(), &txn_opts);
         TXN_COUNTER.inc();
         let rock_txn = RocksTransaction::new(txn);
         let start_at = Instant::now();

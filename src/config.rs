@@ -181,7 +181,7 @@ pub fn config_meta_key_number_or_default() -> u16 {
     }
 
     // default metakey split number
-    100
+    u16::MAX
 }
 
 pub fn async_expire_set_threshold_or_default() -> u32 {
