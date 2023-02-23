@@ -29,13 +29,13 @@ use crate::utils::{
 };
 
 pub struct StringCF<'a> {
-    data_cf: ColumnFamilyRef<'a>,
+    meta_cf: ColumnFamilyRef<'a>,
 }
 
 impl<'a> StringCF<'a> {
     pub fn new(client: &'a RocksRawClient) -> Self {
         StringCF {
-            data_cf: client.cf_handle(CF_NAME_META).unwrap(),
+            meta_cf: client.cf_handle(CF_NAME_META).unwrap(),
         }
     }
 }
@@ -53,7 +53,7 @@ impl<'a> StringCommand<'a> {
         let client = self.client;
         let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_string(key);
-        match client.get(cfs.data_cf.clone(), ekey.clone())? {
+        match client.get(cfs.meta_cf.clone(), ekey.clone())? {
             Some(val) => {
                 let dt = KeyDecoder::decode_key_type(&val);
                 if !matches!(dt, DataType::String) {
@@ -63,7 +63,7 @@ impl<'a> StringCommand<'a> {
                 let ttl = KeyDecoder::decode_key_ttl(&val);
                 if key_is_expired(ttl) {
                     // delete key
-                    client.del(cfs.data_cf, ekey)?;
+                    client.del(cfs.meta_cf, ekey)?;
                     return Ok(resp_nil());
                 }
                 let data = KeyDecoder::decode_key_string_value(&val);
@@ -77,13 +77,13 @@ impl<'a> StringCommand<'a> {
         let client = self.client;
         let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_string(key);
-        match client.get(cfs.data_cf.clone(), ekey.clone())? {
+        match client.get(cfs.meta_cf.clone(), ekey.clone())? {
             Some(val) => {
                 // ttl saved in milliseconds
                 let ttl = KeyDecoder::decode_key_ttl(&val);
                 if key_is_expired(ttl) {
                     // delete key
-                    client.del(cfs.data_cf.clone(), ekey)?;
+                    client.del(cfs.meta_cf.clone(), ekey)?;
                     return Ok(resp_str(&DataType::Null.to_string()));
                 }
                 Ok(resp_str(&KeyDecoder::decode_key_type(&val).to_string()))
@@ -96,7 +96,7 @@ impl<'a> StringCommand<'a> {
         let client = self.client;
         let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_string(key);
-        match client.get(cfs.data_cf.clone(), ekey.clone())? {
+        match client.get(cfs.meta_cf.clone(), ekey.clone())? {
             Some(val) => {
                 let dt = KeyDecoder::decode_key_type(&val);
                 if !matches!(dt, DataType::String) {
@@ -106,7 +106,7 @@ impl<'a> StringCommand<'a> {
                 let ttl = KeyDecoder::decode_key_ttl(&val);
                 if key_is_expired(ttl) {
                     // delete key
-                    client.del(cfs.data_cf, ekey)?;
+                    client.del(cfs.meta_cf, ekey)?;
                     return Ok(resp_int(0));
                 }
                 let data = KeyDecoder::decode_key_string_value(&val);
@@ -121,7 +121,7 @@ impl<'a> StringCommand<'a> {
         let cfs = StringCF::new(client);
         let ekey = KEY_ENCODER.encode_string(key);
         let eval = KEY_ENCODER.encode_string_value(&mut val.to_vec(), timestamp);
-        client.put(cfs.data_cf, ekey, eval)?;
+        client.put(cfs.meta_cf, ekey, eval)?;
         Ok(resp_ok())
     }
 
@@ -129,7 +129,7 @@ impl<'a> StringCommand<'a> {
         let client = &self.client;
         let cfs = StringCF::new(client);
         let ekeys = KEY_ENCODER.encode_strings(keys);
-        let result = client.batch_get(cfs.data_cf.clone(), ekeys.clone())?;
+        let result = client.batch_get(cfs.meta_cf.clone(), ekeys.clone())?;
         let ret: HashMap<Key, Value> = result.into_iter().map(|pair| (pair.0, pair.1)).collect();
 
         let values: Vec<Frame> = ekeys
@@ -143,7 +143,7 @@ impl<'a> StringCommand<'a> {
                         if key_is_expired(ttl) {
                             // delete key
                             client
-                                .del(cfs.data_cf.clone(), k)
+                                .del(cfs.meta_cf.clone(), k)
                                 .expect("remove outdated data failed");
                             Frame::Null
                         } else {
@@ -161,7 +161,7 @@ impl<'a> StringCommand<'a> {
     pub async fn batch_put(self, kvs: Vec<KvPair>) -> RocksResult<Frame> {
         let client = self.client;
         let cfs = StringCF::new(client);
-        client.batch_put(cfs.data_cf, kvs)?;
+        client.batch_put(cfs.meta_cf, kvs)?;
         Ok(resp_ok())
     }
 
@@ -172,19 +172,19 @@ impl<'a> StringCommand<'a> {
         let eval = KEY_ENCODER.encode_string_value(&mut value.to_vec(), -1);
 
         let resp = client.exec_txn(|txn| {
-            match txn.get(cfs.data_cf.clone(), ekey.clone())? {
+            match txn.get_for_update(cfs.meta_cf.clone(), ekey.clone())? {
                 Some(ref v) => {
                     let ttl = KeyDecoder::decode_key_ttl(v);
                     if key_is_expired(ttl) {
                         // no need to delete, just overwrite
-                        txn.put(cfs.data_cf, ekey, eval)?;
+                        txn.put(cfs.meta_cf, ekey, eval)?;
                         Ok(1)
                     } else {
                         Ok(0)
                     }
                 }
                 None => {
-                    txn.put(cfs.data_cf, ekey, eval)?;
+                    txn.put(cfs.meta_cf, ekey, eval)?;
                     Ok(1)
                 }
             }
@@ -206,7 +206,7 @@ impl<'a> StringCommand<'a> {
         let client = self.client;
         let cfs = StringCF::new(client);
         let ekeys = KEY_ENCODER.encode_strings(keys);
-        let result = client.batch_get(cfs.data_cf.clone(), ekeys.clone())?;
+        let result = client.batch_get(cfs.meta_cf.clone(), ekeys.clone())?;
         let ret: HashMap<Key, Value> = result.into_iter().map(|pair| (pair.0, pair.1)).collect();
         let mut nums = 0;
         for k in ekeys {
@@ -216,7 +216,7 @@ impl<'a> StringCommand<'a> {
                 let ttl = KeyDecoder::decode_key_ttl(val);
                 if key_is_expired(ttl) {
                     // delete key
-                    client.del(cfs.data_cf.clone(), k)?;
+                    client.del(cfs.meta_cf.clone(), k)?;
                 } else {
                     nums += 1;
                 }
@@ -232,8 +232,8 @@ impl<'a> StringCommand<'a> {
         let ekey = KEY_ENCODER.encode_string(key);
         let the_key = ekey.clone();
 
-        let resp = client.exec_txn(|txn| {
-            match txn.get(cfs.data_cf.clone(), the_key.clone())? {
+        client.exec_txn(|txn| {
+            let pair = match txn.get_for_update(cfs.meta_cf.clone(), the_key.clone())? {
                 Some(val) => {
                     let dt = KeyDecoder::decode_key_type(&val);
                     if !matches!(dt, DataType::String) {
@@ -243,28 +243,28 @@ impl<'a> StringCommand<'a> {
                     let ttl = KeyDecoder::decode_key_ttl(&val);
                     if key_is_expired(ttl) {
                         // delete key
-                        txn.del(cfs.data_cf.clone(), the_key)?;
-                        Ok((0, None))
+                        txn.del(cfs.meta_cf.clone(), the_key)?;
+                        (0, None)
                     } else {
                         let current_value = KeyDecoder::decode_key_string_slice(&val);
                         let prev_int = str::from_utf8(current_value)
                             .map_err(RError::is_not_integer_error)?
                             .parse::<i64>()?;
                         let prev = Some(val.clone());
-                        Ok((prev_int, prev))
+                        (prev_int, prev)
                     }
                 }
-                None => Ok((0, None)),
-            }
-        })?;
+                None => (0, None),
+            };
 
-        let (prev_int, _) = resp;
+            let (prev_int, _) = pair;
 
-        let new_int = prev_int + step;
-        let new_val = new_int.to_string();
-        let eval = KEY_ENCODER.encode_string_value(&mut new_val.as_bytes().to_vec(), 0);
-        client.put(cfs.data_cf, ekey, eval)?;
-        Ok(resp_int(new_int))
+            let new_int = prev_int + step;
+            let new_val = new_int.to_string();
+            let eval = KEY_ENCODER.encode_string_value(&mut new_val.as_bytes().to_vec(), 0);
+            txn.put(cfs.meta_cf, ekey, eval)?;
+            Ok(resp_int(new_int))
+        })
     }
 
     pub async fn expire(self, key: &str, timestamp: i64) -> RocksResult<Frame> {
@@ -274,7 +274,7 @@ impl<'a> StringCommand<'a> {
         let timestamp = timestamp;
         let ekey = KEY_ENCODER.encode_string(&key);
         let resp = client.exec_txn(|txn| {
-            match txn.get(cfs.data_cf.clone(), ekey.clone())? {
+            match txn.get_for_update(cfs.meta_cf.clone(), ekey.clone())? {
                 Some(meta_value) => {
                     if timestamp == 0 {
                         return Ok(0);
@@ -290,7 +290,7 @@ impl<'a> StringCommand<'a> {
                             }
                             let value = KeyDecoder::decode_key_string_slice(&meta_value);
                             let new_meta_value = KEY_ENCODER.encode_string_slice(value, timestamp);
-                            txn.put(cfs.data_cf.clone(), ekey, new_meta_value)?;
+                            txn.put(cfs.meta_cf.clone(), ekey, new_meta_value)?;
                             Ok(1)
                         }
                         DataType::Set => SetCommand::new(client).txn_expire(
@@ -338,7 +338,7 @@ impl<'a> StringCommand<'a> {
         let cfs = StringCF::new(client);
         let key = key.to_owned();
         let ekey = KEY_ENCODER.encode_string(&key);
-        client.exec_txn(|txn| match txn.get(cfs.data_cf.clone(), ekey.clone())? {
+        client.exec_txn(|txn| match txn.get(cfs.meta_cf.clone(), ekey.clone())? {
             Some(meta_value) => {
                 let dt = KeyDecoder::decode_key_type(&meta_value);
                 let ttl = KeyDecoder::decode_key_ttl(&meta_value);
@@ -384,7 +384,7 @@ impl<'a> StringCommand<'a> {
         let resp = client.exec_txn(|txn| {
             let ekeys = KEY_ENCODER.encode_strings(&keys);
             let ekey_map: HashMap<Key, String> = ekeys.clone().into_iter().zip(keys).collect();
-            let cf = cfs.data_cf.clone();
+            let cf = cfs.meta_cf.clone();
             let pairs = txn.batch_get(cf, ekeys.clone())?;
             let dts: HashMap<Key, DataType> = pairs
                 .into_iter()
@@ -395,7 +395,7 @@ impl<'a> StringCommand<'a> {
             for ekey in ekeys {
                 match dts.get(&ekey) {
                     Some(DataType::String) => {
-                        txn.del(cfs.data_cf.clone(), ekey.clone())?;
+                        txn.del(cfs.meta_cf.clone(), ekey.clone())?;
                         resp += 1;
                     }
                     Some(DataType::Set) => {
@@ -444,7 +444,7 @@ impl<'a> StringCommand<'a> {
                 let range = left_bound.clone()..KEY_ENCODER.encode_keyspace_end();
                 let bound_range: BoundRange = range.into();
 
-                let iter = txn.scan(cfs.data_cf.clone(), bound_range, 100)?;
+                let iter = txn.scan(cfs.meta_cf.clone(), bound_range, 100)?;
                 // reset count to zero
                 last_round_iter_count = 0;
                 for kv in iter {
@@ -502,7 +502,7 @@ impl<'a> StringCommand<'a> {
                 let bound_range: BoundRange = range.into();
 
                 // the iterator will scan all keyspace include sub metakey and datakey
-                let iter = txn.scan(cfs.data_cf.clone(), bound_range, 100)?;
+                let iter = txn.scan(cfs.meta_cf.clone(), bound_range, 100)?;
 
                 // reset count to zero
                 last_round_iter_count = 0;
@@ -558,7 +558,7 @@ impl<'a> StringCommand<'a> {
         let cfs = StringCF::new(client);
         let ttl = KeyDecoder::decode_key_ttl(meta_value);
         if key_is_expired(ttl) {
-            txn.del(cfs.data_cf.clone(), ekey.to_owned())?;
+            txn.del(cfs.meta_cf.clone(), ekey.to_owned())?;
             REMOVED_EXPIRED_KEY_COUNTER
                 .with_label_values(&["string"])
                 .inc();

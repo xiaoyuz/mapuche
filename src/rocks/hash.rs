@@ -79,6 +79,12 @@ impl<'a> HashCommand<'a> {
                     // already exists
                     let (ttl, mut version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
 
+                    // gerate a random index, update sub meta key, create a new sub meta key with this index
+                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, idx);
+                    // create or update it
+                    let sub_meta_value_res =
+                        txn.get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?;
+
                     let mut expired = false;
 
                     if key_is_expired(ttl) {
@@ -119,7 +125,9 @@ impl<'a> HashCommand<'a> {
                         // batch get
                         let real_fields_count = count_unique_keys(&fields_data_key);
                         added_count = real_fields_count as i64
-                            - txn.batch_get(cfs.data_cf.clone(), fields_data_key)?.len() as i64;
+                            - txn
+                                .batch_get_for_update(cfs.data_cf.clone(), fields_data_key)?
+                                .len() as i64;
                     }
 
                     for kv in fvs_copy {
@@ -132,20 +140,14 @@ impl<'a> HashCommand<'a> {
                         txn.put(cfs.data_cf.clone(), data_key, kv.1)?;
                     }
 
-                    // gerate a random index, update sub meta key, create a new sub meta key with this index
-                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, idx);
-                    // create or update it
-                    let new_sub_meta_value = txn
-                        .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
-                        .map_or_else(
-                            || added_count.to_be_bytes().to_vec(),
-                            |sub_meta_value| {
-                                let sub_size =
-                                    i64::from_be_bytes(sub_meta_value.try_into().unwrap());
+                    let new_sub_meta_value = sub_meta_value_res.map_or_else(
+                        || added_count.to_be_bytes().to_vec(),
+                        |sub_meta_value| {
+                            let sub_size = i64::from_be_bytes(sub_meta_value.try_into().unwrap());
 
-                                (sub_size + added_count).to_be_bytes().to_vec()
-                            },
-                        );
+                            (sub_size + added_count).to_be_bytes().to_vec()
+                        },
+                    );
                     txn.put(cfs.sub_meta_cf.clone(), sub_meta_key, new_sub_meta_value)?;
                     if expired {
                         // add meta key
@@ -163,6 +165,11 @@ impl<'a> HashCommand<'a> {
                         &key,
                     )?;
                     debug!(LOGGER, "hset new key {} with version: {}", key, version);
+
+                    // set sub meta key with a random index
+                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, idx);
+                    // lock sub meta key
+                    txn.get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?;
 
                     // not exists
                     let ttl = 0;
@@ -193,8 +200,6 @@ impl<'a> HashCommand<'a> {
                     let new_metaval = KEY_ENCODER.encode_hash_meta_value(ttl, version, meta_size);
                     txn.put(cfs.meta_cf.clone(), meta_key, new_metaval)?;
 
-                    // set sub meta key with a random index
-                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, idx);
                     txn.put(
                         cfs.sub_meta_cf.clone(),
                         sub_meta_key,
@@ -486,7 +491,7 @@ impl<'a> HashCommand<'a> {
                         .iter()
                         .map(|field| KEY_ENCODER.encode_hash_data_key(&key, field, version))
                         .collect();
-                    for pair in txn.batch_get(cfs.data_cf.clone(), data_keys)? {
+                    for pair in txn.batch_get_for_update(cfs.data_cf.clone(), data_keys)? {
                         txn.del(cfs.data_cf.clone(), pair.0)?;
                         deleted += 1;
                     }
@@ -509,7 +514,7 @@ impl<'a> HashCommand<'a> {
                         let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, idx);
                         // create it with negtive value if sub meta key not exists
                         let new_size = txn
-                            .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
+                            .get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
                             .map_or_else(
                                 || -deleted,
                                 |value| {
@@ -569,7 +574,7 @@ impl<'a> HashCommand<'a> {
 
                     data_key = KEY_ENCODER.encode_hash_data_key(&key, &field, version);
 
-                    match txn.get(cfs.data_cf.clone(), data_key.clone())? {
+                    match txn.get_for_update(cfs.data_cf.clone(), data_key.clone())? {
                         Some(data_value) => {
                             // try to convert to int
                             match String::from_utf8_lossy(&data_value).parse::<i64>() {
@@ -588,7 +593,7 @@ impl<'a> HashCommand<'a> {
                             let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, idx);
 
                             let sub_size = txn
-                                .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
+                                .get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
                                 .map_or_else(
                                     || 1,
                                     |value| i64::from_be_bytes(value.try_into().unwrap()),

@@ -73,6 +73,11 @@ impl<'a> ZsetCommand<'a> {
                     }
 
                     let (ttl, mut version, _) = KeyDecoder::decode_key_meta(&meta_value);
+
+                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
+                    let sub_meta_value_res =
+                        txn.get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?;
+
                     let mut expired = false;
                     if key_is_expired(ttl) {
                         self.txn_expire_if_needed(txn, client, &key)?;
@@ -93,7 +98,7 @@ impl<'a> ZsetCommand<'a> {
                         .map(|member| KEY_ENCODER.encode_zset_data_key(&key, member, version))
                         .collect();
                     let data_map: HashMap<Key, Value> = txn
-                        .batch_get(cfs.data_cf.clone(), data_keys)?
+                        .batch_get_for_update(cfs.data_cf.clone(), data_keys)?
                         .into_iter()
                         .map(|pair| (pair.0, pair.1))
                         .collect();
@@ -199,17 +204,13 @@ impl<'a> ZsetCommand<'a> {
 
                     // update or add sub meta key
                     if added_count > 0 {
-                        let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
-                        let new_sub_meta_value = txn
-                            .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
-                            .map_or_else(
-                                || added_count,
-                                |v| {
-                                    let old_sub_meta_value =
-                                        i64::from_be_bytes(v.try_into().unwrap());
-                                    old_sub_meta_value + added_count
-                                },
-                            );
+                        let new_sub_meta_value = sub_meta_value_res.map_or_else(
+                            || added_count,
+                            |v| {
+                                let old_sub_meta_value = i64::from_be_bytes(v.try_into().unwrap());
+                                old_sub_meta_value + added_count
+                            },
+                        );
                         txn.put(
                             cfs.sub_meta_cf.clone(),
                             sub_meta_key,
@@ -237,6 +238,11 @@ impl<'a> ZsetCommand<'a> {
                         &key,
                     )?;
 
+                    // add sub meta key
+                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
+                    // lock sub meta key
+                    txn.get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?;
+
                     if let Some(ex) = exists {
                         if ex {
                             // xx flag specified, do not create new key
@@ -257,8 +263,7 @@ impl<'a> ZsetCommand<'a> {
                         // TODO check old score key exists, in case of zadd same field with different scores?
                         txn.put(cfs.score_cf.clone(), score_key, member)?;
                     }
-                    // add sub meta key
-                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
+
                     txn.put(
                         cfs.sub_meta_cf.clone(),
                         sub_meta_key,
@@ -655,7 +660,7 @@ impl<'a> ZsetCommand<'a> {
                         // update size to a random sub meta key
                         let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
                         let new_sub_meta_value = txn
-                            .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
+                            .get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
                             .map_or_else(
                                 || -poped_count,
                                 |v| {
@@ -772,7 +777,7 @@ impl<'a> ZsetCommand<'a> {
 
                     data_key = KEY_ENCODER.encode_zset_data_key(&key, &member, version);
 
-                    match txn.get(cfs.data_cf.clone(), data_key.clone())? {
+                    match txn.get_for_update(cfs.data_cf.clone(), data_key.clone())? {
                         Some(data_value) => {
                             prev_score = KeyDecoder::decode_key_zset_data_value(&data_value);
                             let prev_score_key = KEY_ENCODER
@@ -787,7 +792,7 @@ impl<'a> ZsetCommand<'a> {
                                 gen_next_meta_index(),
                             );
                             let new_sub_meta_value = txn
-                                .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
+                                .get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
                                 .map_or_else(
                                     || 1_i64,
                                     |v| {
@@ -874,7 +879,7 @@ impl<'a> ZsetCommand<'a> {
                         .map(|member| KEY_ENCODER.encode_zset_data_key(&key, member, version))
                         .collect();
                     let data_map: HashMap<Key, Value> = txn
-                        .batch_get(cfs.data_cf.clone(), data_keys.clone())?
+                        .batch_get_for_update(cfs.data_cf.clone(), data_keys.clone())?
                         .into_iter()
                         .map(|pair| (pair.0, pair.1))
                         .collect();
@@ -908,7 +913,7 @@ impl<'a> ZsetCommand<'a> {
                     } else {
                         let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
                         let new_sub_meta_value = txn
-                            .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
+                            .get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
                             .map_or_else(
                                 || -removed_count,
                                 |v| {
@@ -1009,7 +1014,7 @@ impl<'a> ZsetCommand<'a> {
                     } else {
                         let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
                         let new_sub_meta_value = txn
-                            .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
+                            .get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
                             .map_or_else(
                                 || -removed_count,
                                 |v| {
@@ -1103,7 +1108,7 @@ impl<'a> ZsetCommand<'a> {
                         // update a random sub meta key
                         let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, rand_idx);
                         let new_sub_meta_value = txn
-                            .get(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
+                            .get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
                             .map_or_else(
                                 || -removed_count,
                                 |v| {
