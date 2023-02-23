@@ -61,7 +61,7 @@ impl<'a> ListCommand<'a> {
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
 
         let resp = client.exec_txn(|txn| {
-            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+            match txn.get_for_update(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
                     // check key type and ttl
                     if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::List) {
@@ -152,7 +152,7 @@ impl<'a> ListCommand<'a> {
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
             let mut values = Vec::new();
-            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+            match txn.get_for_update(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
                     // check key type and ttl
                     if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::List) {
@@ -253,7 +253,7 @@ impl<'a> ListCommand<'a> {
 
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
-            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+            match txn.get_for_update(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
                     // check key type and ttl
                     if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::List) {
@@ -468,7 +468,7 @@ impl<'a> ListCommand<'a> {
 
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
-            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+            match txn.get_for_update(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
                     // check key type and ttl
                     if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::List) {
@@ -520,7 +520,7 @@ impl<'a> ListCommand<'a> {
 
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
-            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+            match txn.get_for_update(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
                     // check key type and ttl
                     if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::List) {
@@ -653,7 +653,7 @@ impl<'a> ListCommand<'a> {
 
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
-            match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
+            match txn.get_for_update(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
                     // check key type and ttl
                     if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::List) {
