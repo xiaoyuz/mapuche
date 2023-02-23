@@ -165,3 +165,32 @@ async fn list_txn() {
     // t5.await.unwrap();
     // t6.await.unwrap();
 }
+
+#[tokio::test]
+async fn zincr_txn() {
+    let t1 = spawn(async move {
+        let client = Client::open("redis://127.0.0.1:6380").unwrap();
+        let mut con = client.get_async_connection().await.unwrap();
+        for i in 0..100 {
+            let _res: RedisResult<String> = con.zincr("testzincr", "a", 1).await;
+        }
+    });
+    let t2 = spawn(async move {
+        let client = Client::open("redis://127.0.0.1:6380").unwrap();
+        let mut con = client.get_async_connection().await.unwrap();
+        for i in 200..300 {
+            let _res: RedisResult<String> = con.zincr("testzincr", "a", 1).await;
+        }
+    });
+    let t3 = spawn(async move {
+        let client = Client::open("redis://127.0.0.1:6380").unwrap();
+        let mut con = client.get_async_connection().await.unwrap();
+        for i in 400..500 {
+            let _res: RedisResult<String> = con.zincr("testzincr", "a", 1).await;
+        }
+    });
+
+    t3.await.unwrap();
+    t2.await.unwrap();
+    t1.await.unwrap();
+}
