@@ -21,7 +21,7 @@ impl<'a> RocksTransaction<'a> {
         let key: Vec<u8> = key.into();
         self.inner_txn.get_cf(&cf, key).map_err(|_| {
             ROCKS_ERR_COUNTER
-                .with_label_values(&["txn_client_error"])
+                .with_label_values(&["txn_client_error_get"])
                 .inc();
             TXN_ERROR
         })
@@ -33,7 +33,7 @@ impl<'a> RocksTransaction<'a> {
             .get_for_update_cf(&cf, key, false)
             .map_err(|_| {
                 ROCKS_ERR_COUNTER
-                    .with_label_values(&["txn_client_error"])
+                    .with_label_values(&["txn_client_error_gfu"])
                     .inc();
                 TXN_ERROR
             })
@@ -44,7 +44,7 @@ impl<'a> RocksTransaction<'a> {
         let value: Vec<u8> = value.into();
         self.inner_txn.put_cf(&cf, key, value).map_err(|_| {
             ROCKS_ERR_COUNTER
-                .with_label_values(&["txn_client_error"])
+                .with_label_values(&["txn_client_error_put"])
                 .inc();
             TXN_ERROR
         })
@@ -54,7 +54,7 @@ impl<'a> RocksTransaction<'a> {
         let key: Vec<u8> = key.into();
         self.inner_txn.delete_cf(&cf, key).map_err(|_| {
             ROCKS_ERR_COUNTER
-                .with_label_values(&["txn_client_error"])
+                .with_label_values(&["txn_client_error_del"])
                 .inc();
             TXN_ERROR
         })
@@ -81,7 +81,7 @@ impl<'a> RocksTransaction<'a> {
                 }
                 Err(_) => {
                     ROCKS_ERR_COUNTER
-                        .with_label_values(&["txn_client_error"])
+                        .with_label_values(&["txn_client_error_bg"])
                         .inc();
                 }
             }
@@ -104,7 +104,13 @@ impl<'a> RocksTransaction<'a> {
         for cf_key_pair in cf_key_pairs {
             let res = self
                 .inner_txn
-                .get_for_update_cf(cf_key_pair.0, cf_key_pair.1, false)?;
+                .get_for_update_cf(cf_key_pair.0, cf_key_pair.1, false)
+                .map_err(|_| {
+                    ROCKS_ERR_COUNTER
+                        .with_label_values(&["txn_client_error_bgfu"])
+                        .inc();
+                    TXN_ERROR
+                })?;
             results.push(res);
         }
 
@@ -124,7 +130,7 @@ impl<'a> RocksTransaction<'a> {
     pub fn commit(self) -> RocksResult<()> {
         self.inner_txn.commit().map_err(|_| {
             ROCKS_ERR_COUNTER
-                .with_label_values(&["txn_client_error"])
+                .with_label_values(&["txn_client_error_commit"])
                 .inc();
             TXN_ERROR
         })
