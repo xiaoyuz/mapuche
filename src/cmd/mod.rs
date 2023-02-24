@@ -1,4 +1,6 @@
 mod get;
+
+use futures::future::BoxFuture;
 pub use get::Get;
 
 mod publish;
@@ -172,9 +174,11 @@ pub use zremrangebyscore::Zremrangebyscore;
 mod keys;
 pub use keys::Keys;
 
-use crate::metrics::ROCKS_ERR_COUNTER;
-use crate::rocks::errors::RError;
+use crate::config::txn_retry_count;
+use crate::metrics::TXN_RETRY_COUNTER;
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
+
+use crate::rocks::Result as RocksResult;
 
 /// Enumeration of supported Redis commands.
 ///
@@ -479,97 +483,81 @@ impl Command {
     ) -> crate::Result<()> {
         use Command::*;
 
-        let mut retry = 3000;
-        let mut res: crate::Result<()> = Ok(());
-        while retry > 0 {
-            res = match &mut self {
-                Get(cmd) => cmd.apply(dst).await,
-                Mget(cmd) => cmd.apply(dst).await,
-                Mset(cmd) => cmd.apply(dst).await,
-                Publish(cmd) => cmd.apply(db, dst).await,
-                Set(cmd) => cmd.apply(dst).await,
-                Subscribe(cmd) => cmd.apply(db, dst, shutdown).await,
-                Del(cmd) => cmd.apply(dst).await,
-                Ping(cmd) => cmd.apply(dst).await,
-                Strlen(cmd) => cmd.apply(dst).await,
-                Type(cmd) => cmd.apply(dst).await,
-                Exists(cmd) => cmd.apply(dst).await,
-                Incr(cmd) => cmd.apply(dst, true).await,
-                Decr(cmd) => cmd.apply(dst, false).await,
-                Expire(cmd) => cmd.apply(dst, false, false).await,
-                ExpireAt(cmd) => cmd.apply(dst, false, true).await,
-                Pexpire(cmd) => cmd.apply(dst, true, false).await,
-                PexpireAt(cmd) => cmd.apply(dst, true, true).await,
-                TTL(cmd) => cmd.apply(dst, false).await,
-                PTTL(cmd) => cmd.apply(dst, true).await,
-                Scan(cmd) => cmd.apply(dst).await,
-                Keys(cmd) => cmd.apply(dst).await,
-                Sadd(cmd) => cmd.apply(dst).await,
-                Scard(cmd) => cmd.apply(dst).await,
-                Sismember(cmd) => cmd.apply(dst).await,
-                Smismember(cmd) => cmd.apply(dst).await,
-                Smembers(cmd) => cmd.apply(dst).await,
-                Srandmember(cmd) => cmd.apply(dst).await,
-                Spop(cmd) => cmd.apply(dst).await,
-                Srem(cmd) => cmd.apply(dst).await,
-                Lpush(cmd) => cmd.apply(dst, true).await,
-                Rpush(cmd) => cmd.apply(dst, false).await,
-                Lpop(cmd) => cmd.apply(dst, true).await,
-                Rpop(cmd) => cmd.apply(dst, false).await,
-                Lrange(cmd) => cmd.apply(dst).await,
-                Ltrim(cmd) => cmd.apply(dst).await,
-                Llen(cmd) => cmd.apply(dst).await,
-                Lindex(cmd) => cmd.apply(dst).await,
-                Lset(cmd) => cmd.apply(dst).await,
-                Lrem(cmd) => cmd.apply(dst).await,
-                Linsert(cmd) => cmd.apply(dst).await,
-                Hset(cmd) => cmd.apply(dst, false, false).await,
-                Hmset(cmd) => cmd.apply(dst, true, false).await,
-                Hsetnx(cmd) => cmd.apply(dst, false, true).await,
-                Hget(cmd) => cmd.apply(dst).await,
-                Hmget(cmd) => cmd.apply(dst).await,
-                Hlen(cmd) => cmd.apply(dst).await,
-                Hgetall(cmd) => cmd.apply(dst).await,
-                Hdel(cmd) => cmd.apply(dst).await,
-                Hkeys(cmd) => cmd.apply(dst).await,
-                Hvals(cmd) => cmd.apply(dst).await,
-                Hincrby(cmd) => cmd.apply(dst).await,
-                Hexists(cmd) => cmd.apply(dst).await,
-                Hstrlen(cmd) => cmd.apply(dst).await,
-                Zadd(cmd) => cmd.apply(dst).await,
-                Zcard(cmd) => cmd.apply(dst).await,
-                Zscore(cmd) => cmd.apply(dst).await,
-                Zrem(cmd) => cmd.apply(dst).await,
-                Zremrangebyscore(cmd) => cmd.apply(dst).await,
-                Zremrangebyrank(cmd) => cmd.apply(dst).await,
-                Zrange(cmd) => cmd.apply(dst).await,
-                Zrevrange(cmd) => cmd.apply(dst).await,
-                Zrangebyscore(cmd) => cmd.apply(dst, false).await,
-                Zrevrangebyscore(cmd) => cmd.apply(dst, true).await,
-                Zcount(cmd) => cmd.apply(dst).await,
-                Zpopmin(cmd) => cmd.apply(dst, true).await,
-                Zpopmax(cmd) => cmd.apply(dst, false).await,
-                Zrank(cmd) => cmd.apply(dst).await,
-                Zincrby(cmd) => cmd.apply(dst).await,
+        match &mut self {
+            Get(cmd) => cmd.apply(dst).await,
+            Mget(cmd) => cmd.apply(dst).await,
+            Mset(cmd) => cmd.apply(dst).await,
+            Publish(cmd) => cmd.apply(db, dst).await,
+            Set(cmd) => cmd.apply(dst).await,
+            Subscribe(cmd) => cmd.apply(db, dst, shutdown).await,
+            Del(cmd) => cmd.apply(dst).await,
+            Ping(cmd) => cmd.apply(dst).await,
+            Strlen(cmd) => cmd.apply(dst).await,
+            Type(cmd) => cmd.apply(dst).await,
+            Exists(cmd) => cmd.apply(dst).await,
+            Incr(cmd) => cmd.apply(dst, true).await,
+            Decr(cmd) => cmd.apply(dst, false).await,
+            Expire(cmd) => cmd.apply(dst, false, false).await,
+            ExpireAt(cmd) => cmd.apply(dst, false, true).await,
+            Pexpire(cmd) => cmd.apply(dst, true, false).await,
+            PexpireAt(cmd) => cmd.apply(dst, true, true).await,
+            TTL(cmd) => cmd.apply(dst, false).await,
+            PTTL(cmd) => cmd.apply(dst, true).await,
+            Scan(cmd) => cmd.apply(dst).await,
+            Keys(cmd) => cmd.apply(dst).await,
+            Sadd(cmd) => cmd.apply(dst).await,
+            Scard(cmd) => cmd.apply(dst).await,
+            Sismember(cmd) => cmd.apply(dst).await,
+            Smismember(cmd) => cmd.apply(dst).await,
+            Smembers(cmd) => cmd.apply(dst).await,
+            Srandmember(cmd) => cmd.apply(dst).await,
+            Spop(cmd) => cmd.apply(dst).await,
+            Srem(cmd) => cmd.apply(dst).await,
+            Lpush(cmd) => cmd.apply(dst, true).await,
+            Rpush(cmd) => cmd.apply(dst, false).await,
+            Lpop(cmd) => cmd.apply(dst, true).await,
+            Rpop(cmd) => cmd.apply(dst, false).await,
+            Lrange(cmd) => cmd.apply(dst).await,
+            Ltrim(cmd) => cmd.apply(dst).await,
+            Llen(cmd) => cmd.apply(dst).await,
+            Lindex(cmd) => cmd.apply(dst).await,
+            Lset(cmd) => cmd.apply(dst).await,
+            Lrem(cmd) => cmd.apply(dst).await,
+            Linsert(cmd) => cmd.apply(dst).await,
+            Hset(cmd) => cmd.apply(dst, false, false).await,
+            Hmset(cmd) => cmd.apply(dst, true, false).await,
+            Hsetnx(cmd) => cmd.apply(dst, false, true).await,
+            Hget(cmd) => cmd.apply(dst).await,
+            Hmget(cmd) => cmd.apply(dst).await,
+            Hlen(cmd) => cmd.apply(dst).await,
+            Hgetall(cmd) => cmd.apply(dst).await,
+            Hdel(cmd) => cmd.apply(dst).await,
+            Hkeys(cmd) => cmd.apply(dst).await,
+            Hvals(cmd) => cmd.apply(dst).await,
+            Hincrby(cmd) => cmd.apply(dst).await,
+            Hexists(cmd) => cmd.apply(dst).await,
+            Hstrlen(cmd) => cmd.apply(dst).await,
+            Zadd(cmd) => cmd.apply(dst).await,
+            Zcard(cmd) => cmd.apply(dst).await,
+            Zscore(cmd) => cmd.apply(dst).await,
+            Zrem(cmd) => cmd.apply(dst).await,
+            Zremrangebyscore(cmd) => cmd.apply(dst).await,
+            Zremrangebyrank(cmd) => cmd.apply(dst).await,
+            Zrange(cmd) => cmd.apply(dst).await,
+            Zrevrange(cmd) => cmd.apply(dst).await,
+            Zrangebyscore(cmd) => cmd.apply(dst, false).await,
+            Zrevrangebyscore(cmd) => cmd.apply(dst, true).await,
+            Zcount(cmd) => cmd.apply(dst).await,
+            Zpopmin(cmd) => cmd.apply(dst, true).await,
+            Zpopmax(cmd) => cmd.apply(dst, false).await,
+            Zrank(cmd) => cmd.apply(dst).await,
+            Zincrby(cmd) => cmd.apply(dst).await,
 
-                Unknown(cmd) => cmd.apply(dst).await,
-                // `Unsubscribe` cannot be applied. It may only be received from the
-                // context of a `Subscribe` command.
-                Unsubscribe(_) => Err("`Unsubscribe` is unsupported in this context".into()),
-            };
-            if let Err(e) = &res {
-                if let Some(&RError::Txn(_)) = e.downcast_ref::<RError>() {
-                    retry -= 1;
-                    ROCKS_ERR_COUNTER
-                        .with_label_values(&["txn_client_error"])
-                        .inc();
-                    continue;
-                }
-            } else {
-                return res;
-            }
+            Unknown(cmd) => cmd.apply(dst).await,
+            // `Unsubscribe` cannot be applied. It may only be received from the
+            // context of a `Subscribe` command.
+            Unsubscribe(_) => Err("`Unsubscribe` is unsupported in this context".into()),
         }
-        res
     }
 
     /// Returns the command name
@@ -666,4 +654,22 @@ fn transform_parse<T: Invalid>(parse_res: crate::Result<T>, parse: &mut Parse) -
         }
         Err(_) => T::new_invalid(),
     }
+}
+
+async fn retry_call<'a, F>(mut f: F) -> RocksResult<Frame>
+where
+    F: FnMut() -> BoxFuture<'a, RocksResult<Frame>> + Copy,
+{
+    let mut retry = txn_retry_count();
+    let mut res = Frame::Null;
+    while retry > 0 {
+        res = f().await?;
+        if let Frame::TxnFailed(_) = res {
+            retry -= 1;
+            TXN_RETRY_COUNTER.inc();
+            continue;
+        }
+        return Ok(res);
+    }
+    Ok(res)
 }

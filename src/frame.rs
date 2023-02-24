@@ -11,6 +11,7 @@ use std::string::FromUtf8Error;
 pub enum Frame {
     Simple(String),
     Error(String),
+    TxnFailed(String),
     Integer(i64),
     Bulk(Bytes),
     Null,
@@ -183,6 +184,7 @@ impl fmt::Display for Frame {
         match self {
             Frame::Simple(response) => response.fmt(fmt),
             Frame::Error(msg) => write!(fmt, "error: {msg}"),
+            Frame::TxnFailed(msg) => write!(fmt, "txn failed: {msg}"),
             Frame::Integer(num) => num.fmt(fmt),
             Frame::Bulk(msg) => match str::from_utf8(msg) {
                 Ok(string) => string.fmt(fmt),
@@ -207,8 +209,9 @@ impl From<RError> for Frame {
     fn from(e: RError) -> Self {
         match e {
             RError::Owned(s) => Frame::Error(s),
-            RError::String(s) | RError::Txn(s) => Frame::Error(s.to_string()),
+            RError::String(s) => Frame::Error(s.to_string()),
             RError::RocksClient(e) => Frame::Error(format!("ERR rocksdb client error: {}", e)),
+            RError::Txn(s) => Frame::TxnFailed(s.to_owned()),
         }
     }
 }

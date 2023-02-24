@@ -47,6 +47,8 @@ struct Backend {
     local_pool_number: Option<usize>,
     max_connection: Option<usize>,
 
+    txn_retry_count: Option<u32>,
+
     data_store_dir: Option<String>,
 
     cmd_lrem_length_limit: Option<u32>,
@@ -409,4 +411,16 @@ pub fn config_max_connection() -> usize {
     }
     // default use 8 localset pool to handle connections
     10000
+}
+
+pub fn txn_retry_count() -> u32 {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.backend.txn_retry_count {
+                return s;
+            }
+        }
+    }
+    // default to 3
+    10
 }

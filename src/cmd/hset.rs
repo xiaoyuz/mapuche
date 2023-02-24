@@ -1,10 +1,11 @@
 use crate::{Connection, Frame, Parse};
 
-use crate::cmd::Invalid;
+use crate::cmd::{retry_call, Invalid};
 use crate::config::LOGGER;
 use crate::rocks::hash::HashCommand;
 use crate::rocks::kv::kvpair::KvPair;
 use bytes::Bytes;
+use futures::FutureExt;
 use slog::debug;
 
 use crate::rocks::{get_client, Result as RocksResult};
@@ -77,7 +78,8 @@ impl Hset {
         is_hmset: bool,
         is_nx: bool,
     ) -> crate::Result<()> {
-        let response = self.hset(is_hmset, is_nx).await?;
+        let response =
+            retry_call(|| async move { self.hset(is_hmset, is_nx).await }.boxed()).await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;
 

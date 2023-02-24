@@ -56,6 +56,7 @@ lazy_static! {
         exponential_buckets(0.0005, 2.0, 20).unwrap()
     )
     .unwrap();
+    pub static ref TXN_RETRY_COUNTER: IntCounter = register_int_counter!("rocks_redis_txn_retry_count_total", "Transactions retry count").unwrap();
 
     pub static ref ROCKS_ERR_COUNTER: IntCounterVec = register_int_counter_vec!(
         "redis_rocks_reported_errors_count_total",

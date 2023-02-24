@@ -1,8 +1,9 @@
 use crate::{Connection, Frame, Parse};
 
-use crate::cmd::Invalid;
+use crate::cmd::{retry_call, Invalid};
 use crate::config::LOGGER;
 use bytes::Bytes;
+use futures::FutureExt;
 use slog::debug;
 
 use crate::rocks::zset::ZsetCommand;
@@ -212,7 +213,7 @@ impl Zadd {
     }
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = self.zadd().await?;
+        let response = retry_call(|| async move { self.zadd().await }.boxed()).await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;
 

@@ -1,9 +1,10 @@
 use crate::{Connection, Frame, Parse};
 
-use crate::cmd::Invalid;
+use crate::cmd::{retry_call, Invalid};
 use crate::config::LOGGER;
 use crate::rocks::list::ListCommand;
 use bytes::Bytes;
+use futures::FutureExt;
 use slog::debug;
 
 use crate::rocks::{get_client, Result as RocksResult};
@@ -63,7 +64,7 @@ impl Push {
     }
 
     pub(crate) async fn apply(&self, dst: &mut Connection, op_left: bool) -> crate::Result<()> {
-        let response = self.push(op_left).await?;
+        let response = retry_call(|| async move { self.push(op_left).await }.boxed()).await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;
 

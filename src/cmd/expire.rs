@@ -1,8 +1,9 @@
-use crate::cmd::Invalid;
+use crate::cmd::{retry_call, Invalid};
 use crate::config::LOGGER;
 use crate::parse::Parse;
 use crate::{Connection, Frame};
 use bytes::Bytes;
+use futures::FutureExt;
 use slog::debug;
 
 use crate::rocks::string::StringCommand;
@@ -63,10 +64,10 @@ impl Expire {
         is_millis: bool,
         expire_at: bool,
     ) -> crate::Result<()> {
-        let response = self
-            .expire(is_millis, expire_at)
-            .await
-            .unwrap_or_else(Into::into);
+        let response = retry_call(|| {
+            async move { self.expire(is_millis, expire_at).await.map_err(Into::into) }.boxed()
+        })
+        .await?;
         debug!(LOGGER, "res, {:?}", response);
 
         dst.write_frame(&response).await?;

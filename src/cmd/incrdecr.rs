@@ -1,9 +1,10 @@
-use crate::cmd::Invalid;
+use crate::cmd::{retry_call, Invalid};
 use crate::config::LOGGER;
 use crate::parse::Parse;
 use crate::rocks::errors::DECREMENT_OVERFLOW;
 use crate::{Connection, Frame};
 use bytes::Bytes;
+use futures::FutureExt;
 use slog::debug;
 
 use crate::rocks::string::StringCommand;
@@ -58,11 +59,16 @@ impl IncrDecr {
         }
     }
 
-    pub(crate) async fn apply(&mut self, dst: &mut Connection, inc: bool) -> crate::Result<()> {
-        let response = self.incr_by(inc).await.unwrap_or_else(Into::into);
-
+    pub(crate) async fn apply(&self, dst: &mut Connection, inc: bool) -> crate::Result<()> {
+        let response = retry_call(|| {
+            async move {
+                let mut the_clone = self.clone();
+                the_clone.incr_by(inc).await.map_err(Into::into)
+            }
+            .boxed()
+        })
+        .await?;
         debug!(LOGGER, "res, {:?}", response);
-
         dst.write_frame(&response).await?;
 
         Ok(())
