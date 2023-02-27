@@ -3,7 +3,7 @@ use crate::config::{
     config_meta_key_number_or_default, LOGGER,
 };
 use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
-use crate::rocks::client::{get_version_for_new, RocksRawClient};
+use crate::rocks::client::{get_version_for_new, RocksClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{REDIS_VALUE_IS_NOT_INTEGER_ERR, REDIS_WRONG_TYPE_ERR};
 use crate::rocks::kv::bound_range::BoundRange;
@@ -12,7 +12,7 @@ use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
 use crate::rocks::{
-    gen_next_meta_index, Result as RocksResult, RocksCommand, CF_NAME_GC, CF_NAME_GC_VERSION,
+    gen_next_meta_index, Result as RocksResult, TxnCommand, CF_NAME_GC, CF_NAME_GC_VERSION,
     CF_NAME_HASH_DATA, CF_NAME_HASH_SUB_META, CF_NAME_META, KEY_ENCODER,
 };
 use crate::utils::{
@@ -33,7 +33,7 @@ pub struct HashCF<'a> {
 }
 
 impl<'a> HashCF<'a> {
-    pub fn new(client: &'a RocksRawClient) -> Self {
+    pub fn new(client: &'a RocksClient) -> Self {
         HashCF {
             meta_cf: client.cf_handle(CF_NAME_META).unwrap(),
             sub_meta_cf: client.cf_handle(CF_NAME_HASH_SUB_META).unwrap(),
@@ -45,11 +45,11 @@ impl<'a> HashCF<'a> {
 }
 
 pub struct HashCommand<'a> {
-    client: &'a RocksRawClient,
+    client: &'a RocksClient,
 }
 
 impl<'a> HashCommand<'a> {
-    pub fn new(client: &'a RocksRawClient) -> Self {
+    pub fn new(client: &'a RocksClient) -> Self {
         Self { client }
     }
 
@@ -685,11 +685,11 @@ impl<'a> HashCommand<'a> {
     }
 }
 
-impl RocksCommand for HashCommand<'_> {
+impl TxnCommand for HashCommand<'_> {
     fn txn_del(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
     ) -> RocksResult<()> {
         let key = key.to_owned();
@@ -741,7 +741,7 @@ impl RocksCommand for HashCommand<'_> {
     fn txn_expire_if_needed(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
     ) -> RocksResult<i64> {
         let key = key.to_owned();
@@ -799,7 +799,7 @@ impl RocksCommand for HashCommand<'_> {
     fn txn_expire(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
         timestamp: i64,
         meta_value: &Value,
@@ -820,7 +820,7 @@ impl RocksCommand for HashCommand<'_> {
     fn txn_gc(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
         version: u16,
     ) -> RocksResult<()> {

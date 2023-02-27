@@ -3,12 +3,12 @@ use crate::config::{
     async_gc_worker_queue_size_or_default, LOGGER,
 };
 use crate::metrics::GC_TASK_QUEUE_COUNTER;
-use crate::rocks::client::RocksRawClient;
+use crate::rocks::client::RocksClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::RError;
 use crate::rocks::hash::HashCommand;
 use crate::rocks::list::ListCommand;
-use crate::rocks::{get_client, RocksCommand, CF_NAME_GC, CF_NAME_GC_VERSION, KEY_ENCODER};
+use crate::rocks::{get_client, TxnCommand, CF_NAME_GC, CF_NAME_GC_VERSION, KEY_ENCODER};
 use crc::{Crc, CRC_16_XMODEM};
 use rocksdb::ColumnFamilyRef;
 use slog::{debug, error, info};
@@ -32,7 +32,7 @@ pub struct GcCF<'a> {
 }
 
 impl<'a> GcCF<'a> {
-    pub fn new(client: &'a RocksRawClient) -> Self {
+    pub fn new(client: &'a RocksClient) -> Self {
         GcCF {
             gc_cf: client.cf_handle(CF_NAME_GC).unwrap(),
             gc_version_cf: client.cf_handle(CF_NAME_GC_VERSION).unwrap(),

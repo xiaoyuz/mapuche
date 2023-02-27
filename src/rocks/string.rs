@@ -6,12 +6,12 @@ use glob::Pattern;
 use regex::bytes::Regex;
 
 use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
-use crate::rocks::client::RocksRawClient;
+use crate::rocks::client::RocksClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{RError, REDIS_WRONG_TYPE_ERR};
 use crate::rocks::hash::HashCommand;
 use crate::rocks::kv::bound_range::BoundRange;
-use crate::rocks::{RocksCommand, CF_NAME_META, KEY_ENCODER};
+use crate::rocks::{TxnCommand, CF_NAME_META, KEY_ENCODER};
 use crate::Frame;
 use rocksdb::ColumnFamilyRef;
 
@@ -33,7 +33,7 @@ pub struct StringCF<'a> {
 }
 
 impl<'a> StringCF<'a> {
-    pub fn new(client: &'a RocksRawClient) -> Self {
+    pub fn new(client: &'a RocksClient) -> Self {
         StringCF {
             meta_cf: client.cf_handle(CF_NAME_META).unwrap(),
         }
@@ -41,11 +41,11 @@ impl<'a> StringCF<'a> {
 }
 
 pub struct StringCommand<'a> {
-    client: &'a RocksRawClient,
+    client: &'a RocksClient,
 }
 
 impl<'a> StringCommand<'a> {
-    pub fn new(client: &'a RocksRawClient) -> Self {
+    pub fn new(client: &'a RocksClient) -> Self {
         Self { client }
     }
 
@@ -551,7 +551,7 @@ impl<'a> StringCommand<'a> {
     fn txn_expire_if_needed(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         ekey: &Key,
         meta_value: &Value,
     ) -> RocksResult<i64> {

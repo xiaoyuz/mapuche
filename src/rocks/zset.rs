@@ -1,6 +1,6 @@
 use crate::config::{async_del_zset_threshold_or_default, async_expire_zset_threshold_or_default};
 use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
-use crate::rocks::client::{get_version_for_new, RocksRawClient};
+use crate::rocks::client::{get_version_for_new, RocksClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{REDIS_VALUE_IS_NOT_VALID_FLOAT_ERR, REDIS_WRONG_TYPE_ERR};
 use crate::rocks::kv::bound_range::BoundRange;
@@ -8,7 +8,7 @@ use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
 use crate::rocks::{
-    gen_next_meta_index, Result as RocksResult, RocksCommand, CF_NAME_GC, CF_NAME_GC_VERSION,
+    gen_next_meta_index, Result as RocksResult, TxnCommand, CF_NAME_GC, CF_NAME_GC_VERSION,
     CF_NAME_META, CF_NAME_ZSET_DATA, CF_NAME_ZSET_SCORE, CF_NAME_ZSET_SUB_META, KEY_ENCODER,
 };
 use crate::utils::{key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil};
@@ -26,7 +26,7 @@ pub struct ZsetCF<'a> {
 }
 
 impl<'a> ZsetCF<'a> {
-    pub fn new(client: &'a RocksRawClient) -> Self {
+    pub fn new(client: &'a RocksClient) -> Self {
         ZsetCF {
             meta_cf: client.cf_handle(CF_NAME_META).unwrap(),
             sub_meta_cf: client.cf_handle(CF_NAME_ZSET_SUB_META).unwrap(),
@@ -39,11 +39,11 @@ impl<'a> ZsetCF<'a> {
 }
 
 pub struct ZsetCommand<'a> {
-    client: &'a RocksRawClient,
+    client: &'a RocksClient,
 }
 
 impl<'a> ZsetCommand<'a> {
-    pub fn new(client: &'a RocksRawClient) -> Self {
+    pub fn new(client: &'a RocksClient) -> Self {
         Self { client }
     }
 
@@ -1163,11 +1163,11 @@ impl<'a> ZsetCommand<'a> {
     }
 }
 
-impl RocksCommand for ZsetCommand<'_> {
+impl TxnCommand for ZsetCommand<'_> {
     fn txn_del(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
     ) -> RocksResult<()> {
         let key = key.to_owned();
@@ -1230,7 +1230,7 @@ impl RocksCommand for ZsetCommand<'_> {
     fn txn_expire_if_needed(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
     ) -> RocksResult<i64> {
         let key = key.to_owned();
@@ -1302,7 +1302,7 @@ impl RocksCommand for ZsetCommand<'_> {
     fn txn_expire(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
         timestamp: i64,
         meta_value: &Value,
@@ -1323,7 +1323,7 @@ impl RocksCommand for ZsetCommand<'_> {
     fn txn_gc(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
         version: u16,
     ) -> RocksResult<()> {

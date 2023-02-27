@@ -1,6 +1,6 @@
 use crate::config::{config_meta_key_number_or_default, data_store_dir_or_default};
 use crate::fetch_idx_and_add;
-use crate::rocks::client::RocksRawClient;
+use crate::rocks::client::RocksClient;
 use crate::rocks::encoding::KeyEncoder;
 use crate::rocks::errors::RError;
 use crate::rocks::kv::value::Value;
@@ -41,20 +41,20 @@ lazy_static! {
     pub static ref ROCKS_DB: Arc<TransactionDB> = Arc::new(new_db().unwrap());
 }
 
-pub trait RocksCommand {
-    fn txn_del(&self, txn: &RocksTransaction, client: &RocksRawClient, key: &str) -> Result<()>;
+pub trait TxnCommand {
+    fn txn_del(&self, txn: &RocksTransaction, client: &RocksClient, key: &str) -> Result<()>;
 
     fn txn_expire_if_needed(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
     ) -> Result<i64>;
 
     fn txn_expire(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
         timestamp: i64,
         meta_value: &Value,
@@ -63,7 +63,7 @@ pub trait RocksCommand {
     fn txn_gc(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
         version: u16,
     ) -> Result<()>;
@@ -109,9 +109,9 @@ pub fn get_instance_id() -> u64 {
     unsafe { INSTANCE_ID }
 }
 
-pub async fn get_client() -> RocksRawClient {
+pub async fn get_client() -> RocksClient {
     let db = ROCKS_DB.clone();
-    RocksRawClient::new(db).await
+    RocksClient::new(db).await
 }
 
 pub fn gen_next_meta_index() -> u16 {

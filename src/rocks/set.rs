@@ -2,14 +2,14 @@ use crate::config::{
     async_del_set_threshold_or_default, async_expire_set_threshold_or_default, LOGGER,
 };
 use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
-use crate::rocks::client::{get_version_for_new, RocksRawClient};
+use crate::rocks::client::{get_version_for_new, RocksClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::REDIS_WRONG_TYPE_ERR;
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
 use crate::rocks::{
-    gen_next_meta_index, Result as RocksResult, RocksCommand, CF_NAME_GC, CF_NAME_GC_VERSION,
+    gen_next_meta_index, Result as RocksResult, TxnCommand, CF_NAME_GC, CF_NAME_GC_VERSION,
     CF_NAME_META, CF_NAME_SET_DATA, CF_NAME_SET_SUB_META, KEY_ENCODER,
 };
 use crate::utils::{
@@ -34,7 +34,7 @@ pub struct SetCF<'a> {
 }
 
 impl<'a> SetCF<'a> {
-    pub fn new(client: &'a RocksRawClient) -> Self {
+    pub fn new(client: &'a RocksClient) -> Self {
         SetCF {
             meta_cf: client.cf_handle(CF_NAME_META).unwrap(),
             sub_meta_cf: client.cf_handle(CF_NAME_SET_SUB_META).unwrap(),
@@ -46,11 +46,11 @@ impl<'a> SetCF<'a> {
 }
 
 pub struct SetCommand<'a> {
-    client: &'a RocksRawClient,
+    client: &'a RocksClient,
 }
 
 impl<'a> SetCommand<'a> {
-    pub fn new(client: &'a RocksRawClient) -> Self {
+    pub fn new(client: &'a RocksClient) -> Self {
         Self { client }
     }
 
@@ -583,11 +583,11 @@ impl<'a> SetCommand<'a> {
     }
 }
 
-impl RocksCommand for SetCommand<'_> {
+impl TxnCommand for SetCommand<'_> {
     fn txn_del(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
     ) -> RocksResult<()> {
         let key = key.to_owned();
@@ -636,7 +636,7 @@ impl RocksCommand for SetCommand<'_> {
     fn txn_expire_if_needed(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
     ) -> RocksResult<i64> {
         let key = key.to_owned();
@@ -691,7 +691,7 @@ impl RocksCommand for SetCommand<'_> {
     fn txn_expire(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
         timestamp: i64,
         meta_value: &Value,
@@ -712,7 +712,7 @@ impl RocksCommand for SetCommand<'_> {
     fn txn_gc(
         &self,
         txn: &RocksTransaction,
-        client: &RocksRawClient,
+        client: &RocksClient,
         key: &str,
         version: u16,
     ) -> RocksResult<()> {

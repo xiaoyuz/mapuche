@@ -16,11 +16,11 @@ use crate::rocks::transaction::RocksTransaction;
 use crate::rocks::{Result as RocksResult, KEY_ENCODER};
 use crate::server::duration_to_sec;
 
-pub struct RocksRawClient {
+pub struct RocksClient {
     client: Arc<TransactionDB>,
 }
 
-impl RocksRawClient {
+impl RocksClient {
     pub async fn new(client: Arc<TransactionDB>) -> Self {
         Self { client }
     }
