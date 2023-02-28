@@ -584,12 +584,7 @@ impl<'a> SetCommand<'a> {
 }
 
 impl TxnCommand for SetCommand<'_> {
-    fn txn_del(
-        &self,
-        txn: &RocksTransaction,
-        client: &RocksClient,
-        key: &str,
-    ) -> RocksResult<()> {
+    fn txn_del(&self, txn: &RocksTransaction, client: &RocksClient, key: &str) -> RocksResult<()> {
         let key = key.to_owned();
         let meta_key = KEY_ENCODER.encode_meta_key(&key);
         let cfs = SetCF::new(client);

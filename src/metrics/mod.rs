@@ -47,6 +47,11 @@ lazy_static! {
         &["kind"]
     )
     .unwrap();
+    pub static ref REQUEST_CMD_ERROR_COUNTER: IntCounterVec = register_int_counter_vec!(
+        "redis_command_errors_total",
+        "Request command error counter",
+        &["cmd"]
+    ).unwrap();
 
     // Trasactions
     pub static ref TXN_COUNTER: IntCounter = register_int_counter!("redis_txn_count_total", "Transactions count").unwrap();

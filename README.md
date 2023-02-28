@@ -31,7 +31,7 @@ log_file = "rocksdb-service.log"
 [backend]
 local_pool_number = 8
 max_connection = 10000
-data_store_dir = ./mapuche_store
+data_store_dir = "./mapuche_store"
 ```
 
 - Run clients
@@ -247,6 +247,14 @@ tidis> ZRANGE myzset 0 5 WITHSCORES
     +------------------+---------------------------------------------------------------+
     |      zincrby     | zincrby key increment member                                  |
     +------------------+---------------------------------------------------------------+
+
+### Security
+
+    +-------------+----------------------+
+    |   commands  |      format          |
+    +-------------+----------------------+
+    |    auth     | auth password        |
+    +-------------+----------------------+
 
 ## Acknowledgment
 

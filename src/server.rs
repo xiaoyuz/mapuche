@@ -3,13 +3,19 @@ use std::collections::HashMap;
 
 use crate::client::Client;
 use crate::config::{
-    async_gc_worker_number_or_default, config_local_pool_number, config_max_connection, LOGGER,
+    async_gc_worker_number_or_default, config_local_pool_number, config_max_connection,
+    is_auth_enabled, is_auth_matched, LOGGER,
 };
 use crate::gc::GcMaster;
 use crate::metrics::{
-    CURRENT_CONNECTION_COUNTER, REQUEST_CMD_COUNTER, REQUEST_CMD_FINISH_COUNTER,
-    REQUEST_CMD_HANDLE_TIME, REQUEST_COUNTER, TOTAL_CONNECTION_PROCESSED,
+    CURRENT_CONNECTION_COUNTER, REQUEST_CMD_COUNTER, REQUEST_CMD_ERROR_COUNTER,
+    REQUEST_CMD_FINISH_COUNTER, REQUEST_CMD_HANDLE_TIME, REQUEST_COUNTER,
+    TOTAL_CONNECTION_PROCESSED,
 };
+use crate::rocks::errors::{
+    REDIS_AUTH_INVALID_PASSWORD_ERR, REDIS_AUTH_REQUIRED_ERR, REDIS_AUTH_WHEN_DISABLED_ERR,
+};
+use crate::utils::{resp_err, resp_invalid_arguments, resp_ok};
 use slog::{debug, error, info};
 use std::future::Future;
 use std::sync::Arc;
@@ -72,6 +78,7 @@ struct Handler {
     clients: Arc<Mutex<HashMap<u64, Arc<Mutex<Client>>>>>,
     connection: Connection,
     shutdown: Shutdown,
+    authorized: bool,
     _shutdown_complete: mpsc::Sender<()>,
 }
 
@@ -217,6 +224,7 @@ impl Listener {
                 clients: self.clients.clone(),
                 connection: Connection::new(socket),
                 shutdown: Shutdown::new(self.notify_shutdown.subscribe(), kill_rx),
+                authorized: !is_auth_enabled(),
                 _shutdown_complete: self.shutdown_complete_tx.clone(),
             };
             local_pool.spawn_pinned(|| async move {
@@ -324,16 +332,62 @@ impl Handler {
 
             debug!(LOGGER, "req, {:?}", cmd);
 
-            // Perform the work needed to apply the command. This may mutate the
-            // database state as a result.
-            //
-            // The connection is passed into the apply function which allows the
-            // command to write response frames directly to the connection. In
-            // the case of pub/sub, multiple frames may be send back to the
-            // peer.
-            cmd.apply(&self.db, &mut self.connection, &mut self.shutdown)
-                .await?;
+            match cmd {
+                Command::Auth(c) => {
+                    if !c.valid() {
+                        self.connection
+                            .write_frame(&resp_invalid_arguments())
+                            .await?;
+                    } else if !is_auth_enabled() {
+                        // check password and update connection authorized flag
+                        self.connection
+                            .write_frame(&resp_err(REDIS_AUTH_WHEN_DISABLED_ERR))
+                            .await?;
+                    } else if is_auth_matched(c.passwd()) {
+                        self.connection.write_frame(&resp_ok()).await?;
+                        self.authorized = true;
+                    } else {
+                        self.connection
+                            .write_frame(&resp_err(REDIS_AUTH_INVALID_PASSWORD_ERR))
+                            .await?;
+                    }
+                }
+                _ => {
+                    if !self.authorized {
+                        self.connection
+                            .write_frame(&resp_err(REDIS_AUTH_REQUIRED_ERR))
+                            .await?;
+                    } else {
+                        // Perform the work needed to apply the command. This may mutate the
+                        // database state as a result.
+                        //
+                        // The connection is passed into the apply function which allows the
+                        // command to write response frames directly to the connection. In
+                        // the case of pub/sub, multiple frames may be send back to the
+                        // peer.
 
+                        // Perform the work needed to apply the command. This may mutate the
+                        // database state as a result.
+                        //
+                        // The connection is passed into the apply function which allows the
+                        // command to write response frames directly to the connection. In
+                        // the case of pub/sub, multiple frames may be send back to the
+                        // peer.
+                        match cmd
+                            .apply(&self.db, &mut self.connection, &mut self.shutdown)
+                            .await
+                        {
+                            Ok(_) => (),
+                            Err(e) => {
+                                REQUEST_CMD_ERROR_COUNTER
+                                    .with_label_values(&[&cmd_name])
+                                    .inc();
+                                return Err(e);
+                            }
+                        };
+                    }
+                }
+            }
             let duration = Instant::now() - start_at;
             REQUEST_CMD_HANDLE_TIME
                 .with_label_values(&[&cmd_name])

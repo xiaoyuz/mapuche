@@ -174,6 +174,9 @@ pub use zremrangebyscore::Zremrangebyscore;
 mod keys;
 pub use keys::Keys;
 
+mod auth;
+pub use auth::Auth;
+
 use crate::config::txn_retry_count;
 use crate::metrics::TXN_RETRY_COUNTER;
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
@@ -262,6 +265,8 @@ pub enum Command {
     Zpopmax(Zpop),
     Zrank(Zrank),
     Zincrby(Zincrby),
+
+    Auth(Auth),
 
     Unknown(Unknown),
 }
@@ -450,6 +455,7 @@ impl Command {
                 Zincrby::parse_frames(&mut parse),
                 &mut parse,
             )),
+            "auth" => Command::Auth(transform_parse(Auth::parse_frames(&mut parse), &mut parse)),
 
             _ => {
                 // The command is not recognized and an Unknown command is
@@ -557,6 +563,8 @@ impl Command {
             // `Unsubscribe` cannot be applied. It may only be received from the
             // context of a `Subscribe` command.
             Unsubscribe(_) => Err("`Unsubscribe` is unsupported in this context".into()),
+
+            _ => Ok(()),
         }
     }
 
@@ -632,6 +640,7 @@ impl Command {
             Command::Zpopmax(_) => "zpopmax",
             Command::Zrank(_) => "zrank",
             Command::Zincrby(_) => "zincrby",
+            Command::Auth(_) => "auth",
 
             Command::Unknown(cmd) => cmd.get_name(),
         }

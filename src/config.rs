@@ -37,6 +37,7 @@ struct Server {
     instance_id: Option<String>,
     prometheus_listen: Option<String>,
     prometheus_port: Option<u16>,
+    password: Option<String>,
     log_level: Option<String>,
     log_file: Option<String>,
     meta_key_number: Option<u16>,
@@ -423,4 +424,27 @@ pub fn txn_retry_count() -> u32 {
     }
     // default to 3
     10
+}
+
+pub fn is_auth_enabled() -> bool {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if c.server.password.clone().is_some() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+// return false only if auth is enabled and password mismatch
+pub fn is_auth_matched(password: &str) -> bool {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.server.password.clone() {
+                return s == password;
+            }
+        }
+    }
+    true
 }
