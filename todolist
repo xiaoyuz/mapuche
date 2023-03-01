@@ -1,0 +1,2 @@
+1. Raft protocol support.
+2. Think about a better design for List storage, to avoid the large write lock on meta-data.

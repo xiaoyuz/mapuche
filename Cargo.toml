@@ -1,12 +1,11 @@
 [package]
-authors = ["xiaoyuz <alexanderxiaoyu@gmail.com>"]
+authors = ["xiaoyuz <xiaoyuz@opera.com>"]
 name = "mapuche"
 version = "0.1.0"
 edition = "2021"
 readme = "README.md"
 description = """
-An incomplete implementation of a Rust client and server. Used as a
-larger example of an idiomatic Tokio application.
+An implementation of a Redis protocol server, with RocksDB as KV storage.
 """
 
 [[bin]]
