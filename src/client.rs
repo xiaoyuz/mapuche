@@ -18,9 +18,6 @@ pub struct Client {
     // last command played
     cmd: String,
 
-    local_addr: String,
-    peer_addr: String,
-
     create_time: SystemTime,
     last_interaction: SystemTime,
 
@@ -35,8 +32,6 @@ impl Client {
             name: "".to_owned(),
             fd: socket.as_raw_fd(),
             cmd: "".to_owned(),
-            local_addr: socket.local_addr().unwrap_or_default().to_string(),
-            peer_addr: socket.peer_addr().unwrap_or_default().to_string(),
             create_time: now,
             last_interaction: now,
             kill_tx,
@@ -60,13 +55,6 @@ impl Client {
         self.name.as_str()
     }
 
-    pub fn local_addr(&self) -> &str {
-        &self.local_addr
-    }
-    pub fn peer_addr(&self) -> &str {
-        &self.peer_addr
-    }
-
     pub fn age(&self) -> u64 {
         self.create_time.elapsed().unwrap().as_secs()
     }
@@ -84,12 +72,10 @@ impl fmt::Display for Client {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
-            "id={} addr={} laddr={} fd={} name={} age={} idle={} flags=N \
+            "id={} fd={} name={} age={} idle={} flags=N \
             db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=0 argv-mem=10 obl=0 oll=0 omem=0 \
             tot-mem=0 events=r cmd={} user=default redir=-1",
             self.id,
-            self.peer_addr,
-            self.local_addr,
             self.fd,
             self.name,
             self.age(),
