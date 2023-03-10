@@ -14,6 +14,7 @@ use mapuche::config::{
     config_max_connection, config_port_or_default, config_prometheus_listen_or_default,
     config_prometheus_port_or_default, config_ring_port_or_default,
     config_ring_v_node_num_or_default, set_global_config, Config,
+    data_store_dir_or_default
 };
 use mapuche::hash_ring::{HashRing, NodeInfo};
 use mapuche::metrics::PrometheusServer;
@@ -88,11 +89,11 @@ pub async fn main() -> mapuche::Result<()> {
     }
 
     thread::spawn(|| {
+        let raft_store_path = format!("{}/raft", data_store_dir_or_default());
         let rt = Runtime::new().unwrap();
-        let x =
-            rt.block_on(
-                async move { start_raft_node(1, "127.0.0.1:21001".to_string()).await },
-            );
+        let x = rt.block_on(async move {
+            start_raft_node(1, raft_store_path, "127.0.0.1:21001".to_string()).await
+        });
         println!("x: {:?}", x);
     });
 

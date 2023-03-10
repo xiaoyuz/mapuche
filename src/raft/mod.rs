@@ -2,6 +2,7 @@ use actix_web::middleware::Logger;
 use actix_web::web::Data;
 use actix_web::{middleware, App, HttpServer};
 use openraft::{declare_raft_types, BasicNode, Config, Raft};
+use std::path::Path;
 
 use std::sync::Arc;
 
@@ -37,10 +38,14 @@ declare_raft_types!(
 pub type MapucheRaft = Raft<TypeConfig, MapucheNetwork, Arc<RocksStore>>;
 
 #[allow(dead_code)]
-pub async fn start_raft_node(
+pub async fn start_raft_node<P>(
     node_id: MapucheNodeId,
+    dir: P,
     http_addr: String,
-) -> std::io::Result<()> {
+) -> std::io::Result<()>
+where
+    P: AsRef<Path>,
+{
     // Create a configuration for the raft instance.
     let config = Config {
         heartbeat_interval: 500,
@@ -52,7 +57,7 @@ pub async fn start_raft_node(
     let config = Arc::new(config.validate().unwrap());
 
     // Create a instance of where the Raft data will be stored.
-    let store = Arc::new(RocksStore::default());
+    let store = RocksStore::new(&dir).await;
 
     // Create the network layer that will connect and communicate the raft instances and
     // will be used in conjunction with the store created above.
