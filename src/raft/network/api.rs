@@ -1,9 +1,10 @@
 use crate::raft::app::MapucheRaftApp;
 use crate::raft::store::RocksRequest;
-use crate::raft::{MapucheNode, MapucheNodeId};
+use crate::raft::MapucheNodeId;
 use actix_web::web::{Data, Json};
 use actix_web::{post, Responder};
 use openraft::error::{CheckIsLeaderError, Infallible, RaftError};
+use openraft::BasicNode;
 
 /**
  * Application API
@@ -30,7 +31,8 @@ pub async fn read(
 ) -> actix_web::Result<impl Responder> {
     let state_machine = app.store.state_machine.read().await;
     let key = req.0;
-    let value = state_machine.get(&key).unwrap_or_default();
+    let value = state_machine.data.get(&key).cloned();
+
     let res: Result<String, Infallible> = Ok(value.unwrap_or_default());
     Ok(Json(res))
 }
@@ -46,11 +48,11 @@ pub async fn consistent_read(
         Ok(_) => {
             let state_machine = app.store.state_machine.read().await;
             let key = req.0;
-            let value = state_machine.get(&key).unwrap_or_default();
+            let value = state_machine.data.get(&key).cloned();
 
             let res: Result<
                 String,
-                RaftError<MapucheNodeId, CheckIsLeaderError<MapucheNodeId, MapucheNode>>,
+                RaftError<MapucheNodeId, CheckIsLeaderError<MapucheNodeId, BasicNode>>,
             > = Ok(value.unwrap_or_default());
             Ok(Json(res))
         }

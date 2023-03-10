@@ -1,10 +1,12 @@
 use mapuche::{server, P2P_CLIENT, RING_NODES};
 use std::process::exit;
+use std::thread;
 
 use clap::Parser;
 use local_ip_address::local_ip;
 use sysinfo::set_open_files_limit;
 use tokio::net::TcpListener;
+use tokio::runtime::Runtime;
 use tokio::{fs, signal};
 
 use mapuche::config::{
@@ -17,6 +19,7 @@ use mapuche::hash_ring::{HashRing, NodeInfo};
 use mapuche::metrics::PrometheusServer;
 use mapuche::p2p::client::P2PClient;
 use mapuche::p2p::server::P2PServer;
+use mapuche::raft::start_raft_node;
 use mapuche::rocks::set_instance_id;
 
 #[tokio::main]
@@ -83,6 +86,15 @@ pub async fn main() -> mapuche::Result<()> {
     if !config_cluster_or_default().is_empty() {
         start_cluster().await?;
     }
+
+    thread::spawn(|| {
+        let rt = Runtime::new().unwrap();
+        let x =
+            rt.block_on(
+                async move { start_raft_node(1, "127.0.0.1:21001".to_string()).await },
+            );
+        println!("x: {:?}", x);
+    });
 
     // Bind a TCP listener
     let listener = TcpListener::bind(&format!("{}:{}", &listen_addr, port)).await?;

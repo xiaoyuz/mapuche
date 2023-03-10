@@ -35,7 +35,7 @@ pub mod gc;
 pub mod hash_ring;
 pub mod metrics;
 pub mod p2p;
-mod raft;
+pub mod raft;
 pub mod rocks;
 mod shutdown;
 pub mod utils;

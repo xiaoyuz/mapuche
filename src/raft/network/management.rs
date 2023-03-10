@@ -1,11 +1,11 @@
 // --- Cluster management
 
 use crate::raft::app::MapucheRaftApp;
-use crate::raft::{MapucheNode, MapucheNodeId};
+use crate::raft::MapucheNodeId;
 use actix_web::web::{Data, Json};
 use actix_web::{get, post, Responder};
 use openraft::error::Infallible;
-use openraft::RaftMetrics;
+use openraft::{BasicNode, RaftMetrics};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Add a node as **Learner**.
@@ -16,12 +16,11 @@ use std::collections::{BTreeMap, BTreeSet};
 #[post("/add-learner")]
 pub async fn add_learner(
     app: Data<MapucheRaftApp>,
-    req: Json<(MapucheNodeId, String, String)>,
+    req: Json<(MapucheNodeId, String)>,
 ) -> actix_web::Result<impl Responder> {
     let node_id = req.0 .0;
-    let node = MapucheNode {
-        rpc_addr: req.0 .1,
-        api_addr: req.0 .2,
+    let node = BasicNode {
+        addr: req.0 .1.clone(),
     };
     let res = app.raft.add_learner(node_id, node, true).await;
     Ok(Json(res))
@@ -41,11 +40,12 @@ pub async fn change_membership(
 #[post("/init")]
 pub async fn init(app: Data<MapucheRaftApp>) -> actix_web::Result<impl Responder> {
     let mut nodes = BTreeMap::new();
-    let node = MapucheNode {
-        api_addr: app.api_addr.clone(),
-        rpc_addr: app.rpc_addr.clone(),
-    };
-    nodes.insert(app.id, node);
+    nodes.insert(
+        app.id,
+        BasicNode {
+            addr: app.addr.clone(),
+        },
+    );
     let res = app.raft.initialize(nodes).await;
     Ok(Json(res))
 }
@@ -55,6 +55,11 @@ pub async fn init(app: Data<MapucheRaftApp>) -> actix_web::Result<impl Responder
 pub async fn metrics(app: Data<MapucheRaftApp>) -> actix_web::Result<impl Responder> {
     let metrics = app.raft.metrics().borrow().clone();
 
-    let res: Result<RaftMetrics<MapucheNodeId, MapucheNode>, Infallible> = Ok(metrics);
+    let res: Result<RaftMetrics<MapucheNodeId, BasicNode>, Infallible> = Ok(metrics);
     Ok(Json(res))
+}
+
+#[get("/hello")]
+pub async fn hello(_app: Data<MapucheRaftApp>) -> impl Responder {
+    "hello"
 }

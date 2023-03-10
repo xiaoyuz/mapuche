@@ -1,11 +1,11 @@
-use crate::raft::{MapucheNode, MapucheNodeId, TypeConfig};
+use crate::raft::{MapucheNodeId, TypeConfig};
 use async_trait::async_trait;
 use openraft::error::{InstallSnapshotError, NetworkError, RPCError, RaftError, RemoteError};
 use openraft::raft::{
     AppendEntriesRequest, AppendEntriesResponse, InstallSnapshotRequest, InstallSnapshotResponse,
     VoteRequest, VoteResponse,
 };
-use openraft::{RaftNetwork, RaftNetworkFactory};
+use openraft::{BasicNode, RaftNetwork, RaftNetworkFactory};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -15,16 +15,16 @@ impl MapucheNetwork {
     pub async fn send_rpc<Req, Resp, Err>(
         &self,
         target: MapucheNodeId,
-        target_node: &MapucheNode,
+        target_node: &BasicNode,
         uri: &str,
         req: Req,
-    ) -> Result<Resp, RPCError<MapucheNodeId, MapucheNode, Err>>
+    ) -> Result<Resp, RPCError<MapucheNodeId, BasicNode, Err>>
     where
         Req: Serialize,
         Err: std::error::Error + DeserializeOwned,
         Resp: DeserializeOwned,
     {
-        let addr = &target_node.api_addr;
+        let addr = &target_node.addr;
         let url = format!("http://{}/{}", addr, uri);
         let client = reqwest::Client::new();
         let resp = client
@@ -45,7 +45,7 @@ impl MapucheNetwork {
 impl RaftNetworkFactory<TypeConfig> for MapucheNetwork {
     type Network = MapucheNetworkConnection;
 
-    async fn new_client(&mut self, target: MapucheNodeId, node: &MapucheNode) -> Self::Network {
+    async fn new_client(&mut self, target: MapucheNodeId, node: &BasicNode) -> Self::Network {
         MapucheNetworkConnection {
             owner: MapucheNetwork {},
             target,
@@ -57,7 +57,7 @@ impl RaftNetworkFactory<TypeConfig> for MapucheNetwork {
 pub struct MapucheNetworkConnection {
     owner: MapucheNetwork,
     target: MapucheNodeId,
-    target_node: MapucheNode,
+    target_node: BasicNode,
 }
 
 #[async_trait]
@@ -67,7 +67,7 @@ impl RaftNetwork<TypeConfig> for MapucheNetworkConnection {
         req: AppendEntriesRequest<TypeConfig>,
     ) -> Result<
         AppendEntriesResponse<MapucheNodeId>,
-        RPCError<MapucheNodeId, MapucheNode, RaftError<MapucheNodeId>>,
+        RPCError<MapucheNodeId, BasicNode, RaftError<MapucheNodeId>>,
     > {
         self.owner
             .send_rpc(self.target, &self.target_node, "raft-append", req)
@@ -79,7 +79,7 @@ impl RaftNetwork<TypeConfig> for MapucheNetworkConnection {
         req: InstallSnapshotRequest<TypeConfig>,
     ) -> Result<
         InstallSnapshotResponse<MapucheNodeId>,
-        RPCError<MapucheNodeId, MapucheNode, RaftError<MapucheNodeId, InstallSnapshotError>>,
+        RPCError<MapucheNodeId, BasicNode, RaftError<MapucheNodeId, InstallSnapshotError>>,
     > {
         self.owner
             .send_rpc(self.target, &self.target_node, "raft-snapshot", req)
@@ -91,7 +91,7 @@ impl RaftNetwork<TypeConfig> for MapucheNetworkConnection {
         req: VoteRequest<MapucheNodeId>,
     ) -> Result<
         VoteResponse<MapucheNodeId>,
-        RPCError<MapucheNodeId, MapucheNode, RaftError<MapucheNodeId>>,
+        RPCError<MapucheNodeId, BasicNode, RaftError<MapucheNodeId>>,
     > {
         self.owner
             .send_rpc(self.target, &self.target_node, "raft-vote", req)
