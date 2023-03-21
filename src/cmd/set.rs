@@ -206,11 +206,10 @@ impl Set {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        Ok(match self.nx {
+        match self.nx {
             Some(_) => self.put_not_exists().await,
             None => self.put().await,
         }
-        .unwrap_or_else(Into::into))
     }
 
     async fn put_not_exists(&self) -> RocksResult<Frame> {

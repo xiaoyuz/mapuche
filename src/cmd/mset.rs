@@ -64,7 +64,7 @@ impl Mset {
     }
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = self.batch_put().await.unwrap_or_else(Into::into);
+        let response = self.batch_put().await?;
 
         debug!(LOGGER, "res, {:?}", response);
 

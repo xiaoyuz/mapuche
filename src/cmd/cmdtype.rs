@@ -43,7 +43,7 @@ impl Type {
     }
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = self.cmd_type().await.unwrap_or_else(Into::into);
+        let response = self.cmd_type().await?;
 
         debug!(LOGGER, "res, {:?}", response);
 

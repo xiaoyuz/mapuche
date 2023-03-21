@@ -37,6 +37,7 @@ crc = "2.0"
 tokio-util = { version = "0.7.1", features = ["rt"] }
 sysinfo = "0.28.0"
 glob = "0.3.1"
+anyhow = "1.0.70"
 
 [dev-dependencies]
 # Enable test-utilities in dev mode only. This is mostly for tests.

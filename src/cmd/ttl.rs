@@ -46,7 +46,7 @@ impl TTL {
     }
 
     pub(crate) async fn apply(&self, dst: &mut Connection, is_millis: bool) -> crate::Result<()> {
-        let response = self.ttl(is_millis).await.unwrap_or_else(Into::into);
+        let response = self.ttl(is_millis).await?;
 
         debug!(LOGGER, "res, {:?}", response);
 

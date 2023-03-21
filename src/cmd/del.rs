@@ -51,7 +51,7 @@ impl Del {
     }
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = self.del().await.unwrap_or_else(Into::into);
+        let response = self.del().await?;
         debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;
 

@@ -80,7 +80,7 @@ impl Get {
     /// to execute a received command.
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         // Get the value from the shared database state
-        let response = self.get().await.unwrap_or_else(Into::into);
+        let response = self.get().await?;
 
         debug!(LOGGER, "res, {:?}", response);
 

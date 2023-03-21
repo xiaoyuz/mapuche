@@ -32,7 +32,7 @@ pub const CF_NAME_ZSET_SUB_META: &str = "zset_sub_meta";
 pub const CF_NAME_ZSET_DATA: &str = "zset_data";
 pub const CF_NAME_ZSET_SCORE: &str = "zset_score";
 
-pub type Result<T> = std::result::Result<T, RError>;
+pub type Result<T> = anyhow::Result<T, RError>;
 
 pub static mut INSTANCE_ID: u64 = 0;
 

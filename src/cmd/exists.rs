@@ -53,7 +53,7 @@ impl Exists {
     }
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = self.exists().await.unwrap_or_else(Into::into);
+        let response = self.exists().await?;
 
         debug!(LOGGER, "res, {:?}", response);
 
