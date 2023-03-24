@@ -33,6 +33,7 @@ pub mod server;
 
 pub mod gc;
 pub mod metrics;
+pub mod p2p;
 pub mod rocks;
 mod shutdown;
 pub mod utils;
@@ -43,6 +44,7 @@ use shutdown::Shutdown;
 ///
 /// Used if no port is specified.
 pub const DEFAULT_PORT: &str = "6380";
+pub const DEFAULT_RING_PORT: &str = "6123";
 
 /// Error returned by most functions.
 ///
