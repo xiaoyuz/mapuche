@@ -7,11 +7,12 @@ use crate::rocks::{get_client, KEY_ENCODER};
 use crate::utils::resp_invalid_arguments;
 use crate::{Connection, Frame};
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 use slog::debug;
 
 use crate::rocks::Result as RocksResult;
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Mset {
     keys: Vec<String>,
     vals: Vec<Bytes>,

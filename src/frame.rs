@@ -1,5 +1,6 @@
 use crate::rocks::errors::RError;
 use bytes::{Buf, Bytes};
+use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::fmt;
 use std::io::Cursor;
@@ -7,7 +8,7 @@ use std::num::TryFromIntError;
 use std::string::FromUtf8Error;
 
 /// A frame in the Redis protocol.
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Frame {
     Simple(String),
     Error(String),

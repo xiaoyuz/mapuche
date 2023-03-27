@@ -1,7 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::ops::Bound;
 
-#[derive(Default, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Key(pub(super) Vec<u8>);
 
 impl Key {

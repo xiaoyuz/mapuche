@@ -3,6 +3,7 @@ use crate::{Connection, Frame, Parse};
 use crate::cmd::Invalid;
 use crate::config::LOGGER;
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 use slog::debug;
 
 use crate::rocks::string::StringCommand;
@@ -14,7 +15,7 @@ use crate::utils::resp_invalid_arguments;
 /// If the key does not exist the special value nil is returned. An error is
 /// returned if the value stored at key is not a string, because GET only
 /// handles string values.
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Get {
     /// Name of the key to get
     key: String,

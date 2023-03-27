@@ -1,9 +1,10 @@
 use crate::config::LOGGER;
 use crate::{Connection, Frame};
+use serde::{Deserialize, Serialize};
 use slog::debug;
 
 /// Represents an "unknown" command. This is not a real `Redis` command.
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Unknown {
     command_name: String,
 }

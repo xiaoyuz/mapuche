@@ -1,8 +1,9 @@
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
+use serde::{Deserialize, Serialize};
 use std::{fmt, str};
 
-#[derive(Default, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq)]
 pub struct KvPair(pub Key, pub Value);
 
 impl KvPair {

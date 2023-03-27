@@ -3,13 +3,14 @@ use crate::config::LOGGER;
 use crate::parse::Parse;
 use crate::{Connection, Frame};
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 use slog::debug;
 
 use crate::rocks::string::StringCommand;
 use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Type {
     key: String,
     valid: bool,

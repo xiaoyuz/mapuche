@@ -5,11 +5,12 @@ use crate::rocks::string::StringCommand;
 use crate::utils::resp_invalid_arguments;
 use crate::{Connection, Frame};
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 use slog::debug;
 
 use crate::rocks::{get_client, Result as RocksResult};
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Mget {
     /// Name of the keys to get
     keys: Vec<String>,

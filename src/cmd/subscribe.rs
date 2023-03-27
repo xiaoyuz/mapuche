@@ -2,6 +2,7 @@ use crate::cmd::{Parse, ParseError, Unknown};
 use crate::{Command, Connection, Db, Frame, Shutdown};
 
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 use tokio::select;
 use tokio::sync::broadcast;
@@ -12,7 +13,7 @@ use tokio_stream::{Stream, StreamExt, StreamMap};
 /// Once the client enters the subscribed state, it is not supposed to issue any
 /// other commands, except for additional SUBSCRIBE, PSUBSCRIBE, UNSUBSCRIBE,
 /// PUNSUBSCRIBE, PING and QUIT commands.
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Subscribe {
     channels: Vec<String>,
 }
@@ -21,7 +22,7 @@ pub struct Subscribe {
 ///
 /// When no channels are specified, the client is unsubscribed from all the
 /// previously subscribed channels.
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Unsubscribe {
     channels: Vec<String>,
 }

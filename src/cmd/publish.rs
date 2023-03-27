@@ -1,6 +1,7 @@
 use crate::{Connection, Db, Frame, Parse};
 
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 
 /// Posts a message to the given channel.
 ///
@@ -9,7 +10,7 @@ use bytes::Bytes;
 ///
 /// Channel names have no relation to the key-value namespace. Publishing on a
 /// channel named "foo" has no relation to setting the "foo" key.
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Publish {
     /// Name of the channel on which the message should be published.
     channel: String,

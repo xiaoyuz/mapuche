@@ -1,8 +1,9 @@
 use crate::Parse;
+use serde::{Deserialize, Serialize};
 
 use crate::cmd::Invalid;
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Auth {
     passwd: String,
     valid: bool,

@@ -4,13 +4,14 @@ use crate::parse::Parse;
 use crate::{Connection, Frame};
 use bytes::Bytes;
 use futures::FutureExt;
+use serde::{Deserialize, Serialize};
 use slog::debug;
 
 use crate::rocks::string::StringCommand;
 use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::{resp_invalid_arguments, timestamp_from_ttl};
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Expire {
     key: String,
     seconds: i64,

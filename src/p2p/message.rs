@@ -1,8 +1,16 @@
+use crate::Command;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Message {
-    PingMessage { address: String },
+    PingMessage {
+        address: String,
+    },
+    CmdMessage {
+        address: String,
+        cmd: Command,
+        ts: i64,
+    },
 }
 
 impl From<&Message> for String {

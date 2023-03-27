@@ -2,6 +2,7 @@ mod get;
 
 use futures::future::BoxFuture;
 pub use get::Get;
+use serde::{Deserialize, Serialize};
 
 mod publish;
 pub use publish::Publish;
@@ -186,7 +187,7 @@ use crate::rocks::Result as RocksResult;
 /// Enumeration of supported Redis commands.
 ///
 /// Methods called on `Command` are delegated to the command implementation.
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Command {
     Get(Get),
     Mget(Mget),

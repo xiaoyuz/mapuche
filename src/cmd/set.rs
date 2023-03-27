@@ -3,6 +3,7 @@ use crate::{Connection, Frame};
 
 use crate::config::LOGGER;
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 use slog::debug;
 
 use crate::rocks::string::StringCommand;
@@ -22,7 +23,7 @@ use crate::rocks::{get_client, Result as RocksResult};
 ///
 /// * EX `seconds` -- Set the specified expire time, in seconds.
 /// * PX `milliseconds` -- Set the specified expire time, in milliseconds.
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Set {
     /// the lookup key
     key: String,

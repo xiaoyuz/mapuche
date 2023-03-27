@@ -7,7 +7,11 @@ use sysinfo::set_open_files_limit;
 use tokio::net::TcpListener;
 use tokio::{fs, signal};
 
-use mapuche::config::{config_instance_id_or_default, config_listen_or_default, config_max_connection, config_port_or_default, config_prometheus_listen_or_default, config_prometheus_port_or_default, set_global_config, Config, config_cluster_or_default, config_ring_port_or_default};
+use mapuche::config::{
+    config_cluster_or_default, config_instance_id_or_default, config_listen_or_default,
+    config_max_connection, config_port_or_default, config_prometheus_listen_or_default,
+    config_prometheus_port_or_default, config_ring_port_or_default, set_global_config, Config,
+};
 use mapuche::metrics::PrometheusServer;
 use mapuche::p2p::client::P2PClient;
 use mapuche::p2p::server::P2PServer;
