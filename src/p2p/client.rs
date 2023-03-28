@@ -1,19 +1,17 @@
-use crate::p2p::channel::{create_client_channel, create_signal_channel};
 use crate::p2p::message::Message;
 use crate::p2p::message::Message::PingMessage;
 use crate::utils::sleep;
 use local_ip_address::local_ip;
 use std::collections::HashMap;
-use std::ops::Deref;
+
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::{io, select, spawn};
 
-type ChannelSignalSender = Arc<mpsc::Sender<Message>>;
-type ChannelSignalReceiver = mpsc::Receiver<Message>;
-type ClientConMap = Arc<Mutex<HashMap<String, ChannelSignalSender>>>;
+type ClientConMap =
+    Arc<Mutex<HashMap<String, (mpsc::Sender<Message>, broadcast::Sender<Message>)>>>;
 
 pub struct P2PClient {
     client_con_map: ClientConMap,
@@ -27,21 +25,34 @@ impl P2PClient {
     }
 
     pub async fn add_con(&self, server_url: &str) -> crate::Result<()> {
-        let (signal_channel_tx, signal_channel_rx) = create_signal_channel();
-        let con = ClientCon::new(server_url.to_string(), signal_channel_rx);
+        let (signal_channel_tx, signal_channel_rx) = mpsc::channel(1024);
+        let (response_tx, _) = broadcast::channel(1024);
+        let con = ClientCon::new(
+            server_url.to_string(),
+            signal_channel_rx,
+            response_tx.clone(),
+        );
         con.start()?;
         self.client_con_map
             .lock()
             .await
-            .insert(server_url.to_string(), signal_channel_tx);
+            .insert(server_url.to_string(), (signal_channel_tx, response_tx));
         Ok(())
     }
 
     pub async fn call(&self, server_url: &str, message: Message) -> crate::Result<()> {
         if let Some(sender) = self.client_con_map.lock().await.get(server_url) {
-            sender.send(message).await?
+            sender.0.send(message).await?
         }
         Ok(())
+    }
+
+    pub async fn subscribe(&self, server_url: &str) -> Option<broadcast::Receiver<Message>> {
+        self.client_con_map
+            .lock()
+            .await
+            .get(server_url)
+            .map(|p| p.1.subscribe())
     }
 }
 
@@ -53,16 +64,20 @@ impl Default for P2PClient {
 
 pub struct ClientCon {
     server_url: String,
-    signal_channel_rx: ChannelSignalReceiver,
-    response_tx: Option<broadcast::Sender<Message>>,
+    signal_channel_rx: mpsc::Receiver<Message>,
+    response_tx: broadcast::Sender<Message>,
 }
 
 impl ClientCon {
-    pub fn new(server_url: String, signal_channel_rx: ChannelSignalReceiver) -> Self {
+    pub fn new(
+        server_url: String,
+        signal_channel_rx: mpsc::Receiver<Message>,
+        response_tx: broadcast::Sender<Message>,
+    ) -> Self {
         Self {
             server_url,
             signal_channel_rx,
-            response_tx: None,
+            response_tx,
         }
     }
 
@@ -87,17 +102,15 @@ impl ClientCon {
         println!("Client connected to {}", self.server_url);
 
         let (socket_close_tx, mut socket_close_rx) = broadcast::channel(1);
-        let (channel_tx, channel_rx) = create_client_channel();
+        let (channel_tx, channel_rx) = mpsc::channel(1024);
+        let channel_tx = Arc::new(channel_tx);
+
         let ping_channel_tx = channel_tx.clone();
 
         let socket_close_write_rx = socket_close_tx.subscribe();
         let socket_close_ping_rx = socket_close_tx.subscribe();
 
-        let (response_tx, _) = broadcast::channel(1024);
-        // let response_tx = Arc::new(response_tx);
-        self.response_tx = Some(response_tx.clone());
-
-        self.start_socket_reader(r, socket_close_tx, response_tx);
+        self.start_socket_reader(r, socket_close_tx);
         self.start_socket_writer(w, channel_rx, socket_close_write_rx);
         self.start_pinger(ping_channel_tx, socket_close_ping_rx);
 
@@ -115,17 +128,12 @@ impl ClientCon {
         Ok(())
     }
 
-    fn subscribe(&self) -> Option<broadcast::Receiver<Message>> {
-        let rx = self.response_tx.as_ref()?;
-        Some(rx.subscribe())
-    }
-
     fn start_socket_reader(
         &self,
         mut r: ReadHalf<TcpStream>,
         socket_close_tx: broadcast::Sender<()>,
-        response_tx: broadcast::Sender<Message>,
     ) {
+        let response_tx = self.response_tx.clone();
         // Socket read handler thread, to handle message sent by server
         spawn(async move {
             let mut buf = vec![0; 1024];
@@ -136,10 +144,10 @@ impl ClientCon {
                         println!("Socket closed by server");
                         return;
                     }
-                    Ok(_n) => {
-                        let message: Message = String::from_utf8_lossy(&buf).deref().into();
+                    Ok(n) => {
+                        let message: Message = buf[..n].into();
                         println!("{:?}", message);
-                        response_tx.send(message).unwrap_or_default();
+                        response_tx.clone().send(message).unwrap_or_default();
                     }
                     Err(_) => {
                         socket_close_tx.send(()).unwrap_or_default();
@@ -192,7 +200,7 @@ impl ClientCon {
     }
 }
 
-async fn ping(channel_tx: ChannelSignalSender) {
+async fn ping(channel_tx: Arc<mpsc::Sender<Message>>) {
     loop {
         sleep(5000).await;
         println!("===Ping start");

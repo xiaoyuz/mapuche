@@ -1,4 +1,4 @@
-use crate::{Command, Connection, Db, DbDropGuard, Shutdown};
+use crate::{Command, Connection, Db, DbDropGuard, MapucheError, Shutdown, P2P_CLIENT};
 use std::collections::HashMap;
 
 use crate::client::Client;
@@ -12,10 +12,12 @@ use crate::metrics::{
     REQUEST_CMD_FINISH_COUNTER, REQUEST_CMD_HANDLE_TIME, REQUEST_COUNTER,
     TOTAL_CONNECTION_PROCESSED,
 };
+use crate::p2p::message::Message;
 use crate::rocks::errors::{
     REDIS_AUTH_INVALID_PASSWORD_ERR, REDIS_AUTH_REQUIRED_ERR, REDIS_AUTH_WHEN_DISABLED_ERR,
 };
-use crate::utils::{resp_err, resp_invalid_arguments, resp_ok};
+use crate::utils::{now_timestamp_in_millis, resp_err, resp_invalid_arguments, resp_ok};
+use local_ip_address::local_ip;
 use slog::{debug, error, info};
 use std::future::Future;
 use std::sync::Arc;
@@ -23,6 +25,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
 use tokio::time::{self, Duration, Instant};
 use tokio_util::task::LocalPoolHandle;
+use uuid::Uuid;
 
 /// Server listener state. Created in the `run` call. It includes a `run` method
 /// which performs the TCP listening and initialization of per-connection state.
@@ -358,25 +361,8 @@ impl Handler {
                             .write_frame(&resp_err(REDIS_AUTH_REQUIRED_ERR))
                             .await?;
                     } else {
-                        // Perform the work needed to apply the command. This may mutate the
-                        // database state as a result.
-                        //
-                        // The connection is passed into the apply function which allows the
-                        // command to write response frames directly to the connection. In
-                        // the case of pub/sub, multiple frames may be send back to the
-                        // peer.
-
-                        // Perform the work needed to apply the command. This may mutate the
-                        // database state as a result.
-                        //
-                        // The connection is passed into the apply function which allows the
-                        // command to write response frames directly to the connection. In
-                        // the case of pub/sub, multiple frames may be send back to the
-                        // peer.
-                        match cmd
-                            .apply(&self.db, &mut self.connection, &mut self.shutdown)
-                            .await
-                        {
+                        // TODO
+                        match self.execute_locally(cmd).await {
                             Ok(_) => (),
                             Err(e) => {
                                 REQUEST_CMD_ERROR_COUNTER
@@ -384,7 +370,7 @@ impl Handler {
                                     .inc();
                                 return Err(e);
                             }
-                        };
+                        }
                     }
                 }
             }
@@ -398,6 +384,62 @@ impl Handler {
         }
 
         Ok(())
+    }
+
+    #[allow(dead_code)]
+    async fn execute_remotely(&mut self, cmd: Command) -> crate::Result<()> {
+        let message = Message::CmdReqMessage {
+            address: local_ip()?.to_string(),
+            cmd,
+            ts: now_timestamp_in_millis(),
+            req_id: Uuid::new_v4().to_string(),
+        };
+        let remote_url = local_ip()?.to_string();
+        // TODO
+        let remote_url = format!("{}:6123", remote_url);
+        unsafe {
+            if let Some(client) = &P2P_CLIENT {
+                let rec = client.subscribe(&remote_url).await;
+                client.call(&remote_url, message).await?;
+                let res = rec
+                    .ok_or(MapucheError::String("p2p client not inited"))?
+                    .recv()
+                    .await?;
+                if let Message::CmdRespMessage {
+                    address,
+                    frame,
+                    ts: _,
+                    req_id: _,
+                } = res
+                {
+                    debug!(LOGGER, "res from remote address, {:?}, {}", frame, address);
+                    self.connection.write_frame(&frame).await?;
+                }
+            } else {
+                Err(MapucheError::String("p2p client not inited"))?
+            }
+        }
+        Ok(())
+    }
+
+    async fn execute_locally(&mut self, cmd: Command) -> crate::Result<()> {
+        // Perform the work needed to apply the command. This may mutate the
+        // database state as a result.
+        //
+        // The connection is passed into the apply function which allows the
+        // command to write response frames directly to the connection. In
+        // the case of pub/sub, multiple frames may be send back to the
+        // peer.
+
+        // Perform the work needed to apply the command. This may mutate the
+        // database state as a result.
+        //
+        // The connection is passed into the apply function which allows the
+        // command to write response frames directly to the connection. In
+        // the case of pub/sub, multiple frames may be send back to the
+        // peer.
+        cmd.apply(&self.db, &mut self.connection, &mut self.shutdown)
+            .await
     }
 }
 

@@ -38,7 +38,10 @@ pub mod rocks;
 mod shutdown;
 pub mod utils;
 
+use crate::p2p::client::P2PClient;
 use shutdown::Shutdown;
+
+use thiserror::Error;
 
 /// Default port that a redis server listens on.
 ///
@@ -59,6 +62,14 @@ pub const DEFAULT_RING_PORT: &str = "6123";
 /// it to be converted to `Box<dyn std::error::Error>`.
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
+#[derive(Error, Debug)]
+pub enum MapucheError {
+    #[error("{0}")]
+    String(&'static str),
+    #[error("{0}")]
+    Owned(String),
+}
+
 /// A specialized `Result` type for mapuche operations.
 ///
 /// This is defined as a convenience.
@@ -68,6 +79,8 @@ lazy_static! {
     pub static ref INDEX_COUNT: AtomicU16 =
         AtomicU16::new(SmallRng::from_entropy().gen_range(0..u16::MAX));
 }
+
+pub static mut P2P_CLIENT: Option<P2PClient> = None;
 
 pub fn fetch_idx_and_add() -> u16 {
     // fetch_add wraps around on overflow, see https://github.com/rust-lang/rust/issues/34618

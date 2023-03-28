@@ -71,3 +71,4 @@ pub const REDIS_AUTH_WHEN_DISABLED_ERR: RError =
     RError::String("ERR Client sent AUTH, but no password is set");
 pub const REDIS_AUTH_INVALID_PASSWORD_ERR: RError = RError::String("ERR invalid password");
 pub const REDIS_AUTH_REQUIRED_ERR: RError = RError::String("NOAUTH Authentication required.");
+pub const REDIS_NOT_SUPPORTED_ERR: RError = RError::String("Cmd not supported.");

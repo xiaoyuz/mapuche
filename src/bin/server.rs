@@ -1,4 +1,4 @@
-use mapuche::server;
+use mapuche::{server, P2P_CLIENT};
 use std::process::exit;
 
 use clap::Parser;
@@ -89,6 +89,10 @@ pub async fn main() -> mapuche::Result<()> {
             if local_p2p_server_url != url {
                 p2p_client.add_con(&url).await?;
             }
+            // p2p_client.add_con(&url).await?;
+        }
+        unsafe {
+            P2P_CLIENT.replace(p2p_client);
         }
     }
 

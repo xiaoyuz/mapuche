@@ -1,19 +1,25 @@
 use crate::config::config_ring_port_or_default;
-use crate::p2p::channel::ChannelSignal::{ConnectionClose, ConnectionError, RemoteMessage};
-use crate::p2p::channel::{create_connection_channel, create_server_channel, ChannelSignal};
 use crate::p2p::message::Message;
 use local_ip_address::linux::local_ip;
 use std::collections::HashMap;
-use std::ops::Deref;
+
+use crate::p2p::server::ServerConSignal::{ConnectionClose, ConnectionError};
+use crate::utils::now_timestamp_in_millis;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use tokio::{io, spawn};
 
-type ConnectionReceiver = Arc<Mutex<Receiver<Vec<u8>>>>;
+type ConnectionReceiver = Arc<Mutex<Receiver<Message>>>;
 type ServerConMap = Arc<Mutex<HashMap<String, ServerCon>>>;
+
+#[derive(Debug)]
+pub enum ServerConSignal {
+    ConnectionClose(String),
+    ConnectionError(String),
+}
 
 pub struct P2PServer {
     server_con_map: ServerConMap,
@@ -27,16 +33,16 @@ impl P2PServer {
     }
 
     pub async fn start(&self) -> crate::Result<()> {
-        let (tx, _rx) = create_server_channel();
+        let (tx, rx) = mpsc::channel(1024);
         let local_ip = local_ip()?.to_string();
         let server_url = format!("{}:{}", local_ip, config_ring_port_or_default());
         let listener = TcpListener::bind(server_url).await?;
         self.start_con_dispatcher(listener, tx);
-
+        self.start_channel_handler(rx);
         Ok(())
     }
 
-    fn start_con_dispatcher(&self, listener: TcpListener, tx: Sender<ChannelSignal>) {
+    fn start_con_dispatcher(&self, listener: TcpListener, tx: Sender<ServerConSignal>) {
         let con_map = self.server_con_map.clone();
         spawn(async move {
             loop {
@@ -55,7 +61,7 @@ impl P2PServer {
         });
     }
 
-    fn start_channel_handler(&self, mut rx: Receiver<ChannelSignal>) {
+    fn start_channel_handler(&self, mut rx: Receiver<ServerConSignal>) {
         let con_map = self.server_con_map.clone();
         spawn(async move {
             while let Some(command) = rx.recv().await {
@@ -66,10 +72,6 @@ impl P2PServer {
                     }
                     ConnectionError(peer_addr) => {
                         con_map.lock().await.remove(&peer_addr);
-                    }
-                    RemoteMessage { peer_addr, message } => {
-                        // TODO
-                        println!("Server gets remote message {:?}, {:?}", peer_addr, message);
                     }
                 }
             }
@@ -84,13 +86,13 @@ impl Default for P2PServer {
 }
 
 pub struct ServerCon {
-    con_tx: Sender<Vec<u8>>,
+    con_tx: Sender<Message>,
     con_rx: ConnectionReceiver,
 }
 
 impl ServerCon {
     pub fn new() -> Self {
-        let (con_tx, con_rx) = create_connection_channel();
+        let (con_tx, con_rx) = mpsc::channel(1024);
         Self {
             con_tx,
             con_rx: Arc::new(Mutex::new(con_rx)),
@@ -99,21 +101,22 @@ impl ServerCon {
 
     pub async fn start(
         &self,
-        server_channel_tx: Sender<ChannelSignal>,
+        server_channel_tx: Sender<ServerConSignal>,
         socket: TcpStream,
     ) -> crate::Result<()> {
         let peer_addr = format!("{}", &socket.peer_addr()?);
         let (r, w) = io::split(socket);
-        self.start_channel_handler(w);
+        self.start_socket_writer(w);
         self.start_socket_reader(r, server_channel_tx, &peer_addr);
         Ok(())
     }
 
-    fn start_channel_handler(&self, mut w: WriteHalf<TcpStream>) {
+    fn start_socket_writer(&self, mut w: WriteHalf<TcpStream>) {
         let con_rx = self.con_rx.clone();
         spawn(async move {
             while let Some(message) = con_rx.lock().await.recv().await {
-                w.write_all(message.as_slice()).await.unwrap_or_default();
+                let message_bytes: Vec<u8> = message.into();
+                w.write_all(&message_bytes).await.unwrap_or_default();
             }
         });
     }
@@ -121,11 +124,12 @@ impl ServerCon {
     fn start_socket_reader(
         &self,
         mut r: ReadHalf<TcpStream>,
-        server_channel_tx: Sender<ChannelSignal>,
+        server_channel_tx: Sender<ServerConSignal>,
         peer_addr: &str,
     ) {
         // Serve the socket read
         let peer_addr = peer_addr.to_string();
+        let sender = self.con_tx.clone();
         spawn(async move {
             let mut buf = vec![0; 1024];
             loop {
@@ -137,7 +141,28 @@ impl ServerCon {
                             .unwrap_or_default();
                     }
                     Ok(n) => {
-                        handle_message(n, &buf, &server_channel_tx, peer_addr.as_str()).await;
+                        let message: Message = buf[..n].into();
+                        let sender = sender.clone();
+                        if let Message::CmdReqMessage {
+                            address,
+                            cmd,
+                            ts: _,
+                            req_id,
+                        } = message
+                        {
+                            spawn(async move {
+                                let res = cmd.execute_for_remote().await;
+                                if let Ok(frame) = res {
+                                    let resp_message = Message::CmdRespMessage {
+                                        address,
+                                        frame,
+                                        ts: now_timestamp_in_millis(),
+                                        req_id,
+                                    };
+                                    sender.send(resp_message).await.unwrap_or_default();
+                                }
+                            });
+                        }
                     }
                     Err(_) => {
                         server_channel_tx
@@ -156,20 +181,4 @@ impl Default for ServerCon {
     fn default() -> Self {
         Self::new()
     }
-}
-
-async fn handle_message(
-    _n: usize,
-    buf: &[u8],
-    server_channel_tx: &Sender<ChannelSignal>,
-    addr: &str,
-) {
-    let message: Message = String::from_utf8_lossy(buf).deref().into();
-    server_channel_tx
-        .send(RemoteMessage {
-            peer_addr: addr.to_string(),
-            message,
-        })
-        .await
-        .unwrap();
 }

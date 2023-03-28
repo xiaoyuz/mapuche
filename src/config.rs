@@ -161,7 +161,10 @@ pub fn config_cluster_or_default() -> Vec<String> {
         }
     }
     Vec::default()
-    // "10.7.8.73:6123,10.7.8.73:6124".split(',').map(|s| s.to_string()).collect::<Vec<String>>()
+    // "10.7.8.73:6123"
+    //     .split(',')
+    //     .map(|s| s.to_string())
+    //     .collect::<Vec<String>>()
 }
 
 fn log_level_str() -> String {

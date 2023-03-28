@@ -1,4 +1,4 @@
-use crate::Command;
+use crate::{Command, Frame};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -6,10 +6,17 @@ pub enum Message {
     PingMessage {
         address: String,
     },
-    CmdMessage {
+    CmdReqMessage {
         address: String,
         cmd: Command,
         ts: i64,
+        req_id: String,
+    },
+    CmdRespMessage {
+        address: String,
+        frame: Frame,
+        ts: i64,
+        req_id: String,
     },
 }
 
