@@ -32,6 +32,7 @@ use parse::{Parse, ParseError};
 pub mod server;
 
 pub mod gc;
+pub mod hash_ring;
 pub mod metrics;
 pub mod p2p;
 pub mod rocks;
