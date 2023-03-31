@@ -25,9 +25,10 @@ pub struct HashRing<T, S = XxHash64Hasher> {
     ring: HashMap<u64, T>,
     sorted_keys: Vec<u64>,
     hash_builder: S,
+    real_nodes: Vec<T>,
 }
 
-impl<T: ToString + Clone> HashRing<T, XxHash64Hasher> {
+impl<T: ToString + Clone + PartialEq> HashRing<T, XxHash64Hasher> {
     /// Creates a new hash ring with the specified nodes.
     /// Replicas is the number of virtual nodes each node has to make a better distribution.
     pub fn new(nodes: Vec<T>, replicas: isize) -> HashRing<T, XxHash64Hasher> {
@@ -37,7 +38,7 @@ impl<T: ToString + Clone> HashRing<T, XxHash64Hasher> {
 
 impl<T, S> HashRing<T, S>
 where
-    T: ToString + Clone,
+    T: ToString + Clone + PartialEq,
     S: BuildHasher,
 {
     pub fn with_hasher(nodes: Vec<T>, replicas: isize, hash_builder: S) -> HashRing<T, S> {
@@ -46,6 +47,7 @@ where
             ring: HashMap::new(),
             sorted_keys: Vec::new(),
             hash_builder,
+            real_nodes: Vec::new(),
         };
 
         for n in &nodes {
@@ -63,6 +65,7 @@ where
         }
 
         self.sorted_keys = BinaryHeap::from(self.sorted_keys.clone()).into_sorted_vec();
+        self.real_nodes.push(node.clone());
     }
 
     /// Deletes a node from the hash ring
@@ -81,6 +84,9 @@ where
                 }
             }
             self.sorted_keys.remove(index);
+        }
+        if let Some(i) = self.real_nodes.iter().position(|x| x == node) {
+            self.real_nodes.remove(i);
         }
     }
 
@@ -101,6 +107,38 @@ where
 
         let node = &nodes[0];
         return Some(self.ring.get(node).unwrap());
+    }
+
+    pub fn pre_node(&self, node: &T) -> Option<&T> {
+        if self.real_nodes.is_empty() {
+            return None;
+        }
+
+        for (index, cur_node) in self.real_nodes.iter().enumerate() {
+            if node == cur_node {
+                if index == 0 {
+                    return Some(self.real_nodes.last().unwrap());
+                }
+                return Some(self.real_nodes.get(index - 1).unwrap());
+            }
+        }
+        None
+    }
+
+    pub fn next_node(&self, node: &T) -> Option<&T> {
+        if self.real_nodes.is_empty() {
+            return None;
+        }
+
+        for (index, cur_node) in self.real_nodes.iter().enumerate() {
+            if node == cur_node {
+                if index == self.real_nodes.len() - 1 {
+                    return Some(self.real_nodes.first().unwrap());
+                }
+                return Some(self.real_nodes.get(index + 1).unwrap());
+            }
+        }
+        None
     }
 
     /// Generates a key from a string value
@@ -161,7 +199,7 @@ mod test {
         assert_eq!(Some(&node(15326)), hash_ring.get_node("hello".to_string()));
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, PartialEq)]
     struct CustomNodeInfo {
         pub host: &'static str,
         pub port: u16,
@@ -316,5 +354,27 @@ mod test {
         assert_eq!(Some(&node(15329)), hash_ring.get_node("hello".to_string()));
         assert_eq!(Some(&node(15329)), hash_ring.get_node("dude".to_string()));
         assert_eq!(Some(&node(15329)), hash_ring.get_node("two".to_string()));
+    }
+
+    #[test]
+    fn test_pre_next_node() {
+        let nodes = vec![
+            node(15324),
+            node(15325),
+            node(15326),
+            node(15327),
+            node(15328),
+            node(15329),
+        ];
+
+        let hash_ring: HashRing<NodeInfo> = HashRing::new(nodes, 10);
+
+        println!("{}", hash_ring.next_node(&node(15325)).unwrap());
+        println!("{}", hash_ring.pre_node(&node(15329)).unwrap());
+
+        println!("{}", hash_ring.pre_node(&node(15324)).unwrap());
+        println!("{}", hash_ring.next_node(&node(15329)).unwrap());
+
+        // assert_eq!(Some(&node(15324)), hash_ring.get_node("two".to_string()));
     }
 }
