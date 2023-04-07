@@ -1,4 +1,4 @@
-use crate::{Command, Connection, Db, DbDropGuard, MapucheError, Shutdown, P2P_CLIENT};
+use crate::{Command, Connection, Db, DbDropGuard, MapucheError, Shutdown, P2P_CLIENT, RING_NODES};
 use std::collections::HashMap;
 
 use crate::client::Client;
@@ -388,35 +388,41 @@ impl Handler {
 
     #[allow(dead_code)]
     async fn execute_remotely(&mut self, cmd: Command) -> crate::Result<()> {
+        let hash_ring_key = cmd.hash_ring_key()?;
         let message = Message::CmdReqMessage {
             address: local_ip()?.to_string(),
             cmd,
             ts: now_timestamp_in_millis(),
             req_id: Uuid::new_v4().to_string(),
         };
-        let remote_url = local_ip()?.to_string();
-        // TODO
-        let remote_url = format!("{}:6123", remote_url);
         unsafe {
-            if let Some(client) = &P2P_CLIENT {
-                let rec = client.subscribe(&remote_url).await;
-                client.call(&remote_url, message).await?;
-                let res = rec
-                    .ok_or(MapucheError::String("p2p client not inited"))?
-                    .recv()
-                    .await?;
-                if let Message::CmdRespMessage {
-                    address,
-                    frame,
-                    ts: _,
-                    req_id: _,
-                } = res
-                {
-                    debug!(LOGGER, "res from remote address, {:?}, {}", frame, address);
-                    self.connection.write_frame(&frame).await?;
+            if let Some(hash_ring) = &RING_NODES {
+                let remote_node = hash_ring
+                    .get_node(hash_ring_key)
+                    .ok_or(MapucheError::String("hash ring node not matched"))?;
+                let remote_url: String = remote_node.into();
+                if let Some(client) = &P2P_CLIENT {
+                    let rec = client.subscribe(&remote_url).await;
+                    client.call(&remote_url, message).await?;
+                    let res = rec
+                        .ok_or(MapucheError::String("p2p client not inited"))?
+                        .recv()
+                        .await?;
+                    if let Message::CmdRespMessage {
+                        address,
+                        frame,
+                        ts: _,
+                        req_id: _,
+                    } = res
+                    {
+                        debug!(LOGGER, "res from remote address, {:?}, {}", frame, address);
+                        self.connection.write_frame(&frame).await?;
+                    }
+                } else {
+                    Err(MapucheError::String("p2p client not inited"))?
                 }
             } else {
-                Err(MapucheError::String("p2p client not inited"))?
+                Err(MapucheError::String("hash ring not inited"))?
             }
         }
         Ok(())

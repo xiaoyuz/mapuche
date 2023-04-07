@@ -571,6 +571,78 @@ impl Command {
         }
     }
 
+    /// Get hash ring key for cmd, to dispatch self to related nodes.
+    pub(crate) fn hash_ring_key(&self) -> crate::Result<String> {
+        use Command::*;
+
+        match self {
+            Get(cmd) => cmd.hash_ring_key(),
+            Mget(cmd) => cmd.hash_ring_key(),
+            Mset(cmd) => cmd.hash_ring_key(),
+            Set(cmd) => cmd.hash_ring_key(),
+            Del(cmd) => cmd.hash_ring_key(),
+            Strlen(cmd) => cmd.hash_ring_key(),
+            Exists(cmd) => cmd.hash_ring_key(),
+            Incr(cmd) => cmd.hash_ring_key(),
+            Decr(cmd) => cmd.hash_ring_key(),
+            Expire(cmd) => cmd.hash_ring_key(),
+            ExpireAt(cmd) => cmd.hash_ring_key(),
+            Pexpire(cmd) => cmd.hash_ring_key(),
+            PexpireAt(cmd) => cmd.hash_ring_key(),
+            TTL(cmd) => cmd.hash_ring_key(),
+            PTTL(cmd) => cmd.hash_ring_key(),
+            Sadd(cmd) => cmd.hash_ring_key(),
+            Scard(cmd) => cmd.hash_ring_key(),
+            Sismember(cmd) => cmd.hash_ring_key(),
+            Smismember(cmd) => cmd.hash_ring_key(),
+            Smembers(cmd) => cmd.hash_ring_key(),
+            Srandmember(cmd) => cmd.hash_ring_key(),
+            Spop(cmd) => cmd.hash_ring_key(),
+            Srem(cmd) => cmd.hash_ring_key(),
+            Lpush(cmd) => cmd.hash_ring_key(),
+            Rpush(cmd) => cmd.hash_ring_key(),
+            Lpop(cmd) => cmd.hash_ring_key(),
+            Rpop(cmd) => cmd.hash_ring_key(),
+            Lrange(cmd) => cmd.hash_ring_key(),
+            Ltrim(cmd) => cmd.hash_ring_key(),
+            Llen(cmd) => cmd.hash_ring_key(),
+            Lindex(cmd) => cmd.hash_ring_key(),
+            Lset(cmd) => cmd.hash_ring_key(),
+            Lrem(cmd) => cmd.hash_ring_key(),
+            Linsert(cmd) => cmd.hash_ring_key(),
+            Hset(cmd) => cmd.hash_ring_key(),
+            Hmset(cmd) => cmd.hash_ring_key(),
+            Hsetnx(cmd) => cmd.hash_ring_key(),
+            Hget(cmd) => cmd.hash_ring_key(),
+            Hmget(cmd) => cmd.hash_ring_key(),
+            Hlen(cmd) => cmd.hash_ring_key(),
+            Hgetall(cmd) => cmd.hash_ring_key(),
+            Hdel(cmd) => cmd.hash_ring_key(),
+            Hkeys(cmd) => cmd.hash_ring_key(),
+            Hvals(cmd) => cmd.hash_ring_key(),
+            Hincrby(cmd) => cmd.hash_ring_key(),
+            Hexists(cmd) => cmd.hash_ring_key(),
+            Hstrlen(cmd) => cmd.hash_ring_key(),
+            Zadd(cmd) => cmd.hash_ring_key(),
+            Zcard(cmd) => cmd.hash_ring_key(),
+            Zscore(cmd) => cmd.hash_ring_key(),
+            Zrem(cmd) => cmd.hash_ring_key(),
+            Zremrangebyscore(cmd) => cmd.hash_ring_key(),
+            Zremrangebyrank(cmd) => cmd.hash_ring_key(),
+            Zrange(cmd) => cmd.hash_ring_key(),
+            Zrevrange(cmd) => cmd.hash_ring_key(),
+            Zrangebyscore(cmd) => cmd.hash_ring_key(),
+            Zrevrangebyscore(cmd) => cmd.hash_ring_key(),
+            Zcount(cmd) => cmd.hash_ring_key(),
+            Zpopmin(cmd) => cmd.hash_ring_key(),
+            Zpopmax(cmd) => cmd.hash_ring_key(),
+            Zrank(cmd) => cmd.hash_ring_key(),
+            Zincrby(cmd) => cmd.hash_ring_key(),
+
+            _ => Err("`Unsubscribe` is unsupported in this context".into()),
+        }
+    }
+
     /// Execute the command for remote node requests, only used in cluster.
     pub(crate) async fn execute_for_remote(mut self) -> crate::Result<Frame> {
         use Command::*;

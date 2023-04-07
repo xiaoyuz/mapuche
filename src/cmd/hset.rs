@@ -96,6 +96,10 @@ impl Hset {
             .hset(&self.key, &self.field_and_value, is_hmset, is_nx)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Default for Hset {

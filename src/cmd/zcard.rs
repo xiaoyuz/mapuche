@@ -60,6 +60,10 @@ impl Zcard {
         }
         ZsetCommand::new(&get_client().await).zcard(&self.key).await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Zcard {

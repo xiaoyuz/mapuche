@@ -78,6 +78,10 @@ impl Zremrangebyrank {
             .zremrange_by_rank(&self.key, self.min, self.max)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Zremrangebyrank {

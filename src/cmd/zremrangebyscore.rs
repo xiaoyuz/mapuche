@@ -80,6 +80,10 @@ impl Zremrangebyscore {
             .zremrange_by_score(&self.key, self.min, self.max)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Zremrangebyscore {

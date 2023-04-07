@@ -75,6 +75,10 @@ impl Hstrlen {
             .hstrlen(&self.key, &self.field)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Hstrlen {

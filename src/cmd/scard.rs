@@ -60,6 +60,10 @@ impl Scard {
         }
         SetCommand::new(&get_client().await).scard(&self.key).await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Scard {

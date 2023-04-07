@@ -64,6 +64,10 @@ impl Zscore {
             .zscore(&self.key, &self.member)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Zscore {

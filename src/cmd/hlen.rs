@@ -61,6 +61,10 @@ impl Hlen {
         }
         HashCommand::new(&get_client().await).hlen(&self.key).await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Hlen {

@@ -63,6 +63,10 @@ impl Hgetall {
             .hgetall(&self.key, true, true)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Hgetall {

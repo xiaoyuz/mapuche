@@ -7,7 +7,7 @@ use twox_hash::XxHash64;
 /// information. It is optional and you can define your own.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NodeInfo {
-    pub host: &'static str,
+    pub host: String,
     pub port: u16,
 }
 
@@ -17,11 +17,17 @@ impl Display for NodeInfo {
     }
 }
 
+impl From<&NodeInfo> for String {
+    fn from(value: &NodeInfo) -> Self {
+        format!("{}:{}", value.host, value.port)
+    }
+}
+
 type XxHash64Hasher = BuildHasherDefault<XxHash64>;
 
 /// HashRing
 pub struct HashRing<T, S = XxHash64Hasher> {
-    replicas: isize,
+    replicas: usize,
     ring: HashMap<u64, T>,
     sorted_keys: Vec<u64>,
     hash_builder: S,
@@ -31,7 +37,7 @@ pub struct HashRing<T, S = XxHash64Hasher> {
 impl<T: ToString + Clone + PartialEq> HashRing<T, XxHash64Hasher> {
     /// Creates a new hash ring with the specified nodes.
     /// Replicas is the number of virtual nodes each node has to make a better distribution.
-    pub fn new(nodes: Vec<T>, replicas: isize) -> HashRing<T, XxHash64Hasher> {
+    pub fn new(nodes: Vec<T>, replicas: usize) -> HashRing<T, XxHash64Hasher> {
         HashRing::with_hasher(nodes, replicas, XxHash64Hasher::default())
     }
 }
@@ -41,7 +47,7 @@ where
     T: ToString + Clone + PartialEq,
     S: BuildHasher,
 {
-    pub fn with_hasher(nodes: Vec<T>, replicas: isize, hash_builder: S) -> HashRing<T, S> {
+    pub fn with_hasher(nodes: Vec<T>, replicas: usize, hash_builder: S) -> HashRing<T, S> {
         let mut new_hash_ring: HashRing<T, S> = HashRing {
             replicas,
             ring: HashMap::new(),
@@ -158,7 +164,7 @@ mod test {
     // Defines a NodeInfo for a localhost address with a given port.
     fn node(port: u16) -> NodeInfo {
         NodeInfo {
-            host: "localhost",
+            host: "localhost".to_owned(),
             port,
         }
     }

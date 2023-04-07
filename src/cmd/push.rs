@@ -80,6 +80,10 @@ impl Push {
             .push(&self.key, &self.items, op_left)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Push {

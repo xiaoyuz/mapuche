@@ -42,6 +42,7 @@ pub mod utils;
 use crate::p2p::client::P2PClient;
 use shutdown::Shutdown;
 
+use crate::hash_ring::{HashRing, NodeInfo};
 use thiserror::Error;
 
 /// Default port that a redis server listens on.
@@ -82,6 +83,7 @@ lazy_static! {
 }
 
 pub static mut P2P_CLIENT: Option<P2PClient> = None;
+pub static mut RING_NODES: Option<HashRing<NodeInfo>> = None;
 
 pub fn fetch_idx_and_add() -> u16 {
     // fetch_add wraps around on overflow, see https://github.com/rust-lang/rust/issues/34618

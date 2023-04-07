@@ -78,6 +78,10 @@ impl Sadd {
             .sadd(&self.key, &self.members)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Sadd {

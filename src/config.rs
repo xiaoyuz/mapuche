@@ -35,6 +35,7 @@ struct Server {
     listen: Option<String>,
     port: Option<u16>,
     ring_port: Option<u16>,
+    ring_v_node_num: Option<u16>,
     instance_id: Option<String>,
     prometheus_listen: Option<String>,
     prometheus_port: Option<u16>,
@@ -117,6 +118,18 @@ pub fn config_ring_port_or_default() -> String {
     }
 
     DEFAULT_RING_PORT.to_owned()
+}
+
+pub fn config_ring_v_node_num_or_default() -> u16 {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.server.ring_v_node_num {
+                return s;
+            }
+        }
+    }
+
+    5
 }
 
 pub fn config_instance_id_or_default() -> String {

@@ -91,6 +91,10 @@ impl Expire {
             .expire(&self.key, ttl)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Expire {

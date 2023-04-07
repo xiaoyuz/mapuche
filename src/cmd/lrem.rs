@@ -76,6 +76,10 @@ impl Lrem {
             .lrem(&self.key, count as usize, from_head, &self.element)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Lrem {

@@ -5,7 +5,7 @@ use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::string::StringCommand;
 use crate::rocks::{get_client, KEY_ENCODER};
 use crate::utils::resp_invalid_arguments;
-use crate::{Connection, Frame};
+use crate::{Connection, Frame, MapucheError};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use slog::debug;
@@ -88,6 +88,13 @@ impl Mset {
             kvs.push(kvpair);
         }
         StringCommand::new(&get_client().await).batch_put(kvs).await
+    }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        if self.keys.len() != 1 {
+            return Err(MapucheError::String("Cmd don't support cluster").into());
+        }
+        Ok((&self.keys.first().unwrap()).to_string())
     }
 }
 

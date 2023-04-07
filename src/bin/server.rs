@@ -1,4 +1,4 @@
-use mapuche::{server, P2P_CLIENT};
+use mapuche::{server, P2P_CLIENT, RING_NODES};
 use std::process::exit;
 
 use clap::Parser;
@@ -10,8 +10,10 @@ use tokio::{fs, signal};
 use mapuche::config::{
     config_cluster_or_default, config_instance_id_or_default, config_listen_or_default,
     config_max_connection, config_port_or_default, config_prometheus_listen_or_default,
-    config_prometheus_port_or_default, config_ring_port_or_default, set_global_config, Config,
+    config_prometheus_port_or_default, config_ring_port_or_default,
+    config_ring_v_node_num_or_default, set_global_config, Config,
 };
+use mapuche::hash_ring::{HashRing, NodeInfo};
 use mapuche::metrics::PrometheusServer;
 use mapuche::p2p::client::P2PClient;
 use mapuche::p2p::server::P2PServer;
@@ -79,21 +81,7 @@ pub async fn main() -> mapuche::Result<()> {
 
     // If cluster enabled, init cluster connections
     if !config_cluster_or_default().is_empty() {
-        let p2p_server = P2PServer::new();
-        let p2p_client = P2PClient::new();
-        p2p_server.start().await?;
-        for url in config_cluster_or_default() {
-            let local_ip = local_ip()?.to_string();
-            let local_port = config_ring_port_or_default();
-            let local_p2p_server_url = format!("{}:{}", local_ip, local_port);
-            if local_p2p_server_url != url {
-                p2p_client.add_con(&url).await?;
-            }
-            // p2p_client.add_con(&url).await?;
-        }
-        unsafe {
-            P2P_CLIENT.replace(p2p_client);
-        }
+        start_cluster().await?;
     }
 
     // Bind a TCP listener
@@ -101,6 +89,35 @@ pub async fn main() -> mapuche::Result<()> {
 
     server::run(listener, signal::ctrl_c()).await;
 
+    Ok(())
+}
+
+async fn start_cluster() -> mapuche::Result<()> {
+    let p2p_server = P2PServer::new();
+    let p2p_client = P2PClient::new();
+    p2p_server.start().await?;
+    let mut ring_nodes = vec![];
+    for url in config_cluster_or_default() {
+        let local_ip = local_ip()?.to_string();
+        let local_port = config_ring_port_or_default();
+        let local_p2p_server_url = format!("{}:{}", &local_ip, &local_port);
+        if local_p2p_server_url != url {
+            p2p_client.add_con(&url).await?;
+        }
+        // p2p_client.add_con(&url).await?;
+
+        let node_info = NodeInfo {
+            host: local_ip.clone(),
+            port: local_port.parse().unwrap(),
+        };
+        ring_nodes.push(node_info);
+    }
+    let hash_ring: HashRing<NodeInfo> =
+        HashRing::new(ring_nodes, config_ring_v_node_num_or_default() as usize);
+    unsafe {
+        P2P_CLIENT.replace(p2p_client);
+        RING_NODES.replace(hash_ring);
+    }
     Ok(())
 }
 

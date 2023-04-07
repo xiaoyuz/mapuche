@@ -80,6 +80,10 @@ impl Ltrim {
             .ltrim(&self.key, self.start, self.end)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Ltrim {

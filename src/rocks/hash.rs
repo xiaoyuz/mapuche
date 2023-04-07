@@ -398,7 +398,7 @@ impl<'a> HashCommand<'a> {
                     }
 
                     let meta_size = self.sum_key_size(&key, version)?;
-                    Ok(resp_int(meta_size as i64))
+                    Ok(resp_int(meta_size))
                 }
                 None => Ok(resp_int(0)),
             }

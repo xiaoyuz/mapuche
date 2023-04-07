@@ -92,6 +92,10 @@ impl Zrevrange {
             .zrange(&self.key, self.min, self.max, self.withscores, true)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Zrevrange {

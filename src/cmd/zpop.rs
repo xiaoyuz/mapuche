@@ -72,6 +72,10 @@ impl Zpop {
             .zpop(&self.key, from_min, self.count as u64)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Zpop {

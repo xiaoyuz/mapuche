@@ -76,6 +76,10 @@ impl Lset {
             .lset(&self.key, self.idx, &self.element)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Lset {

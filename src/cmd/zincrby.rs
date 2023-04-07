@@ -69,6 +69,10 @@ impl Zincrby {
             .zincrby(&self.key, self.step, &self.member)
             .await
     }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        Ok(self.key.to_string())
+    }
 }
 
 impl Invalid for Zincrby {

@@ -1,4 +1,4 @@
-use crate::{Connection, Frame, Parse};
+use crate::{Connection, Frame, MapucheError, Parse};
 
 use crate::cmd::Invalid;
 use crate::config::LOGGER;
@@ -66,6 +66,13 @@ impl Del {
         StringCommand::new(&get_client().await)
             .del(&self.keys)
             .await
+    }
+
+    pub fn hash_ring_key(&self) -> crate::Result<String> {
+        if self.keys.len() != 1 {
+            return Err(MapucheError::String("Cmd don't support cluster").into());
+        }
+        Ok((&self.keys.first().unwrap()).to_string())
     }
 }
 

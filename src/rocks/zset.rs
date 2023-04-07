@@ -439,8 +439,8 @@ impl<'a> ZsetCommand<'a> {
                     }
 
                     if reverse {
-                        let r_min = size as i64 - max - 1;
-                        let r_max = size as i64 - min - 1;
+                        let r_min = size - max - 1;
+                        let r_max = size - min - 1;
                         min = r_min;
                         max = r_max;
                     }
@@ -936,7 +936,7 @@ impl<'a> ZsetCommand<'a> {
         });
 
         match resp {
-            Ok(v) => Ok(resp_int(v as i64)),
+            Ok(v) => Ok(resp_int(v)),
             Err(e) => Ok(resp_err(e)),
         }
     }
@@ -1037,7 +1037,7 @@ impl<'a> ZsetCommand<'a> {
         });
 
         match resp {
-            Ok(v) => Ok(resp_int(v as i64)),
+            Ok(v) => Ok(resp_int(v)),
             Err(e) => Ok(resp_err(e)),
         }
     }
@@ -1131,7 +1131,7 @@ impl<'a> ZsetCommand<'a> {
         });
 
         match resp {
-            Ok(v) => Ok(resp_int(v as i64)),
+            Ok(v) => Ok(resp_int(v)),
             Err(e) => Ok(resp_err(e)),
         }
     }
