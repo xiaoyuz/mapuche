@@ -52,6 +52,11 @@ lazy_static! {
         "Request command error counter",
         &["cmd"]
     ).unwrap();
+    pub static ref REQUEST_CMD_REMOTE_COUNTER: IntCounterVec = register_int_counter_vec!(
+        "redis_command_remote_total",
+        "Request command remotely counter",
+        &["cmd"]
+    ).unwrap();
 
     // Trasactions
     pub static ref TXN_COUNTER: IntCounter = register_int_counter!("redis_txn_count_total", "Transactions count").unwrap();

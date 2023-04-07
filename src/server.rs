@@ -3,14 +3,14 @@ use std::collections::HashMap;
 
 use crate::client::Client;
 use crate::config::{
-    async_gc_worker_number_or_default, config_local_pool_number, config_max_connection,
-    is_auth_enabled, is_auth_matched, LOGGER,
+    async_gc_worker_number_or_default, config_cluster_or_default, config_local_pool_number,
+    config_max_connection, is_auth_enabled, is_auth_matched, LOGGER,
 };
 use crate::gc::GcMaster;
 use crate::metrics::{
     CURRENT_CONNECTION_COUNTER, REQUEST_CMD_COUNTER, REQUEST_CMD_ERROR_COUNTER,
-    REQUEST_CMD_FINISH_COUNTER, REQUEST_CMD_HANDLE_TIME, REQUEST_COUNTER,
-    TOTAL_CONNECTION_PROCESSED,
+    REQUEST_CMD_FINISH_COUNTER, REQUEST_CMD_HANDLE_TIME, REQUEST_CMD_REMOTE_COUNTER,
+    REQUEST_COUNTER, TOTAL_CONNECTION_PROCESSED,
 };
 use crate::p2p::message::Message;
 use crate::rocks::errors::{
@@ -361,8 +361,12 @@ impl Handler {
                             .write_frame(&resp_err(REDIS_AUTH_REQUIRED_ERR))
                             .await?;
                     } else {
-                        // TODO
-                        match self.execute_locally(cmd).await {
+                        let execute_res = if config_cluster_or_default().is_empty() {
+                            self.execute_locally(cmd).await
+                        } else {
+                            self.execute_on_ring(cmd).await
+                        };
+                        match execute_res {
                             Ok(_) => (),
                             Err(e) => {
                                 REQUEST_CMD_ERROR_COUNTER
@@ -387,11 +391,12 @@ impl Handler {
     }
 
     #[allow(dead_code)]
-    async fn execute_remotely(&mut self, cmd: Command) -> crate::Result<()> {
+    async fn execute_on_ring(&mut self, cmd: Command) -> crate::Result<()> {
         let hash_ring_key = cmd.hash_ring_key()?;
+        let local_address = local_ip()?.to_string();
         let message = Message::CmdReqMessage {
-            address: local_ip()?.to_string(),
-            cmd,
+            address: local_address.clone(),
+            cmd: cmd.clone(),
             ts: now_timestamp_in_millis(),
             req_id: Uuid::new_v4().to_string(),
         };
@@ -401,29 +406,46 @@ impl Handler {
                     .get_node(hash_ring_key)
                     .ok_or(MapucheError::String("hash ring node not matched"))?;
                 let remote_url: String = remote_node.into();
-                if let Some(client) = &P2P_CLIENT {
-                    let rec = client.subscribe(&remote_url).await;
-                    client.call(&remote_url, message).await?;
-                    let res = rec
-                        .ok_or(MapucheError::String("p2p client not inited"))?
-                        .recv()
-                        .await?;
-                    if let Message::CmdRespMessage {
-                        address,
-                        frame,
-                        ts: _,
-                        req_id: _,
-                    } = res
-                    {
-                        debug!(LOGGER, "res from remote address, {:?}, {}", frame, address);
-                        self.connection.write_frame(&frame).await?;
-                    }
+                if local_address == remote_url {
+                    self.execute_locally(cmd).await?;
                 } else {
-                    Err(MapucheError::String("p2p client not inited"))?
+                    let cmd_name = cmd.get_name().to_owned();
+                    REQUEST_CMD_REMOTE_COUNTER
+                        .with_label_values(&[&cmd_name])
+                        .inc();
+                    self.do_remote_execute(message, &remote_url).await?;
                 }
             } else {
                 Err(MapucheError::String("hash ring not inited"))?
             }
+        }
+        Ok(())
+    }
+
+    async unsafe fn do_remote_execute(
+        &mut self,
+        message: Message,
+        remote_url: &str,
+    ) -> crate::Result<()> {
+        if let Some(client) = &P2P_CLIENT {
+            let rec = client.subscribe(remote_url).await;
+            client.call(remote_url, message).await?;
+            let res = rec
+                .ok_or(MapucheError::String("p2p client not inited"))?
+                .recv()
+                .await?;
+            if let Message::CmdRespMessage {
+                address,
+                frame,
+                ts: _,
+                req_id: _,
+            } = res
+            {
+                debug!(LOGGER, "res from remote address, {:?}, {}", frame, address);
+                self.connection.write_frame(&frame).await?;
+            }
+        } else {
+            Err(MapucheError::String("p2p client not inited"))?
         }
         Ok(())
     }
