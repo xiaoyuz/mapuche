@@ -13,8 +13,7 @@ use mapuche::config::{
     config_cluster_or_default, config_instance_id_or_default, config_listen_or_default,
     config_max_connection, config_port_or_default, config_prometheus_listen_or_default,
     config_prometheus_port_or_default, config_ring_port_or_default,
-    config_ring_v_node_num_or_default, set_global_config, Config,
-    data_store_dir_or_default
+    config_ring_v_node_num_or_default, data_store_dir_or_default, set_global_config, Config,
 };
 use mapuche::hash_ring::{HashRing, NodeInfo};
 use mapuche::metrics::PrometheusServer;
