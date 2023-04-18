@@ -252,15 +252,15 @@ async fn test_cluster() -> anyhow::Result<()> {
 
     // --- Remove node 1 from the cluster.
 
-    println!("=== change-membership to 3, ");
-    let _x = client.change_membership(&btreeset! {3}).await?;
+    println!("=== change-membership to 2,3,4 ");
+    let _x = client.change_membership(&btreeset! {2,3,4}).await?;
 
-    tokio::time::sleep(Duration::from_millis(8_000)).await;
+    tokio::time::sleep(Duration::from_millis(60_000)).await;
 
-    println!("=== metrics after change-membership to {{3}}");
+    println!("=== metrics after change-membership to {{2,3,4}}");
     let x = client.metrics().await?;
     assert_eq!(
-        &vec![btreeset![3]],
+        &vec![btreeset![2,3,4]],
         x.membership_config.membership().get_joint_config()
     );
 
