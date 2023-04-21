@@ -1,7 +1,6 @@
 use maplit::{btreemap, btreeset};
 use mapuche::raft::client::RaftClient;
-use mapuche::raft::start_raft_node;
-use mapuche::raft::store::RocksRequest;
+use mapuche::raft::{start_raft_node, RaftRequest};
 use openraft::BasicNode;
 use std::collections::BTreeMap;
 use std::thread;
@@ -143,13 +142,13 @@ async fn test_cluster() -> anyhow::Result<()> {
 
     println!("=== write `foo=bar` `boo=bar`");
     let _x = client
-        .write(&RocksRequest::Set {
+        .write(&RaftRequest::Set {
             key: "foo".to_string(),
             value: "bar".to_string(),
         })
         .await?;
     let _x = client
-        .write(&RocksRequest::Set {
+        .write(&RaftRequest::Set {
             key: "boo".to_string(),
             value: "bar".to_string(),
         })
@@ -177,7 +176,7 @@ async fn test_cluster() -> anyhow::Result<()> {
 
     println!("=== read `foo` on node 2");
     let _x = client2
-        .write(&RocksRequest::Set {
+        .write(&RaftRequest::Set {
             key: "foo".to_string(),
             value: "wow".to_string(),
         })
@@ -260,13 +259,13 @@ async fn test_cluster() -> anyhow::Result<()> {
     println!("=== metrics after change-membership to {{2,3,4}}");
     let x = client.metrics().await?;
     assert_eq!(
-        &vec![btreeset![2,3,4]],
+        &vec![btreeset![2, 3, 4]],
         x.membership_config.membership().get_joint_config()
     );
 
     println!("=== write `foo=zoo` to node-3");
     let _x = client3
-        .write(&RocksRequest::Set {
+        .write(&RaftRequest::Set {
             key: "foo".to_string(),
             value: "zoo".to_string(),
         })

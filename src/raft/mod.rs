@@ -4,12 +4,13 @@ use actix_web::{middleware, App, HttpServer};
 use openraft::{declare_raft_types, BasicNode, Config, Raft};
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::raft::app::MapucheRaftApp;
-use crate::raft::network::raft_network_impl::MapucheNetwork;
+use crate::raft::network::raft_network_impl::MapucheRaftNetworkFactory;
 use crate::raft::network::{api, management, raft};
-use crate::raft::store::{RocksRequest, RocksResponse, RocksStore};
+use crate::raft::store::{RaftResponse, RaftStore};
 
 pub mod app;
 pub mod client;
@@ -32,10 +33,15 @@ pub type ClientWriteResponse = openraft::raft::ClientWriteResponse<TypeConfig>;
 
 declare_raft_types!(
     /// Declare the type configuration for `MemStore`.
-    pub TypeConfig: D = RocksRequest, R = RocksResponse, NodeId = MapucheNodeId, Node = BasicNode
+    pub TypeConfig: D = RaftRequest, R = RaftResponse, NodeId = MapucheNodeId, Node = BasicNode
 );
 
-pub type MapucheRaft = Raft<TypeConfig, MapucheNetwork, Arc<RocksStore>>;
+pub type MapucheRaft = Raft<TypeConfig, MapucheRaftNetworkFactory, Arc<RaftStore>>;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum RaftRequest {
+    Set { key: String, value: String },
+}
 
 #[allow(dead_code)]
 pub async fn start_raft_node<P>(
@@ -57,11 +63,11 @@ where
     let config = Arc::new(config.validate().unwrap());
 
     // Create a instance of where the Raft data will be stored.
-    let store = RocksStore::new(&dir).await;
+    let store = RaftStore::new(&dir).await;
 
     // Create the network layer that will connect and communicate the raft instances and
     // will be used in conjunction with the store created above.
-    let network = MapucheNetwork {};
+    let network = MapucheRaftNetworkFactory {};
 
     // Create a local raft instance.
     let raft = Raft::new(node_id, config.clone(), network, store.clone())

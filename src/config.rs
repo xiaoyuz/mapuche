@@ -1,4 +1,4 @@
-use crate::{DEFAULT_PORT, DEFAULT_RING_PORT};
+use crate::{DEFAULT_PORT, DEFAULT_RAFT_PORT, DEFAULT_RING_PORT};
 use lazy_static::lazy_static;
 use serde::Deserialize;
 
@@ -35,6 +35,7 @@ struct Server {
     listen: Option<String>,
     port: Option<u16>,
     ring_port: Option<u16>,
+    raft_port: Option<u16>,
     ring_v_node_num: Option<u16>,
     instance_id: Option<String>,
     prometheus_listen: Option<String>,
@@ -118,6 +119,18 @@ pub fn config_ring_port_or_default() -> String {
     }
 
     DEFAULT_RING_PORT.to_owned()
+}
+
+pub fn config_raft_port_or_default() -> String {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.server.raft_port {
+                return s.to_string();
+            }
+        }
+    }
+
+    DEFAULT_RAFT_PORT.to_owned()
 }
 
 pub fn config_ring_v_node_num_or_default() -> u16 {

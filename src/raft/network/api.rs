@@ -1,6 +1,5 @@
 use crate::raft::app::MapucheRaftApp;
-use crate::raft::store::RocksRequest;
-use crate::raft::MapucheNodeId;
+use crate::raft::{MapucheNodeId, RaftRequest};
 use actix_web::web::{Data, Json};
 use actix_web::{post, Responder};
 use openraft::error::{CheckIsLeaderError, Infallible, RaftError};
@@ -18,7 +17,7 @@ use openraft::BasicNode;
 #[post("/write")]
 pub async fn write(
     app: Data<MapucheRaftApp>,
-    req: Json<RocksRequest>,
+    req: Json<RaftRequest>,
 ) -> actix_web::Result<impl Responder> {
     let response = app.raft.client_write(req.0).await;
     Ok(Json(response))

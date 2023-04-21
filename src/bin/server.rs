@@ -1,9 +1,10 @@
-use mapuche::{server, P2P_CLIENT, RING_NODES};
+use mapuche::{server, P2P_CLIENT, RAFT_CLIENT, RING_NODES};
 use std::process::exit;
 use std::thread;
 
 use clap::Parser;
 use local_ip_address::local_ip;
+use slog::info;
 use sysinfo::set_open_files_limit;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
@@ -12,15 +13,17 @@ use tokio::{fs, signal};
 use mapuche::config::{
     config_cluster_or_default, config_instance_id_or_default, config_listen_or_default,
     config_max_connection, config_port_or_default, config_prometheus_listen_or_default,
-    config_prometheus_port_or_default, config_ring_port_or_default,
+    config_prometheus_port_or_default, config_raft_port_or_default, config_ring_port_or_default,
     config_ring_v_node_num_or_default, data_store_dir_or_default, set_global_config, Config,
+    LOGGER,
 };
 use mapuche::hash_ring::{HashRing, NodeInfo};
 use mapuche::metrics::PrometheusServer;
 use mapuche::p2p::client::P2PClient;
 use mapuche::p2p::server::P2PServer;
+use mapuche::raft::client::RaftClient;
 use mapuche::raft::start_raft_node;
-use mapuche::rocks::set_instance_id;
+use mapuche::rocks::{set_instance_id, INSTANCE_ID};
 
 #[tokio::main]
 pub async fn main() -> mapuche::Result<()> {
@@ -87,20 +90,32 @@ pub async fn main() -> mapuche::Result<()> {
         start_cluster().await?;
     }
 
-    thread::spawn(|| {
-        let raft_store_path = format!("{}/raft", data_store_dir_or_default());
-        let rt = Runtime::new().unwrap();
-        let x = rt.block_on(async move {
-            start_raft_node(1, raft_store_path, "127.0.0.1:21001".to_string()).await
-        });
-        println!("x: {:?}", x);
-    });
+    // Start raft, but not inited
+    start_raft()?;
 
     // Bind a TCP listener
     let listener = TcpListener::bind(&format!("{}:{}", &listen_addr, port)).await?;
 
     server::run(listener, signal::ctrl_c()).await;
 
+    Ok(())
+}
+
+fn start_raft() -> mapuche::Result<()> {
+    thread::spawn(|| {
+        let raft_port = config_raft_port_or_default();
+        let raft_address = format!("127.0.0.1:{}", raft_port);
+        let leader_addr = raft_address.clone();
+        let x = Runtime::new().unwrap().block_on(async move {
+            let raft_store_path = format!("{}/raft", data_store_dir_or_default());
+            start_raft_node(1, raft_store_path, raft_address).await
+        });
+        unsafe {
+            let raft_client = RaftClient::new(INSTANCE_ID, leader_addr);
+            RAFT_CLIENT.replace(raft_client);
+        }
+        info!(LOGGER, "raft noe start: {:?}", x);
+    });
     Ok(())
 }
 

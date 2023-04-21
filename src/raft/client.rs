@@ -1,7 +1,6 @@
-use crate::raft::store::RocksRequest;
 use crate::raft::{
     CheckIsLeaderError, ClientWriteError, ClientWriteResponse, ForwardToLeader, InitializeError,
-    MapucheNodeId, RPCError, RaftError,
+    MapucheNodeId, RPCError, RaftError, RaftRequest,
 };
 use openraft::error::{NetworkError, RemoteError};
 use openraft::{BasicNode, RaftMetrics, TryAsRef};
@@ -45,7 +44,7 @@ impl RaftClient {
     /// The result of applying the request will be returned.
     pub async fn write(
         &self,
-        req: &RocksRequest,
+        req: &RaftRequest,
     ) -> Result<ClientWriteResponse, RPCError<ClientWriteError>> {
         self.send_rpc_to_leader("write", Some(req)).await
     }

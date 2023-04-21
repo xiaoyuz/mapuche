@@ -1,4 +1,4 @@
-use crate::raft::{MapucheNodeId, MapucheRaft, RocksStore};
+use crate::raft::{MapucheNodeId, MapucheRaft, RaftStore};
 use openraft::Config;
 use std::sync::Arc;
 
@@ -8,6 +8,6 @@ pub struct MapucheRaftApp {
     pub id: MapucheNodeId,
     pub addr: String,
     pub raft: MapucheRaft,
-    pub store: Arc<RocksStore>,
+    pub store: Arc<RaftStore>,
     pub config: Arc<Config>,
 }

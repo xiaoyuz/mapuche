@@ -9,9 +9,9 @@ use openraft::{BasicNode, RaftNetwork, RaftNetworkFactory};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-pub struct MapucheNetwork {}
+pub struct MapucheRaftNetworkFactory {}
 
-impl MapucheNetwork {
+impl MapucheRaftNetworkFactory {
     pub async fn send_rpc<Req, Resp, Err>(
         &self,
         target: MapucheNodeId,
@@ -42,26 +42,26 @@ impl MapucheNetwork {
 }
 
 #[async_trait]
-impl RaftNetworkFactory<TypeConfig> for MapucheNetwork {
-    type Network = MapucheNetworkConnection;
+impl RaftNetworkFactory<TypeConfig> for MapucheRaftNetworkFactory {
+    type Network = MapucheNetwork;
 
     async fn new_client(&mut self, target: MapucheNodeId, node: &BasicNode) -> Self::Network {
-        MapucheNetworkConnection {
-            owner: MapucheNetwork {},
+        MapucheNetwork {
+            owner: MapucheRaftNetworkFactory {},
             target,
             target_node: node.clone(),
         }
     }
 }
 
-pub struct MapucheNetworkConnection {
-    owner: MapucheNetwork,
+pub struct MapucheNetwork {
+    owner: MapucheRaftNetworkFactory,
     target: MapucheNodeId,
     target_node: BasicNode,
 }
 
 #[async_trait]
-impl RaftNetwork<TypeConfig> for MapucheNetworkConnection {
+impl RaftNetwork<TypeConfig> for MapucheNetwork {
     async fn send_append_entries(
         &mut self,
         req: AppendEntriesRequest<TypeConfig>,
