@@ -21,11 +21,14 @@ use rocksdb::{BoundColumnFamily, ColumnFamilyDescriptor, Direction, Options, DB}
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use crate::Frame;
+
 type StorageResult<T> = Result<T, StorageError<MapucheNodeId>>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RaftResponse {
-    pub value: Option<String>,
+pub enum RaftResponse {
+    OptString(Option<String>),
+    Frame(Frame),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -203,7 +206,6 @@ fn sm_w_err<E: Error + 'static>(e: E) -> StorageError<MapucheNodeId> {
 #[derive(Debug)]
 pub struct RaftStore {
     db: Arc<DB>,
-
     /// The Raft state machine.
     pub state_machine: RwLock<RaftStateMachine>,
 }
@@ -456,13 +458,7 @@ impl RaftSnapshotBuilder<TypeConfig, Cursor<Vec<u8>>> for Arc<RaftStore> {
             // Serialize the data of the state machine.
             let state_machine =
                 SerializableRaftStateMachine::from(&*self.state_machine.read().await);
-            data = serde_json::to_vec(&state_machine).map_err(|e| {
-                StorageIOError::new(
-                    ErrorSubject::StateMachine,
-                    ErrorVerb::Read,
-                    AnyError::new(&e),
-                )
-            })?;
+            data = serde_json::to_vec(&state_machine).map_err(sm_r_err)?;
 
             last_applied_log = state_machine.last_applied_log;
             last_membership = state_machine.last_membership;
@@ -596,19 +592,31 @@ impl RaftStorage<TypeConfig> for Arc<RaftStore> {
             sm.set_last_applied_log(entry.log_id)?;
 
             match entry.payload {
-                EntryPayload::Blank => res.push(RaftResponse { value: None }),
+                EntryPayload::Blank => res.push(RaftResponse::OptString(None)),
                 EntryPayload::Normal(ref req) => match req {
                     RaftRequest::Set { key, value } => {
                         sm.insert(key.clone(), value.clone())?;
-                        res.push(RaftResponse {
-                            value: Some(value.clone()),
-                        })
+                        res.push(RaftResponse::OptString(Some(value.clone())))
+                    }
+                    RaftRequest::CmdLog { id, cmd } => {
+                        let frame = cmd.clone().execute_for_remote().await.map_err(|e| {
+                            StorageError::IO {
+                                source: StorageIOError::new(
+                                    ErrorSubject::StateMachine,
+                                    ErrorVerb::Seek,
+                                    AnyError::error(format!("raft request error: {:?}", e)),
+                                ),
+                            }
+                        })?;
+                        let cmd_str: String = cmd.into();
+                        sm.insert(id.clone(), cmd_str.clone())?;
+                        res.push(RaftResponse::Frame(frame))
                     }
                 },
                 EntryPayload::Membership(ref mem) => {
                     sm.set_last_membership(StoredMembership::new(Some(entry.log_id), mem.clone()))?;
 
-                    res.push(RaftResponse { value: None })
+                    res.push(RaftResponse::OptString(None))
                 }
             };
         }

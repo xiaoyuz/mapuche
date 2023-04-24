@@ -4,6 +4,7 @@ use actix_web::{middleware, App, HttpServer};
 use openraft::{declare_raft_types, BasicNode, Config, Raft};
 use std::path::Path;
 
+use crate::Command;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -41,6 +42,7 @@ pub type MapucheRaft = Raft<TypeConfig, MapucheRaftNetworkFactory, Arc<RaftStore
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum RaftRequest {
     Set { key: String, value: String },
+    CmdLog { id: String, cmd: Command },
 }
 
 #[allow(dead_code)]
@@ -100,7 +102,6 @@ where
             .service(management::add_learner)
             .service(management::change_membership)
             .service(management::metrics)
-            .service(management::hello)
             // application API
             .service(api::write)
             .service(api::read)

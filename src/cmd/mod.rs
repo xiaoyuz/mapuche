@@ -274,6 +274,12 @@ pub enum Command {
     Unknown(Unknown),
 }
 
+pub enum CommandType {
+    READ,
+    WRITE,
+    MANAGE,
+}
+
 impl Command {
     /// Parse a command from a received frame.
     ///
@@ -478,6 +484,22 @@ impl Command {
 
         // The command has been successfully parsed
         Ok(command)
+    }
+
+    pub fn cmd_type(&self) -> CommandType {
+        use Command::*;
+
+        match self {
+            Ping(_) | Type(_) | Auth(_) | Unknown(_) => CommandType::MANAGE,
+            Mset(_) | Set(_) | Del(_) | Incr(_) | Decr(_) | Expire(_) | ExpireAt(_)
+            | Pexpire(_) | PexpireAt(_) | Sadd(_) | Spop(_) | Srem(_) | Lpush(_) | Rpush(_)
+            | Lpop(_) | Rpop(_) | Ltrim(_) | Lset(_) | Lrem(_) | Linsert(_) | Hset(_)
+            | Hmset(_) | Hsetnx(_) | Hdel(_) | Hincrby(_) | Zadd(_) | Zrem(_)
+            | Zremrangebyscore(_) | Zremrangebyrank(_) | Zpopmin(_) | Zpopmax(_) | Zincrby(_) => {
+                CommandType::WRITE
+            }
+            _ => CommandType::READ,
+        }
     }
 
     /// Apply the command to the specified `Db` instance.
@@ -792,6 +814,18 @@ impl Command {
 
             Command::Unknown(cmd) => cmd.get_name(),
         }
+    }
+}
+
+impl From<&str> for Command {
+    fn from(value: &str) -> Self {
+        serde_json::from_str(value).unwrap()
+    }
+}
+
+impl From<&Command> for String {
+    fn from(value: &Command) -> Self {
+        serde_json::to_string(value).unwrap()
     }
 }
 

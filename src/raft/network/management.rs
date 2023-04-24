@@ -58,8 +58,3 @@ pub async fn metrics(app: Data<MapucheRaftApp>) -> actix_web::Result<impl Respon
     let res: Result<RaftMetrics<MapucheNodeId, BasicNode>, Infallible> = Ok(metrics);
     Ok(Json(res))
 }
-
-#[get("/hello")]
-pub async fn hello(_app: Data<MapucheRaftApp>) -> impl Responder {
-    "hello"
-}

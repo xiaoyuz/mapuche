@@ -1,4 +1,7 @@
-use crate::{Command, Connection, Db, DbDropGuard, MapucheError, Shutdown, P2P_CLIENT, RING_NODES};
+use crate::{
+    Command, Connection, Db, DbDropGuard, MapucheError, Shutdown, P2P_CLIENT, RAFT_CLIENT,
+    RING_NODES,
+};
 use std::collections::HashMap;
 
 use crate::client::Client;
@@ -22,6 +25,10 @@ use slog::{debug, error, info};
 use std::future::Future;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
+
+use crate::cmd::CommandType;
+use crate::raft::store::RaftResponse;
+use crate::raft::RaftRequest;
 use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
 use tokio::time::{self, Duration, Instant};
 use tokio_util::task::LocalPoolHandle;
@@ -118,25 +125,6 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) {
     let mut gc_master = GcMaster::new(async_gc_worker_number_or_default());
     gc_master.start_workers().await;
 
-    // Concurrently run the server and listen for the `shutdown` signal. The
-    // server task runs until an error is encountered, so under normal
-    // circumstances, this `select!` statement runs until the `shutdown` signal
-    // is received.
-    //
-    // `select!` statements are written in the form of:
-    //
-    // ```
-    // <result of async op> = <async op> => <step to perform with result>
-    // ```
-    //
-    // All `<async op>` statements are executed concurrently. Once the **first**
-    // op completes, its associated `<step to perform with result>` is
-    // performed.
-    //
-    // The `select!` macro is a foundational building block for writing
-    // asynchronous Rust. See the API docs for more details:
-    //
-    // https://docs.rs/tokio/*/tokio/macro.select.html
     tokio::select! {
         res = server.run() => {
             // If an error is received here, accepting connections from the TCP
@@ -202,6 +190,7 @@ impl Listener {
 
         let local_pool_number = config_local_pool_number();
         let local_pool = LocalPoolHandle::new(local_pool_number);
+
         loop {
             let permit = self
                 .limit_connections
@@ -451,23 +440,24 @@ impl Handler {
     }
 
     async fn execute_locally(&mut self, cmd: Command) -> crate::Result<()> {
-        // Perform the work needed to apply the command. This may mutate the
-        // database state as a result.
-        //
-        // The connection is passed into the apply function which allows the
-        // command to write response frames directly to the connection. In
-        // the case of pub/sub, multiple frames may be send back to the
-        // peer.
-
-        // Perform the work needed to apply the command. This may mutate the
-        // database state as a result.
-        //
-        // The connection is passed into the apply function which allows the
-        // command to write response frames directly to the connection. In
-        // the case of pub/sub, multiple frames may be send back to the
-        // peer.
-        cmd.apply(&self.db, &mut self.connection, &mut self.shutdown)
-            .await
+        unsafe {
+            if let (Some(client), CommandType::WRITE) = (&RAFT_CLIENT, cmd.cmd_type()) {
+                let response = client
+                    .write(&RaftRequest::CmdLog {
+                        id: Uuid::new_v4().to_string(),
+                        cmd,
+                    })
+                    .await?;
+                if let RaftResponse::Frame(frame) = response.data {
+                    debug!(LOGGER, "res from raft, {:?}", frame);
+                    self.connection.write_frame(&frame).await?;
+                }
+            } else {
+                cmd.apply(&self.db, &mut self.connection, &mut self.shutdown)
+                    .await?;
+            }
+        }
+        Ok(())
     }
 }
 
