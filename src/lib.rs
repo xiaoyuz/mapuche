@@ -75,6 +75,29 @@ pub enum MapucheError {
     Owned(String),
 }
 
+#[derive(Debug, Clone)]
+pub enum MapucheInfra {
+    Single,
+    Replica,
+    Cluster,
+}
+
+impl MapucheInfra {
+    pub fn need_raft(&self) -> bool {
+        matches!(self, MapucheInfra::Replica | MapucheInfra::Cluster)
+    }
+}
+
+impl From<&str> for MapucheInfra {
+    fn from(value: &str) -> Self {
+        match value {
+            "replica" => Self::Replica,
+            "cluster" => Self::Cluster,
+            _ => Self::Replica,
+        }
+    }
+}
+
 /// A specialized `Result` type for mapuche operations.
 ///
 /// This is defined as a convenience.

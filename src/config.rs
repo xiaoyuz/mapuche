@@ -1,4 +1,4 @@
-use crate::{DEFAULT_PORT, DEFAULT_RAFT_PORT, DEFAULT_RING_PORT};
+use crate::{MapucheInfra, DEFAULT_PORT, DEFAULT_RAFT_PORT, DEFAULT_RING_PORT};
 use lazy_static::lazy_static;
 use serde::Deserialize;
 
@@ -44,6 +44,7 @@ struct Server {
     log_level: Option<String>,
     log_file: Option<String>,
     meta_key_number: Option<u16>,
+    infra: Option<String>,
     cluster: Option<String>,
 }
 
@@ -176,6 +177,17 @@ pub fn config_prometheus_port_or_default() -> String {
         }
     }
     "18080".to_owned()
+}
+
+pub fn config_infra_or_default() -> MapucheInfra {
+    unsafe {
+        if let Some(c) = &SERVER_CONFIG {
+            if let Some(s) = c.server.infra.clone() {
+                return s.as_str().into();
+            }
+        }
+    }
+    MapucheInfra::Single
 }
 
 pub fn config_cluster_or_default() -> Vec<String> {

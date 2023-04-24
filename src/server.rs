@@ -6,8 +6,8 @@ use std::collections::HashMap;
 
 use crate::client::Client;
 use crate::config::{
-    async_gc_worker_number_or_default, config_cluster_or_default, config_local_pool_number,
-    config_max_connection, is_auth_enabled, is_auth_matched, LOGGER,
+    async_gc_worker_number_or_default, config_cluster_or_default, config_infra_or_default,
+    config_local_pool_number, config_max_connection, is_auth_enabled, is_auth_matched, LOGGER,
 };
 use crate::gc::GcMaster;
 use crate::metrics::{
@@ -440,6 +440,11 @@ impl Handler {
     }
 
     async fn execute_locally(&mut self, cmd: Command) -> crate::Result<()> {
+        if !config_infra_or_default().need_raft() {
+            return cmd
+                .apply(&self.db, &mut self.connection, &mut self.shutdown)
+                .await;
+        }
         unsafe {
             if let (Some(client), CommandType::WRITE) = (&RAFT_CLIENT, cmd.cmd_type()) {
                 let response = client

@@ -11,11 +11,11 @@ use tokio::runtime::Runtime;
 use tokio::{fs, signal};
 
 use mapuche::config::{
-    config_cluster_or_default, config_instance_id_or_default, config_listen_or_default,
-    config_max_connection, config_port_or_default, config_prometheus_listen_or_default,
-    config_prometheus_port_or_default, config_raft_port_or_default, config_ring_port_or_default,
-    config_ring_v_node_num_or_default, data_store_dir_or_default, set_global_config, Config,
-    LOGGER,
+    config_cluster_or_default, config_infra_or_default, config_instance_id_or_default,
+    config_listen_or_default, config_max_connection, config_port_or_default,
+    config_prometheus_listen_or_default, config_prometheus_port_or_default,
+    config_raft_port_or_default, config_ring_port_or_default, config_ring_v_node_num_or_default,
+    data_store_dir_or_default, set_global_config, Config, LOGGER,
 };
 use mapuche::hash_ring::{HashRing, NodeInfo};
 use mapuche::metrics::PrometheusServer;
@@ -91,7 +91,9 @@ pub async fn main() -> mapuche::Result<()> {
     }
 
     // Start raft, but not inited
-    start_raft()?;
+    if config_infra_or_default().need_raft() {
+        start_raft()?;
+    }
 
     // Bind a TCP listener
     let listener = TcpListener::bind(&format!("{}:{}", &listen_addr, port)).await?;
