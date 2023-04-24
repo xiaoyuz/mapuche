@@ -1,3 +1,4 @@
-1. Raft protocol support.
+1. Raft protocol support (On going).
 2. Think about a better design for List storage, to avoid the large write lock on meta-data.
 3. Replace hyper to actix-web.
+4. hash ring to support cluster.
