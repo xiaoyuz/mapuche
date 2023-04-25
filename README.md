@@ -27,6 +27,7 @@ prometheus_listen = "0.0.0.0"
 prometheus_port = 18080
 log_level = "info"
 log_file = "rocksdb-service.log"
+infra = "single"
 
 [backend]
 local_pool_number = 8
@@ -256,7 +257,38 @@ tidis> ZRANGE myzset 0 5 WITHSCORES
     |    auth     | auth password        |
     +-------------+----------------------+
 
+## Raft Support
+You can start a raft node group to manage replication.
+Just add the config like below:
+``` toml
+[server]
+raft_port = 16123
+infra = "replica"
+```
+The ``infra`` has three states: _single_, _replica_ and _cluster_ (cluster is on developing).
+
+To start raft replication group, you can start some nodes (>= 3 and odd), and than init the groups by calling http request to one node like:
+```shell
+curl --request POST 'http://localhost:16123/init'
+```
+Then add other nodes and learners:
+```shell
+curl --request POST 'http://localhost:16123/add-learner' \
+--header 'Content-Type: application/json' \
+--data-raw '[2, "127.0.0.1:16124"]'
+```
+At last, add them as members for voting:
+```shell
+curl --request POST 'http://localhost:16123/change-membership' \
+--header 'Content-Type: application/json' \
+--data-raw '[1,2,3]'
+```
+You can always check the metrics on any node:
+```shell
+curl --request GET 'http://localhost:16123/metrics'
+```
+
 ## Acknowledgment
 
 * Thanks to tokio's mini_redis project (https://github.com/tokio-rs/mini-redis), it provides a good start point.
-* And many thanks to Tidis (https://github.com/tidb-incubator/tidis), we learnt a lot about the design of datastore structure from it. 
+* And many thanks to Tidis (https://github.com/tidb-incubator/tidis), we learnt a lot about the design of datastore structure from it.
