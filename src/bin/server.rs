@@ -77,13 +77,7 @@ pub async fn main() -> mapuche::Result<()> {
         println!("failed to update the open files limit...");
     }
 
-    let pmt_server = PrometheusServer::new(
-        format!("{}:{}", &prom_listen, prom_port),
-        instance_id as i64,
-    );
-    tokio::spawn(async move {
-        pmt_server.run().await;
-    });
+    start_pmt(prom_listen, prom_port, instance_id)?;
 
     // If cluster enabled, init cluster connections
     if !config_cluster_or_default().is_empty() {
@@ -100,6 +94,18 @@ pub async fn main() -> mapuche::Result<()> {
 
     server::run(listener, signal::ctrl_c()).await;
 
+    Ok(())
+}
+
+fn start_pmt(prom_listen: &str, prom_port: &str, instance_id: u64) -> mapuche::Result<()> {
+    let pmt_server =
+        PrometheusServer::new(format!("{}:{}", prom_listen, prom_port), instance_id as i64);
+    thread::spawn(|| {
+        Runtime::new()
+            .unwrap()
+            .block_on(async move { pmt_server.run().await })
+    });
+    info!(LOGGER, "pmt node start");
     Ok(())
 }
 

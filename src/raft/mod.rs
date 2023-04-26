@@ -17,7 +17,6 @@ pub mod app;
 pub mod client;
 pub mod network;
 pub mod store;
-pub mod test;
 
 pub type MapucheNodeId = u64;
 

@@ -31,7 +31,6 @@ slog = { version = "2.3", features = ["max_level_trace", "release_max_level_debu
 slog-term = { version = "2.4" }
 toml = { version = "0.7.2" }
 prometheus = { version = "0.13.0", features = ["process"]}
-hyper = { version = "0.14.17", features = ["full"] }
 pprof = { version = "0.9", features = ["flamegraph", "protobuf-codec"] }
 crc = "2.0"
 tokio-util = { version = "0.7.1", features = ["rt"] }

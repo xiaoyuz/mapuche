@@ -1,11 +1,9 @@
 use crate::config::LOGGER;
 use crate::metrics::{CURRENT_CONNECTION_COUNTER, INSTANCE_ID_GAUGER, REQUEST_COUNTER};
-use crate::Result;
-use hyper::header::CONTENT_TYPE;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Request, Response, Server};
+use actix_web::{get, App, HttpResponse, HttpServer, Responder};
+
 use prometheus::{Encoder, TextEncoder};
-use slog::{error, info};
+use slog::info;
 
 pub struct PrometheusServer {
     listen_addr: String,
@@ -20,37 +18,22 @@ impl PrometheusServer {
         PrometheusServer { listen_addr }
     }
 
-    pub async fn run(&self) {
+    pub async fn run(&self) -> std::io::Result<()> {
         info!(LOGGER, "Prometheus Server Listen on: {}", &self.listen_addr);
-        match self.serve().await {
-            Ok(_) => {}
-            Err(e) => {
-                error!(LOGGER, "Prometheus Got Error: {}", e.to_string());
-            }
-        }
+
+        // Start the actix-web server.
+        let server = HttpServer::new(move || App::new().service(metric));
+
+        let x = server.bind(&self.listen_addr)?;
+        x.run().await
     }
+}
 
-    async fn serve(&self) -> Result<()> {
-        let addr = self.listen_addr.parse()?;
-        let serve_future = Server::bind(&addr).serve(make_service_fn(|_| async {
-            Ok::<_, hyper::Error>(service_fn(Self::serve_req))
-        }));
-        serve_future.await?;
-        Ok(())
-    }
-
-    async fn serve_req(_r: Request<Body>) -> Result<Response<Body>> {
-        let encoder = TextEncoder::new();
-        let metric_families = prometheus::gather();
-        let mut buffer = vec![];
-        encoder.encode(&metric_families, &mut buffer).unwrap();
-
-        let response = Response::builder()
-            .status(200)
-            .header(CONTENT_TYPE, encoder.format_type())
-            .body(Body::from(buffer))
-            .unwrap();
-
-        Ok(response)
-    }
+#[get("/")]
+async fn metric() -> impl Responder {
+    let encoder = TextEncoder::new();
+    let metric_families = prometheus::gather();
+    let mut buffer = vec![];
+    encoder.encode(&metric_families, &mut buffer).unwrap();
+    HttpResponse::Ok().body(buffer)
 }
