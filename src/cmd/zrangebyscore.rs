@@ -177,7 +177,7 @@ impl Zrangebyscore {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand::new(&get_client().await)
+        ZsetCommand::new(&get_client())
             .zrange_by_score(
                 &self.key,
                 self.min,

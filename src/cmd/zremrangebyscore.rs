@@ -76,7 +76,7 @@ impl Zremrangebyscore {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand::new(&get_client().await)
+        ZsetCommand::new(&get_client())
             .zremrange_by_score(&self.key, self.min, self.max)
             .await
     }

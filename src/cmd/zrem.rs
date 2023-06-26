@@ -76,7 +76,7 @@ impl Zrem {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand::new(&get_client().await)
+        ZsetCommand::new(&get_client())
             .zrem(&self.key, &self.members)
             .await
     }

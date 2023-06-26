@@ -87,7 +87,7 @@ impl Expire {
         if !expire_at {
             ttl = timestamp_from_ttl(ttl);
         }
-        StringCommand::new(&get_client().await)
+        StringCommand::new(&get_client())
             .expire(&self.key, ttl)
             .await
     }

@@ -76,7 +76,7 @@ impl Push {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ListCommand::new(&get_client().await)
+        ListCommand::new(&get_client())
             .push(&self.key, &self.items, op_left)
             .await
     }

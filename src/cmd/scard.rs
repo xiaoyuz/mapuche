@@ -58,7 +58,7 @@ impl Scard {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        SetCommand::new(&get_client().await).scard(&self.key).await
+        SetCommand::new(&get_client()).scard(&self.key).await
     }
 
     pub fn hash_ring_key(&self) -> crate::Result<String> {

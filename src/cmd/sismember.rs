@@ -61,7 +61,7 @@ impl Sismember {
         }
         let mut members = vec![];
         members.push(self.member.clone());
-        SetCommand::new(&get_client().await)
+        SetCommand::new(&get_client())
             .sismember(&self.key, &members, false)
             .await
     }

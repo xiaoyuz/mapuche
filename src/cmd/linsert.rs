@@ -84,7 +84,7 @@ impl Linsert {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ListCommand::new(&get_client().await)
+        ListCommand::new(&get_client())
             .linsert(&self.key, self.before_pivot, &self.pivot, &self.element)
             .await
     }

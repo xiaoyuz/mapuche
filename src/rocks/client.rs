@@ -21,7 +21,7 @@ pub struct RocksClient {
 }
 
 impl RocksClient {
-    pub async fn new(client: Arc<TransactionDB>) -> Self {
+    pub fn new(client: Arc<TransactionDB>) -> Self {
         Self { client }
     }
 

@@ -135,7 +135,7 @@ impl<'a> StringCommand<'a> {
         let values: Vec<Frame> = ekeys
             .into_iter()
             .map(|k| {
-                let data = ret.get(k.as_ref());
+                let data = ret.get(&k);
                 match data {
                     Some(val) => {
                         // ttl saved in milliseconds
@@ -210,7 +210,7 @@ impl<'a> StringCommand<'a> {
         let ret: HashMap<Key, Value> = result.into_iter().map(|pair| (pair.0, pair.1)).collect();
         let mut nums = 0;
         for k in ekeys {
-            let data = ret.get(k.as_ref());
+            let data = ret.get(&k);
             if let Some(val) = data {
                 // ttl saved in milliseconds
                 let ttl = KeyDecoder::decode_key_ttl(val);

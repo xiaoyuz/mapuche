@@ -59,7 +59,7 @@ impl Hkeys {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        HashCommand::new(&get_client().await)
+        HashCommand::new(&get_client())
             .hgetall(&self.key, true, false)
             .await
     }

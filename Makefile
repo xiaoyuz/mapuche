@@ -7,6 +7,10 @@ check:
 	cargo fmt -- --check
 	cargo clippy --all-targets --all-features -- -D clippy::all
 
+fmt:
+	cargo clippy --fix --allow-dirty --allow-staged
+	cargo fmt
+
 debug:
 	cargo build
 

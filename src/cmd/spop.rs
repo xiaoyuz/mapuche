@@ -68,7 +68,7 @@ impl Spop {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        SetCommand::new(&get_client().await)
+        SetCommand::new(&get_client())
             .spop(&self.key, self.count as u64)
             .await
     }

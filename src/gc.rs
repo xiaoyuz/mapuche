@@ -106,7 +106,7 @@ impl GcMaster {
     pub async fn run(&mut self) -> RocksResult<()> {
         let mut interval = time::interval(Duration::from_millis(async_gc_interval_or_default()));
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
-        let client = get_client().await;
+        let client = get_client();
         let gc_cfs = GcCF::new(&client);
         loop {
             interval.tick().await;
@@ -192,7 +192,7 @@ impl GcWorker {
     }
 
     pub async fn handle_task(&self, task: GcTask) -> RocksResult<()> {
-        let client = get_client().await;
+        let client = get_client();
         let gc_cfs = GcCF::new(&client);
         client.exec_txn(|txn| {
             let task = task.clone();

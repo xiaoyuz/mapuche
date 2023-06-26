@@ -38,7 +38,7 @@ pub static mut INSTANCE_ID: u64 = 0;
 
 lazy_static! {
     pub static ref KEY_ENCODER: KeyEncoder = KeyEncoder::new();
-    pub static ref ROCKS_DB: Arc<TransactionDB> = Arc::new(new_db().unwrap());
+    pub static ref ROCKS_CLIENT: Arc<RocksClient> = Arc::new(new_client().unwrap());
 }
 
 pub trait TxnCommand {
@@ -67,6 +67,11 @@ pub trait TxnCommand {
         key: &str,
         version: u16,
     ) -> Result<()>;
+}
+
+fn new_client() -> Result<RocksClient> {
+    let db = new_db()?;
+    Ok(RocksClient::new(Arc::new(db)))
 }
 
 fn new_db() -> Result<TransactionDB<MultiThreaded>> {
@@ -108,9 +113,8 @@ pub fn get_instance_id() -> u64 {
     unsafe { INSTANCE_ID }
 }
 
-pub async fn get_client() -> RocksClient {
-    let db = ROCKS_DB.clone();
-    RocksClient::new(db).await
+pub fn get_client() -> Arc<RocksClient> {
+    ROCKS_CLIENT.clone()
 }
 
 pub fn gen_next_meta_index() -> u16 {

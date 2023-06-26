@@ -109,7 +109,7 @@ impl Scan {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand::new(&get_client().await)
+        StringCommand::new(&get_client())
             .scan(&self.start, self.count.try_into().unwrap(), &self.regex)
             .await
     }

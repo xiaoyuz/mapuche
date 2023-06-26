@@ -65,7 +65,7 @@ impl Zincrby {
             return Ok(resp_invalid_arguments());
         }
 
-        ZsetCommand::new(&get_client().await)
+        ZsetCommand::new(&get_client())
             .zincrby(&self.key, self.step, &self.member)
             .await
     }

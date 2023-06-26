@@ -57,9 +57,7 @@ impl Strlen {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand::new(&get_client().await)
-            .strlen(&self.key)
-            .await
+        StringCommand::new(&get_client()).strlen(&self.key).await
     }
 
     pub fn hash_ring_key(&self) -> crate::Result<String> {

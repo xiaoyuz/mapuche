@@ -71,7 +71,7 @@ impl Hstrlen {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        HashCommand::new(&get_client().await)
+        HashCommand::new(&get_client())
             .hstrlen(&self.key, &self.field)
             .await
     }

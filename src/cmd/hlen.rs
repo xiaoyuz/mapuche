@@ -59,7 +59,7 @@ impl Hlen {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        HashCommand::new(&get_client().await).hlen(&self.key).await
+        HashCommand::new(&get_client()).hlen(&self.key).await
     }
 
     pub fn hash_ring_key(&self) -> crate::Result<String> {

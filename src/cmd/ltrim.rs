@@ -76,7 +76,7 @@ impl Ltrim {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ListCommand::new(&get_client().await)
+        ListCommand::new(&get_client())
             .ltrim(&self.key, self.start, self.end)
             .await
     }

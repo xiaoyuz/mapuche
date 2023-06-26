@@ -61,9 +61,7 @@ impl Smembers {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        SetCommand::new(&get_client().await)
-            .smembers(&self.key)
-            .await
+        SetCommand::new(&get_client()).smembers(&self.key).await
     }
 
     pub fn hash_ring_key(&self) -> crate::Result<String> {

@@ -63,7 +63,7 @@ impl Hexists {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        HashCommand::new(&get_client().await)
+        HashCommand::new(&get_client())
             .hexists(&self.key, &self.field)
             .await
     }

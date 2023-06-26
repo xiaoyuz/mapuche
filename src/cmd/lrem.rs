@@ -72,7 +72,7 @@ impl Lrem {
             from_head = false;
             count = -count;
         }
-        ListCommand::new(&get_client().await)
+        ListCommand::new(&get_client())
             .lrem(&self.key, count as usize, from_head, &self.element)
             .await
     }

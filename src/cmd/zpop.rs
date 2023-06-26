@@ -68,7 +68,7 @@ impl Zpop {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand::new(&get_client().await)
+        ZsetCommand::new(&get_client())
             .zpop(&self.key, from_min, self.count as u64)
             .await
     }

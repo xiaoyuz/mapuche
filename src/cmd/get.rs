@@ -95,7 +95,7 @@ impl Get {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand::new(&get_client().await).get(&self.key).await
+        StringCommand::new(&get_client()).get(&self.key).await
     }
 
     pub fn hash_ring_key(&self) -> crate::Result<String> {

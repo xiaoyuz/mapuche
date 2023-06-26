@@ -87,7 +87,7 @@ impl Mset {
             let kvpair = KvPair::from((ekey, eval));
             kvs.push(kvpair);
         }
-        StringCommand::new(&get_client().await).batch_put(kvs).await
+        StringCommand::new(&get_client()).batch_put(kvs).await
     }
 
     pub fn hash_ring_key(&self) -> crate::Result<String> {

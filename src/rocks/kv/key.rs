@@ -72,11 +72,6 @@ impl<'a> From<&'a Vec<u8>> for &'a Key {
         unsafe { &*(key as *const Vec<u8> as *const Key) }
     }
 }
-impl AsRef<Key> for Key {
-    fn as_ref(&self) -> &Key {
-        self
-    }
-}
 
 impl AsRef<[u8]> for Key {
     fn as_ref(&self) -> &[u8] {
