@@ -1,8 +1,10 @@
-use actix_web::middleware::Logger;
-use actix_web::web::Data;
-use actix_web::{middleware, App, HttpServer};
+use actix_web::middleware::{self, Logger};
+use actix_web::{App, HttpServer};
 use openraft::{declare_raft_types, BasicNode, Config, Raft};
 use std::path::Path;
+use std::thread;
+use tokio::runtime::Runtime;
+use tonic::transport::Server;
 
 use crate::Command;
 use serde::{Deserialize, Serialize};
@@ -10,8 +12,12 @@ use std::sync::Arc;
 
 use crate::raft::app::MapucheRaftApp;
 use crate::raft::network::raft_network_impl::MapucheRaftNetworkFactory;
-use crate::raft::network::{api, management, raft};
+
 use crate::raft::store::{RaftResponse, RaftStore};
+
+use self::network::management;
+use self::network::rpc::raft_rpc::raft_server;
+use self::network::rpc::RaftRpcService;
 
 pub mod app;
 pub mod client;
@@ -38,17 +44,29 @@ declare_raft_types!(
 
 pub type MapucheRaft = Raft<TypeConfig, MapucheRaftNetworkFactory, Arc<RaftStore>>;
 
+pub static mut RAFT_APP: Option<Arc<MapucheRaftApp>> = None;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum RaftRequest {
     Set { key: String, value: String },
     CmdLog { id: String, cmd: Command },
 }
 
-#[allow(dead_code)]
+impl From<&str> for RaftRequest {
+    fn from(value: &str) -> Self {
+        serde_json::from_str(value).unwrap()
+    }
+}
+
+pub fn get_raft_app() -> Option<Arc<MapucheRaftApp>> {
+    unsafe { RAFT_APP.clone() }
+}
+
 pub async fn start_raft_node<P>(
     node_id: MapucheNodeId,
     dir: P,
-    http_addr: String,
+    addr: &str,
+    api_addr: &str,
 ) -> std::io::Result<()>
 where
     P: AsRef<Path>,
@@ -75,14 +93,29 @@ where
         .await
         .unwrap();
 
-    // Create an application that will store all the instances created above, this will
-    // be later used on the actix-web services.
-    let app = Data::new(MapucheRaftApp {
+    let app = MapucheRaftApp {
         id: node_id,
-        addr: http_addr.clone(),
+        addr: addr.to_string(),
         raft,
         store,
         config,
+    };
+
+    unsafe {
+        RAFT_APP.replace(Arc::new(app.clone()));
+    }
+
+    let addr = addr.parse().unwrap();
+    let rpc_service = RaftRpcService::default();
+
+    thread::spawn(move || {
+        Runtime::new().unwrap().block_on(async move {
+            Server::builder()
+                .add_service(raft_server::RaftServer::new(rpc_service))
+                .serve(addr)
+                .await
+                .unwrap();
+        })
     });
 
     // Start the actix-web server.
@@ -91,23 +124,14 @@ where
             .wrap(Logger::default())
             .wrap(Logger::new("%a %{User-Agent}i"))
             .wrap(middleware::Compress::default())
-            .app_data(app.clone())
-            // raft internal RPC
-            .service(raft::append)
-            .service(raft::snapshot)
-            .service(raft::vote)
             // admin API
             .service(management::init)
             .service(management::add_learner)
             .service(management::change_membership)
             .service(management::metrics)
-            // application API
-            .service(api::write)
-            .service(api::read)
-            .service(api::consistent_read)
     });
 
-    let x = server.bind(http_addr)?;
+    let x = server.bind(api_addr)?;
 
     x.run().await
 }

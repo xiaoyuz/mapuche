@@ -52,7 +52,8 @@ use thiserror::Error;
 /// Used if no port is specified.
 pub const DEFAULT_PORT: &str = "6380";
 pub const DEFAULT_RING_PORT: &str = "6123";
-pub const DEFAULT_RAFT_PORT: &str = "16123";
+pub const DEFAULT_RAFT_INTERNAL_PORT: &str = "16123";
+pub const DEFAULT_RAFT_API_PORT: &str = "26123";
 
 /// Error returned by most functions.
 ///

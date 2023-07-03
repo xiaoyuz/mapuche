@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package raftrpc;
+
+message RaftReq {
+  string req = 1;
+}
+
+message RaftResp {
+  string resp = 1;
+}
+
+service Raft {
+  rpc Request (RaftReq) returns (RaftResp) {}
+}

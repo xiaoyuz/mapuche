@@ -38,7 +38,7 @@ pub static mut INSTANCE_ID: u64 = 0;
 
 lazy_static! {
     pub static ref KEY_ENCODER: KeyEncoder = KeyEncoder::new();
-    pub static ref ROCKS_CLIENT: Arc<RocksClient> = Arc::new(new_client().unwrap());
+    static ref ROCKS_CLIENT: Arc<RocksClient> = Arc::new(new_client().unwrap());
 }
 
 pub trait TxnCommand {

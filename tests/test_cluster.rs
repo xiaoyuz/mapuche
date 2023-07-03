@@ -33,7 +33,7 @@ async fn test_cluster() -> anyhow::Result<()> {
     let _h1 = thread::spawn(|| {
         let rt = Runtime::new().unwrap();
         let x = rt.block_on(async move {
-            start_raft_node(1, d1.path(), "127.0.0.1:21001".to_string()).await
+            start_raft_node(1, d1.path(), "127.0.0.1:21001", "127.0.0.1:31001").await
         });
         println!("x: {:?}", x);
     });
@@ -41,7 +41,7 @@ async fn test_cluster() -> anyhow::Result<()> {
     let _h2 = thread::spawn(|| {
         let rt = Runtime::new().unwrap();
         let x = rt.block_on(async move {
-            start_raft_node(2, d2.path(), "127.0.0.1:21002".to_string()).await
+            start_raft_node(2, d2.path(), "127.0.0.1:21002", "127.0.0.1:31002").await
         });
         println!("x: {:?}", x);
     });
@@ -49,7 +49,7 @@ async fn test_cluster() -> anyhow::Result<()> {
     let _h3 = thread::spawn(|| {
         let rt = Runtime::new().unwrap();
         let x = rt.block_on(async move {
-            start_raft_node(3, d3.path(), "127.0.0.1:21003".to_string()).await
+            start_raft_node(3, d3.path(), "127.0.0.1:21003", "127.0.0.1:31003").await
         });
         println!("x: {:?}", x);
     });
@@ -57,7 +57,7 @@ async fn test_cluster() -> anyhow::Result<()> {
     let _h4 = thread::spawn(|| {
         let rt = Runtime::new().unwrap();
         let x = rt.block_on(async move {
-            start_raft_node(3, d4.path(), "127.0.0.1:21004".to_string()).await
+            start_raft_node(3, d4.path(), "127.0.0.1:21004", "127.0.0.1:31004").await
         });
         println!("x: {:?}", x);
     });
@@ -161,15 +161,15 @@ async fn test_cluster() -> anyhow::Result<()> {
     // --- Read it on every node.
 
     println!("=== read `foo` on node 1");
-    let x = client.read(&("foo".to_string())).await?;
+    let x = client.read("foo").await?;
     assert_eq!("bar", x);
 
     println!("=== read `foo` on node 2");
-    let x = client2.read(&("foo".to_string())).await?;
+    let x = client2.read("foo").await?;
     assert_eq!("bar", x);
 
     println!("=== read `foo` on node 3");
-    let x = client3.read(&("foo".to_string())).await?;
+    let x = client3.read("foo").await?;
     assert_eq!("bar", x);
 
     // --- A write to non-leader will be automatically forwarded to a known leader
@@ -187,25 +187,25 @@ async fn test_cluster() -> anyhow::Result<()> {
     // --- Read it on every node.
 
     println!("=== read `foo` on node 1");
-    let x = client.read(&("foo".to_string())).await?;
+    let x = client.read("foo").await?;
     assert_eq!("wow", x);
 
     println!("=== read `foo` on node 2");
     let client2 = RaftClient::new(2, get_addr(2)?);
-    let x = client2.read(&("foo".to_string())).await?;
+    let x = client2.read("foo").await?;
     assert_eq!("wow", x);
 
     println!("=== read `foo` on node 3");
     let client3 = RaftClient::new(3, get_addr(3)?);
-    let x = client3.read(&("foo".to_string())).await?;
+    let x = client3.read("foo").await?;
     assert_eq!("wow", x);
 
     println!("=== consistent_read `foo` on node 1");
-    let x = client.consistent_read(&("foo".to_string())).await?;
+    let x = client.consistent_read("foo").await?;
     assert_eq!("wow", x);
 
     println!("=== consistent_read `foo` on node 2 MUST return CheckIsLeaderError");
-    let x = client2.consistent_read(&("foo".to_string())).await;
+    let x = client2.consistent_read("foo").await;
     match x {
         Err(e) => {
             let s = e.to_string();
@@ -244,9 +244,9 @@ async fn test_cluster() -> anyhow::Result<()> {
     );
     println!("=== read `foo` on node 4");
     let client4 = RaftClient::new(4, get_addr(4)?);
-    let x = client4.read(&("foo".to_string())).await?;
+    let x = client4.read("foo").await?;
     assert_eq!("wow", x);
-    let x = client4.read(&("boo".to_string())).await?;
+    let x = client4.read("boo").await?;
     assert_eq!("bar", x);
 
     // --- Remove node 1 from the cluster.
@@ -272,7 +272,7 @@ async fn test_cluster() -> anyhow::Result<()> {
         .await?;
 
     println!("=== read `foo=zoo` to node-3");
-    let got = client3.read(&"foo".to_string()).await?;
+    let got = client3.read("foo").await?;
     assert_eq!("zoo", got);
     Ok(())
 }

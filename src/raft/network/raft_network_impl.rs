@@ -1,45 +1,25 @@
 use crate::raft::{MapucheNodeId, TypeConfig};
+
 use async_trait::async_trait;
-use openraft::error::{InstallSnapshotError, NetworkError, RPCError, RaftError, RemoteError};
+use openraft::error::{InstallSnapshotError, RPCError, RaftError, RemoteError};
 use openraft::raft::{
     AppendEntriesRequest, AppendEntriesResponse, InstallSnapshotRequest, InstallSnapshotResponse,
     VoteRequest, VoteResponse,
 };
 use openraft::{BasicNode, RaftNetwork, RaftNetworkFactory};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 
-pub struct MapucheRaftNetworkFactory {}
+use tonic::Status;
 
-impl MapucheRaftNetworkFactory {
-    pub async fn send_rpc<Req, Resp, Err>(
-        &self,
-        target: MapucheNodeId,
-        target_node: &BasicNode,
-        uri: &str,
-        req: Req,
-    ) -> Result<Resp, RPCError<MapucheNodeId, BasicNode, Err>>
-    where
-        Req: Serialize,
-        Err: std::error::Error + DeserializeOwned,
-        Resp: DeserializeOwned,
-    {
-        let addr = &target_node.addr;
-        let url = format!("http://{}/{}", addr, uri);
-        let client = reqwest::Client::new();
-        let resp = client
-            .post(url)
-            .json(&req)
-            .send()
-            .await
-            .map_err(|e| RPCError::Network(NetworkError::new(&e)))?;
-        let res: Result<Resp, Err> = resp
-            .json()
-            .await
-            .map_err(|e| RPCError::Network(NetworkError::new(&e)))?;
-        res.map_err(|e| RPCError::RemoteError(RemoteError::new(target, e)))
-    }
+use super::rpc::raft_rpc::raft_client::RaftClient;
+use super::rpc::raft_rpc::RaftReq;
+use super::rpc::{RpcReqMessage, RpcRespMessage};
+
+pub mod raft_rpc {
+    tonic::include_proto!("raftrpc");
 }
+
+#[derive(Clone)]
+pub struct MapucheRaftNetworkFactory {}
 
 #[async_trait]
 impl RaftNetworkFactory<TypeConfig> for MapucheRaftNetworkFactory {
@@ -51,6 +31,26 @@ impl RaftNetworkFactory<TypeConfig> for MapucheRaftNetworkFactory {
             target,
             target_node: node.clone(),
         }
+    }
+}
+
+impl MapucheRaftNetworkFactory {
+    pub async fn send_rpc(
+        &self,
+        req: &RpcReqMessage,
+        target_node: &BasicNode,
+    ) -> Result<RpcRespMessage, Status> {
+        let addr = format!("http://{}", target_node.addr.clone());
+        let mut client = RaftClient::connect(addr)
+            .await
+            .map_err(|e| Status::from_error(Box::new(e)))?;
+        let req = serde_json::to_string(req).unwrap();
+        let request: tonic::Request<RaftReq> = tonic::Request::new(RaftReq { req });
+
+        client.request(request).await.map(|r| {
+            let resp: RpcRespMessage = (&r.into_inner()).into();
+            resp
+        })
     }
 }
 
@@ -69,9 +69,25 @@ impl RaftNetwork<TypeConfig> for MapucheNetwork {
         AppendEntriesResponse<MapucheNodeId>,
         RPCError<MapucheNodeId, BasicNode, RaftError<MapucheNodeId>>,
     > {
-        self.owner
-            .send_rpc(self.target, &self.target_node, "raft-append", req)
+        let req = RpcReqMessage::Append(req);
+        let res = self
+            .owner
+            .send_rpc(&req, &self.target_node)
             .await
+            .map_err(|_| {
+                RPCError::RemoteError(RemoteError::new(
+                    self.target,
+                    RaftError::Fatal(openraft::error::Fatal::Panicked),
+                ))
+            })?;
+        if let RpcRespMessage::Append(r) = res {
+            r.map_err(|e| RPCError::RemoteError(RemoteError::new(self.target, e)))
+        } else {
+            Err(RPCError::RemoteError(RemoteError::new(
+                self.target,
+                RaftError::Fatal(openraft::error::Fatal::Panicked),
+            )))
+        }
     }
 
     async fn send_install_snapshot(
@@ -81,9 +97,25 @@ impl RaftNetwork<TypeConfig> for MapucheNetwork {
         InstallSnapshotResponse<MapucheNodeId>,
         RPCError<MapucheNodeId, BasicNode, RaftError<MapucheNodeId, InstallSnapshotError>>,
     > {
-        self.owner
-            .send_rpc(self.target, &self.target_node, "raft-snapshot", req)
+        let req = RpcReqMessage::InstallSnapshot(req);
+        let res = self
+            .owner
+            .send_rpc(&req, &self.target_node)
             .await
+            .map_err(|_| {
+                RPCError::RemoteError(RemoteError::new(
+                    self.target,
+                    RaftError::Fatal(openraft::error::Fatal::Panicked),
+                ))
+            })?;
+        if let RpcRespMessage::InstallSnapshot(r) = res {
+            r.map_err(|e| RPCError::RemoteError(RemoteError::new(self.target, e)))
+        } else {
+            Err(RPCError::RemoteError(RemoteError::new(
+                self.target,
+                RaftError::Fatal(openraft::error::Fatal::Panicked),
+            )))
+        }
     }
 
     async fn send_vote(
@@ -93,8 +125,24 @@ impl RaftNetwork<TypeConfig> for MapucheNetwork {
         VoteResponse<MapucheNodeId>,
         RPCError<MapucheNodeId, BasicNode, RaftError<MapucheNodeId>>,
     > {
-        self.owner
-            .send_rpc(self.target, &self.target_node, "raft-vote", req)
+        let req = RpcReqMessage::Vote(req);
+        let res = self
+            .owner
+            .send_rpc(&req, &self.target_node)
             .await
+            .map_err(|_| {
+                RPCError::RemoteError(RemoteError::new(
+                    self.target,
+                    RaftError::Fatal(openraft::error::Fatal::Panicked),
+                ))
+            })?;
+        if let RpcRespMessage::Vote(r) = res {
+            r.map_err(|e| RPCError::RemoteError(RemoteError::new(self.target, e)))
+        } else {
+            Err(RPCError::RemoteError(RemoteError::new(
+                self.target,
+                RaftError::Fatal(openraft::error::Fatal::Panicked),
+            )))
+        }
     }
 }

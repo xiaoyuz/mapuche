@@ -46,6 +46,8 @@ byteorder = "1.4.3"
 async-trait = "0.1.64"
 actix-web = "4"
 reqwest = { version = "0.11.9", features = ["json"] }
+tonic = "0.9"
+prost = "0.11"
 
 [dev-dependencies]
 # Enable test-utilities in dev mode only. This is mostly for tests.
@@ -54,3 +56,6 @@ redis = { version = "0.22.1", features = ["tokio-comp"] }
 anyhow = "1.0.63"
 maplit = "1.0.2"
 tempfile = { version = "3.4.0" }
+
+[build-dependencies]
+tonic-build = "0.9"

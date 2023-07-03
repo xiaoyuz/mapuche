@@ -14,8 +14,9 @@ use mapuche::config::{
     config_cluster_or_default, config_infra_or_default, config_instance_id_or_default,
     config_listen_or_default, config_max_connection, config_port_or_default,
     config_prometheus_listen_or_default, config_prometheus_port_or_default,
-    config_raft_port_or_default, config_ring_port_or_default, config_ring_v_node_num_or_default,
-    data_store_dir_or_default, set_global_config, Config, LOGGER,
+    config_raft_api_port_or_default, config_raft_internal_port_or_default,
+    config_ring_port_or_default, config_ring_v_node_num_or_default, data_store_dir_or_default,
+    set_global_config, Config, LOGGER,
 };
 use mapuche::hash_ring::{HashRing, NodeInfo};
 use mapuche::metrics::PrometheusServer;
@@ -110,13 +111,19 @@ fn start_pmt(prom_listen: &str, prom_port: &str, instance_id: u64) -> mapuche::R
 }
 
 fn start_raft() -> mapuche::Result<()> {
-    let raft_port = config_raft_port_or_default();
-    let raft_address = format!("127.0.0.1:{}", raft_port);
-    let leader_addr = raft_address.clone();
+    let raft_api_address = format!("127.0.0.1:{}", config_raft_api_port_or_default());
+    let raft_internal_address = format!("127.0.0.1:{}", config_raft_internal_port_or_default());
+    let leader_addr = raft_internal_address.clone();
     thread::spawn(|| {
         Runtime::new().unwrap().block_on(async move {
             let raft_store_path = format!("{}/raft", data_store_dir_or_default());
-            start_raft_node(get_instance_id(), raft_store_path, raft_address).await
+            start_raft_node(
+                get_instance_id(),
+                raft_store_path,
+                &raft_internal_address,
+                &raft_api_address,
+            )
+            .await
         })
     });
     unsafe {
