@@ -203,7 +203,7 @@ pub fn config_infra_or_default() -> MapucheInfra {
             }
         }
     }
-    MapucheInfra::Replica
+    MapucheInfra::Single
 }
 
 pub fn config_cluster_or_default() -> Vec<String> {
