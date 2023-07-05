@@ -167,7 +167,7 @@ impl RaftClient {
     where
         Err: std::error::Error + Serialize + DeserializeOwned,
     {
-        let fact = MapucheRaftNetworkFactory {};
+        let fact: MapucheRaftNetworkFactory = Default::default();
         let (_, addr) = {
             let t = self.leader.lock().await;
             (t.0, t.1.clone())

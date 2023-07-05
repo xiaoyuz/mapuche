@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use crate::raft::{MapucheNodeId, TypeConfig};
 
 use async_trait::async_trait;
@@ -8,6 +11,8 @@ use openraft::raft::{
 };
 use openraft::{BasicNode, RaftNetwork, RaftNetworkFactory};
 
+use tokio::sync::Mutex;
+use tonic::transport::{Channel, Endpoint};
 use tonic::Status;
 
 use super::rpc::raft_rpc::raft_client::RaftClient;
@@ -18,8 +23,10 @@ pub mod raft_rpc {
     tonic::include_proto!("raftrpc");
 }
 
-#[derive(Clone)]
-pub struct MapucheRaftNetworkFactory {}
+#[derive(Clone, Default)]
+pub struct MapucheRaftNetworkFactory {
+    channel_map: Arc<Mutex<HashMap<String, Arc<Channel>>>>,
+}
 
 #[async_trait]
 impl RaftNetworkFactory<TypeConfig> for MapucheRaftNetworkFactory {
@@ -27,7 +34,7 @@ impl RaftNetworkFactory<TypeConfig> for MapucheRaftNetworkFactory {
 
     async fn new_client(&mut self, target: MapucheNodeId, node: &BasicNode) -> Self::Network {
         MapucheNetwork {
-            owner: MapucheRaftNetworkFactory {},
+            owner: MapucheRaftNetworkFactory::default(),
             target,
             target_node: node.clone(),
         }
@@ -41,8 +48,10 @@ impl MapucheRaftNetworkFactory {
         target_node: &BasicNode,
     ) -> Result<RpcRespMessage, Status> {
         let addr = format!("http://{}", target_node.addr.clone());
-        let mut client = RaftClient::connect(addr)
+        let mut client = self
+            .get_channel(&addr)
             .await
+            .map(|channel| RaftClient::new((*channel).clone()))
             .map_err(|e| Status::from_error(Box::new(e)))?;
         let req = serde_json::to_string(req).unwrap();
         let request: tonic::Request<RaftReq> = tonic::Request::new(RaftReq { req });
@@ -51,6 +60,17 @@ impl MapucheRaftNetworkFactory {
             let resp: RpcRespMessage = (&r.into_inner()).into();
             resp
         })
+    }
+
+    async fn get_channel(&self, addr: &str) -> Result<Arc<Channel>, tonic::transport::Error> {
+        let mut map = self.channel_map.lock().await;
+        if map.contains_key(addr) {
+            return Ok(map[addr].clone());
+        }
+        let channel = Endpoint::from_shared(addr.to_owned())?.connect().await?;
+        let channel = Arc::new(channel);
+        map.insert(addr.to_owned(), channel.clone());
+        Ok(channel)
     }
 }
 

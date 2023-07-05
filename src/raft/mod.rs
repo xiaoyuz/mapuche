@@ -86,7 +86,7 @@ where
 
     // Create the network layer that will connect and communicate the raft instances and
     // will be used in conjunction with the store created above.
-    let network = MapucheRaftNetworkFactory {};
+    let network: MapucheRaftNetworkFactory = Default::default();
 
     // Create a local raft instance.
     let raft = Raft::new(node_id, config.clone(), network, store.clone())
