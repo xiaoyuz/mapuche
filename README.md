@@ -262,30 +262,31 @@ You can start a raft node group to manage replication.
 Just add the config like below:
 ``` toml
 [server]
-raft_port = 16123
+raft_internal_port = 16123
+raft_api_port = 26123
 infra = "replica"
 ```
 The ``infra`` has three states: _single_, _replica_ and _cluster_ (cluster is on developing).
 
 To start raft replication group, you can start some nodes (>= 3 and odd), and than init the groups by calling http request to one node like:
 ```shell
-curl --request POST 'http://localhost:16123/init'
+curl --request POST 'http://localhost:26123/init'
 ```
 Then add other nodes and learners:
 ```shell
-curl --request POST 'http://localhost:16123/add-learner' \
+curl --request POST 'http://localhost:26123/add-learner' \
 --header 'Content-Type: application/json' \
 --data-raw '[2, "127.0.0.1:16124"]'
 ```
 At last, add them as members for voting:
 ```shell
-curl --request POST 'http://localhost:16123/change-membership' \
+curl --request POST 'http://localhost:26123/change-membership' \
 --header 'Content-Type: application/json' \
 --data-raw '[1,2,3]'
 ```
 You can always check the metrics on any node:
 ```shell
-curl --request GET 'http://localhost:16123/metrics'
+curl --request GET 'http://localhost:26123/metrics'
 ```
 
 ## Acknowledgment
