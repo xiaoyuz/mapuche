@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
+use crate::metrics::{RAFT_CMD_COUNTER, RAFT_CMD_HANDLE_TIME};
 use crate::raft::{MapucheNodeId, TypeConfig};
+use crate::server::duration_to_sec;
 
 use async_trait::async_trait;
 use openraft::error::{InstallSnapshotError, RPCError, RaftError, RemoteError};
@@ -47,6 +50,9 @@ impl MapucheRaftNetworkFactory {
         req: &RpcReqMessage,
         target_node: &BasicNode,
     ) -> Result<RpcRespMessage, Status> {
+        let req_name = req.name();
+        RAFT_CMD_COUNTER.with_label_values(&[req_name]).inc();
+        let start_at = Instant::now();
         let addr = format!("http://{}", target_node.addr.clone());
         let mut client = self
             .get_channel(&addr)
@@ -56,10 +62,15 @@ impl MapucheRaftNetworkFactory {
         let req = serde_json::to_string(req).unwrap();
         let request: tonic::Request<RaftReq> = tonic::Request::new(RaftReq { req });
 
-        client.request(request).await.map(|r| {
+        let res = client.request(request).await.map(|r| {
             let resp: RpcRespMessage = (&r.into_inner()).into();
             resp
-        })
+        });
+        let duration = Instant::now() - start_at;
+        RAFT_CMD_HANDLE_TIME
+            .with_label_values(&[req_name])
+            .observe(duration_to_sec(duration));
+        res
     }
 
     async fn get_channel(&self, addr: &str) -> Result<Arc<Channel>, tonic::transport::Error> {

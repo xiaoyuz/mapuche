@@ -68,6 +68,29 @@ lazy_static! {
     .unwrap();
     pub static ref TXN_RETRY_COUNTER: IntCounter = register_int_counter!("rocks_redis_txn_retry_count_total", "Transactions retry count").unwrap();
 
+    // Raft
+    pub static ref RAFT_REMOTE_COUNTER: IntCounter = register_int_counter!("redis_raft_remote_count_total", "Raft remote ops count").unwrap();
+    pub static ref RAFT_REMOTE_DURATION: Histogram = register_histogram!(
+        "redis_raft_remote_duration_seconds",
+        "Bucketed histogram of raft remote ops duration",
+        exponential_buckets(0.0005, 2.0, 20).unwrap()
+    )
+    .unwrap();
+    pub static ref RAFT_CMD_COUNTER: IntCounterVec = register_int_counter_vec!(
+        "redis_raft_command_handle_time_duration_seconds",
+        "Bucketed histogram of raft command counter",
+        &["cmd"]
+    )
+    .unwrap();
+    pub static ref RAFT_CMD_HANDLE_TIME: HistogramVec = register_histogram_vec!(
+        "redis_raft_command_handle_time_duration_seconds",
+        "Bucketed histogram of raft command handle duration",
+        &["cmd"],
+        exponential_buckets(0.0005, 2.0, 20).unwrap()
+    )
+    .unwrap();
+
+    // Error
     pub static ref ROCKS_ERR_COUNTER: IntCounterVec = register_int_counter_vec!(
         "redis_rocks_reported_errors_count_total",
         "rocks_reported err",

@@ -41,57 +41,26 @@ impl From<&RaftReq> for RpcReqMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum RpcRespMessage {
-    Unknown,
-    Vote(Result<VoteResponse<MapucheNodeId>, RaftError<MapucheNodeId>>),
-    Append(Result<AppendEntriesResponse<MapucheNodeId>, RaftError<MapucheNodeId>>),
-    InstallSnapshot(
-        Result<
-            InstallSnapshotResponse<MapucheNodeId>,
-            RaftError<MapucheNodeId, InstallSnapshotError>,
-        >,
-    ),
-
-    Write(
-        Result<
-            ClientWriteResponse<TypeConfig>,
-            RaftError<MapucheNodeId, ClientWriteError<MapucheNodeId, BasicNode>>,
-        >,
-    ),
-    Read(String),
-    ConsistentRead(String),
-
-    AddLearner(
-        Result<
-            ClientWriteResponse<TypeConfig>,
-            RaftError<MapucheNodeId, ClientWriteError<MapucheNodeId, BasicNode>>,
-        >,
-    ),
-    ChangeMembership(
-        Result<
-            ClientWriteResponse<TypeConfig>,
-            RaftError<MapucheNodeId, ClientWriteError<MapucheNodeId, BasicNode>>,
-        >,
-    ),
-    Initialize(Result<(), RaftError<MapucheNodeId, InitializeError<MapucheNodeId, BasicNode>>>),
-    Metrics(Result<RaftMetrics<MapucheNodeId, BasicNode>, Infallible>),
-}
-
-impl From<&RpcRespMessage> for RaftResp {
-    fn from(value: &RpcRespMessage) -> Self {
-        let resp = serde_json::to_string(value).unwrap_or_default();
-        RaftResp { resp }
-    }
-}
-
-impl From<&RaftResp> for RpcRespMessage {
-    fn from(value: &RaftResp) -> Self {
-        serde_json::from_str(&value.resp).unwrap()
-    }
-}
-
 impl RpcReqMessage {
+    pub fn name(&self) -> &str {
+        match &self {
+            Self::Vote(_req) => "Vote",
+            Self::Append(_req) => "Append",
+            Self::InstallSnapshot(_req) => "InstallSnapshot",
+
+            Self::Write(_req) => "Write",
+            Self::Read(_req) => "Read",
+            Self::ConsistentRead(_req) => "ConsistentRead",
+
+            Self::AddLearner(_node_id, _addr) => "AddLearner",
+            Self::ChangeMembership(_req) => "ChangeMembership",
+            Self::Initialize => "Initialize",
+            Self::Metrics => "Metrics",
+
+            _ => "",
+        }
+    }
+
     pub async fn handle(&self) -> Result<Response<RaftResp>, Status> {
         let app = get_raft_app().ok_or(Status::new(Code::InvalidArgument, "raft not inited"))?;
         let resp = match &self {
@@ -152,6 +121,56 @@ impl RpcReqMessage {
         };
         let resp: RaftResp = (&resp).into();
         Ok(Response::new(resp))
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum RpcRespMessage {
+    Unknown,
+    Vote(Result<VoteResponse<MapucheNodeId>, RaftError<MapucheNodeId>>),
+    Append(Result<AppendEntriesResponse<MapucheNodeId>, RaftError<MapucheNodeId>>),
+    InstallSnapshot(
+        Result<
+            InstallSnapshotResponse<MapucheNodeId>,
+            RaftError<MapucheNodeId, InstallSnapshotError>,
+        >,
+    ),
+
+    Write(
+        Result<
+            ClientWriteResponse<TypeConfig>,
+            RaftError<MapucheNodeId, ClientWriteError<MapucheNodeId, BasicNode>>,
+        >,
+    ),
+    Read(String),
+    ConsistentRead(String),
+
+    AddLearner(
+        Result<
+            ClientWriteResponse<TypeConfig>,
+            RaftError<MapucheNodeId, ClientWriteError<MapucheNodeId, BasicNode>>,
+        >,
+    ),
+    ChangeMembership(
+        Result<
+            ClientWriteResponse<TypeConfig>,
+            RaftError<MapucheNodeId, ClientWriteError<MapucheNodeId, BasicNode>>,
+        >,
+    ),
+    Initialize(Result<(), RaftError<MapucheNodeId, InitializeError<MapucheNodeId, BasicNode>>>),
+    Metrics(Result<RaftMetrics<MapucheNodeId, BasicNode>, Infallible>),
+}
+
+impl From<&RpcRespMessage> for RaftResp {
+    fn from(value: &RpcRespMessage) -> Self {
+        let resp = serde_json::to_string(value).unwrap_or_default();
+        RaftResp { resp }
+    }
+}
+
+impl From<&RaftResp> for RpcRespMessage {
+    fn from(value: &RaftResp) -> Self {
+        serde_json::from_str(&value.resp).unwrap()
     }
 }
 

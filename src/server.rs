@@ -11,9 +11,9 @@ use crate::config::{
 };
 use crate::gc::GcMaster;
 use crate::metrics::{
-    CURRENT_CONNECTION_COUNTER, REQUEST_CMD_COUNTER, REQUEST_CMD_ERROR_COUNTER,
-    REQUEST_CMD_FINISH_COUNTER, REQUEST_CMD_HANDLE_TIME, REQUEST_CMD_REMOTE_COUNTER,
-    REQUEST_COUNTER, TOTAL_CONNECTION_PROCESSED,
+    CURRENT_CONNECTION_COUNTER, RAFT_REMOTE_COUNTER, RAFT_REMOTE_DURATION, REQUEST_CMD_COUNTER,
+    REQUEST_CMD_ERROR_COUNTER, REQUEST_CMD_FINISH_COUNTER, REQUEST_CMD_HANDLE_TIME,
+    REQUEST_CMD_REMOTE_COUNTER, REQUEST_COUNTER, TOTAL_CONNECTION_PROCESSED,
 };
 use crate::p2p::message::Message;
 use crate::rocks::errors::{
@@ -447,12 +447,16 @@ impl Handler {
         }
         unsafe {
             if let (Some(client), CommandType::WRITE) = (&RAFT_CLIENT, cmd.cmd_type()) {
+                RAFT_REMOTE_COUNTER.inc();
+                let start_at = Instant::now();
                 let response = client
                     .write(&RaftRequest::CmdLog {
                         id: Uuid::new_v4().to_string(),
                         cmd,
                     })
                     .await?;
+                let duration = Instant::now() - start_at;
+                RAFT_REMOTE_DURATION.observe(duration_to_sec(duration));
                 if let RaftResponse::Frame(frame) = response.data {
                     debug!(LOGGER, "res from raft, {:?}", frame);
                     self.connection.write_frame(&frame).await?;
