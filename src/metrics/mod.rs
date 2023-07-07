@@ -77,7 +77,7 @@ lazy_static! {
     )
     .unwrap();
     pub static ref RAFT_CMD_COUNTER: IntCounterVec = register_int_counter_vec!(
-        "redis_raft_command_handle_time_duration_seconds",
+        "redis_raft_command_total",
         "Bucketed histogram of raft command counter",
         &["cmd"]
     )
