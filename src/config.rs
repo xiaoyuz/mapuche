@@ -1,7 +1,4 @@
-use crate::{
-    MapucheInfra, DEFAULT_PORT, DEFAULT_RAFT_API_PORT, DEFAULT_RAFT_INTERNAL_PORT,
-    DEFAULT_RING_PORT,
-};
+use crate::DEFAULT_PORT;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 
@@ -37,19 +34,11 @@ pub struct Config {
 struct Server {
     listen: Option<String>,
     port: Option<u16>,
-    ring_port: Option<u16>,
-    raft_api_port: Option<u16>,
-    raft_internal_port: Option<u16>,
-    ring_v_node_num: Option<u16>,
     instance_id: Option<String>,
-    prometheus_listen: Option<String>,
-    prometheus_port: Option<u16>,
     password: Option<String>,
     log_level: Option<String>,
     log_file: Option<String>,
     meta_key_number: Option<u16>,
-    infra: Option<String>,
-    cluster: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -114,54 +103,6 @@ pub fn config_port_or_default() -> String {
     DEFAULT_PORT.to_owned()
 }
 
-pub fn config_ring_port_or_default() -> String {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if let Some(s) = c.server.ring_port {
-                return s.to_string();
-            }
-        }
-    }
-
-    DEFAULT_RING_PORT.to_owned()
-}
-
-pub fn config_raft_api_port_or_default() -> String {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if let Some(s) = c.server.raft_api_port {
-                return s.to_string();
-            }
-        }
-    }
-
-    DEFAULT_RAFT_API_PORT.to_owned()
-}
-
-pub fn config_raft_internal_port_or_default() -> String {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if let Some(s) = c.server.raft_internal_port {
-                return s.to_string();
-            }
-        }
-    }
-
-    DEFAULT_RAFT_INTERNAL_PORT.to_owned()
-}
-
-pub fn config_ring_v_node_num_or_default() -> u16 {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if let Some(s) = c.server.ring_v_node_num {
-                return s;
-            }
-        }
-    }
-
-    5
-}
-
 pub fn config_instance_id_or_default() -> String {
     unsafe {
         if let Some(c) = &SERVER_CONFIG {
@@ -171,54 +112,6 @@ pub fn config_instance_id_or_default() -> String {
         }
     }
     "1".to_owned()
-}
-
-pub fn config_prometheus_listen_or_default() -> String {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if let Some(s) = c.server.prometheus_listen.clone() {
-                return s;
-            }
-        }
-    }
-    "0.0.0.0".to_owned()
-}
-
-pub fn config_prometheus_port_or_default() -> String {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if let Some(s) = c.server.prometheus_port {
-                return s.to_string();
-            }
-        }
-    }
-    "18080".to_owned()
-}
-
-pub fn config_infra_or_default() -> MapucheInfra {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if let Some(s) = c.server.infra.clone() {
-                return s.as_str().into();
-            }
-        }
-    }
-    MapucheInfra::Single
-}
-
-pub fn config_cluster_or_default() -> Vec<String> {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if let Some(s) = c.server.cluster.clone() {
-                return s.split(',').map(|s| s.to_string()).collect::<Vec<String>>();
-            }
-        }
-    }
-    Vec::default()
-    // "10.7.8.73:6123"
-    //     .split(',')
-    //     .map(|s| s.to_string())
-    //     .collect::<Vec<String>>()
 }
 
 fn log_level_str() -> String {

@@ -2,7 +2,6 @@ use crate::config::{
     async_deletion_enabled_or_default, async_gc_interval_or_default,
     async_gc_worker_queue_size_or_default, LOGGER,
 };
-use crate::metrics::GC_TASK_QUEUE_COUNTER;
 use crate::rocks::client::RocksClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::RError;
@@ -182,9 +181,6 @@ impl GcWorker {
                 error!(LOGGER, "[GC] send task to channel failed"; "error" => ?e);
                 Err(RError::Owned(e.to_string()))
             } else {
-                GC_TASK_QUEUE_COUNTER
-                    .with_label_values(&[&self.id.to_string()])
-                    .inc();
                 Ok(())
             };
         }
@@ -269,9 +265,6 @@ impl GcWorker {
                     Ok(_) => {
                         debug!(LOGGER, "[GC] gc task done: {:?}", task);
                         self.task_sets.lock().await.remove(&task.to_bytes());
-                        GC_TASK_QUEUE_COUNTER
-                            .with_label_values(&[&self.id.to_string()])
-                            .dec();
                     }
                     Err(e) => {
                         error!(LOGGER, "[GC] handle task error: {:?}", e);

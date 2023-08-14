@@ -2,7 +2,6 @@ use crate::config::{
     async_del_hash_threshold_or_default, async_expire_hash_threshold_or_default,
     config_meta_key_number_or_default, LOGGER,
 };
-use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
 use crate::rocks::client::{get_version_for_new, RocksClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{REDIS_VALUE_IS_NOT_INTEGER_ERR, REDIS_WRONG_TYPE_ERR};
@@ -782,9 +781,6 @@ impl TxnCommand for HashCommand<'_> {
 
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
                 }
-                REMOVED_EXPIRED_KEY_COUNTER
-                    .with_label_values(&["hash"])
-                    .inc();
                 Ok(1)
             }
             None => Ok(0),

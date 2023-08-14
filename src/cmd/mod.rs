@@ -179,12 +179,9 @@ mod auth;
 pub use auth::Auth;
 
 use crate::config::txn_retry_count;
-use crate::metrics::TXN_RETRY_COUNTER;
-use crate::rocks::errors::REDIS_NOT_SUPPORTED_ERR;
 use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
 
 use crate::rocks::Result as RocksResult;
-use crate::utils::resp_err;
 
 /// Enumeration of supported Redis commands.
 ///
@@ -593,151 +590,6 @@ impl Command {
         }
     }
 
-    /// Get hash ring key for cmd, to dispatch self to related nodes.
-    pub(crate) fn hash_ring_key(&self) -> crate::Result<String> {
-        use Command::*;
-
-        match self {
-            Get(cmd) => cmd.hash_ring_key(),
-            Mget(cmd) => cmd.hash_ring_key(),
-            Mset(cmd) => cmd.hash_ring_key(),
-            Set(cmd) => cmd.hash_ring_key(),
-            Del(cmd) => cmd.hash_ring_key(),
-            Strlen(cmd) => cmd.hash_ring_key(),
-            Exists(cmd) => cmd.hash_ring_key(),
-            Incr(cmd) => cmd.hash_ring_key(),
-            Decr(cmd) => cmd.hash_ring_key(),
-            Expire(cmd) => cmd.hash_ring_key(),
-            ExpireAt(cmd) => cmd.hash_ring_key(),
-            Pexpire(cmd) => cmd.hash_ring_key(),
-            PexpireAt(cmd) => cmd.hash_ring_key(),
-            TTL(cmd) => cmd.hash_ring_key(),
-            PTTL(cmd) => cmd.hash_ring_key(),
-            Sadd(cmd) => cmd.hash_ring_key(),
-            Scard(cmd) => cmd.hash_ring_key(),
-            Sismember(cmd) => cmd.hash_ring_key(),
-            Smismember(cmd) => cmd.hash_ring_key(),
-            Smembers(cmd) => cmd.hash_ring_key(),
-            Srandmember(cmd) => cmd.hash_ring_key(),
-            Spop(cmd) => cmd.hash_ring_key(),
-            Srem(cmd) => cmd.hash_ring_key(),
-            Lpush(cmd) => cmd.hash_ring_key(),
-            Rpush(cmd) => cmd.hash_ring_key(),
-            Lpop(cmd) => cmd.hash_ring_key(),
-            Rpop(cmd) => cmd.hash_ring_key(),
-            Lrange(cmd) => cmd.hash_ring_key(),
-            Ltrim(cmd) => cmd.hash_ring_key(),
-            Llen(cmd) => cmd.hash_ring_key(),
-            Lindex(cmd) => cmd.hash_ring_key(),
-            Lset(cmd) => cmd.hash_ring_key(),
-            Lrem(cmd) => cmd.hash_ring_key(),
-            Linsert(cmd) => cmd.hash_ring_key(),
-            Hset(cmd) => cmd.hash_ring_key(),
-            Hmset(cmd) => cmd.hash_ring_key(),
-            Hsetnx(cmd) => cmd.hash_ring_key(),
-            Hget(cmd) => cmd.hash_ring_key(),
-            Hmget(cmd) => cmd.hash_ring_key(),
-            Hlen(cmd) => cmd.hash_ring_key(),
-            Hgetall(cmd) => cmd.hash_ring_key(),
-            Hdel(cmd) => cmd.hash_ring_key(),
-            Hkeys(cmd) => cmd.hash_ring_key(),
-            Hvals(cmd) => cmd.hash_ring_key(),
-            Hincrby(cmd) => cmd.hash_ring_key(),
-            Hexists(cmd) => cmd.hash_ring_key(),
-            Hstrlen(cmd) => cmd.hash_ring_key(),
-            Zadd(cmd) => cmd.hash_ring_key(),
-            Zcard(cmd) => cmd.hash_ring_key(),
-            Zscore(cmd) => cmd.hash_ring_key(),
-            Zrem(cmd) => cmd.hash_ring_key(),
-            Zremrangebyscore(cmd) => cmd.hash_ring_key(),
-            Zremrangebyrank(cmd) => cmd.hash_ring_key(),
-            Zrange(cmd) => cmd.hash_ring_key(),
-            Zrevrange(cmd) => cmd.hash_ring_key(),
-            Zrangebyscore(cmd) => cmd.hash_ring_key(),
-            Zrevrangebyscore(cmd) => cmd.hash_ring_key(),
-            Zcount(cmd) => cmd.hash_ring_key(),
-            Zpopmin(cmd) => cmd.hash_ring_key(),
-            Zpopmax(cmd) => cmd.hash_ring_key(),
-            Zrank(cmd) => cmd.hash_ring_key(),
-            Zincrby(cmd) => cmd.hash_ring_key(),
-
-            _ => Err("`Unsubscribe` is unsupported in this context".into()),
-        }
-    }
-
-    /// Execute the command for remote node requests, only used in cluster.
-    pub(crate) async fn execute_for_remote(mut self) -> crate::Result<Frame> {
-        use Command::*;
-
-        let frame = match &mut self {
-            Get(cmd) => cmd.get().await,
-            Mget(cmd) => cmd.batch_get().await,
-            Mset(cmd) => cmd.batch_put().await,
-            Set(cmd) => cmd.set().await,
-            Del(cmd) => cmd.del().await,
-            Strlen(cmd) => cmd.strlen().await,
-            Exists(cmd) => cmd.exists().await,
-            Incr(cmd) => cmd.incr_by(true).await,
-            Decr(cmd) => cmd.incr_by(false).await,
-            Expire(cmd) => cmd.expire(false, false).await,
-            ExpireAt(cmd) => cmd.expire(false, true).await,
-            Pexpire(cmd) => cmd.expire(true, false).await,
-            PexpireAt(cmd) => cmd.expire(true, true).await,
-            TTL(cmd) => cmd.ttl(false).await,
-            PTTL(cmd) => cmd.ttl(true).await,
-            Sadd(cmd) => cmd.sadd().await,
-            Scard(cmd) => cmd.scard().await,
-            Sismember(cmd) => cmd.sismember().await,
-            Smismember(cmd) => cmd.smismember().await,
-            Smembers(cmd) => cmd.smembers().await,
-            Srandmember(cmd) => cmd.srandmember().await,
-            Spop(cmd) => cmd.spop().await,
-            Srem(cmd) => cmd.srem().await,
-            Lpush(cmd) => cmd.push(true).await,
-            Rpush(cmd) => cmd.push(false).await,
-            Lpop(cmd) => cmd.pop(true).await,
-            Rpop(cmd) => cmd.pop(false).await,
-            Lrange(cmd) => cmd.lrange().await,
-            Ltrim(cmd) => cmd.ltrim().await,
-            Llen(cmd) => cmd.llen().await,
-            Lindex(cmd) => cmd.lindex().await,
-            Lset(cmd) => cmd.lset().await,
-            Lrem(cmd) => cmd.lrem().await,
-            Linsert(cmd) => cmd.linsert().await,
-            Hset(cmd) => cmd.hset(false, false).await,
-            Hmset(cmd) => cmd.hset(true, false).await,
-            Hsetnx(cmd) => cmd.hset(false, true).await,
-            Hget(cmd) => cmd.hget().await,
-            Hmget(cmd) => cmd.hmget().await,
-            Hlen(cmd) => cmd.hlen().await,
-            Hgetall(cmd) => cmd.hgetall().await,
-            Hdel(cmd) => cmd.hdel().await,
-            Hkeys(cmd) => cmd.hkeys().await,
-            Hvals(cmd) => cmd.hvals().await,
-            Hincrby(cmd) => cmd.hincrby().await,
-            Hexists(cmd) => cmd.hexists().await,
-            Hstrlen(cmd) => cmd.hstrlen().await,
-            Zadd(cmd) => cmd.zadd().await,
-            Zcard(cmd) => cmd.zcard().await,
-            Zscore(cmd) => cmd.zscore().await,
-            Zrem(cmd) => cmd.zrem().await,
-            Zremrangebyscore(cmd) => cmd.zremrangebyscore().await,
-            Zremrangebyrank(cmd) => cmd.zremrangebyrank().await,
-            Zrange(cmd) => cmd.zrange().await,
-            Zrevrange(cmd) => cmd.zrevrange().await,
-            Zrangebyscore(cmd) => cmd.zrangebyscore(false).await,
-            Zrevrangebyscore(cmd) => cmd.zrangebyscore(true).await,
-            Zcount(cmd) => cmd.zcount().await,
-            Zpopmin(cmd) => cmd.zpop(true).await,
-            Zpopmax(cmd) => cmd.zpop(false).await,
-            Zrank(cmd) => cmd.zrank().await,
-            Zincrby(cmd) => cmd.zincrby().await,
-
-            _ => Ok(resp_err(REDIS_NOT_SUPPORTED_ERR)),
-        }?;
-        Ok(frame)
-    }
-
     /// Returns the command name
     pub(crate) fn get_name(&self) -> &str {
         match self {
@@ -857,7 +709,6 @@ where
         res = f().await?;
         if let Frame::TxnFailed(_) = res {
             retry -= 1;
-            TXN_RETRY_COUNTER.inc();
             continue;
         }
         return Ok(res);

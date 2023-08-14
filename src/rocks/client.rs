@@ -1,11 +1,8 @@
 use crate::config::async_deletion_enabled_or_default;
-use crate::metrics::{ROCKS_ERR_COUNTER, TXN_COUNTER, TXN_DURATION};
 use rocksdb::{
     ColumnFamilyRef, TransactionDB, TransactionOptions, WriteBatchWithTransaction, WriteOptions,
 };
 use std::sync::Arc;
-
-use tokio::time::Instant;
 
 use crate::rocks::errors::{CF_NOT_EXISTS_ERR, KEY_VERSION_EXHUSTED_ERR, TXN_ERROR};
 use crate::rocks::kv::bound_range::BoundRange;
@@ -14,7 +11,6 @@ use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
 use crate::rocks::{Result as RocksResult, KEY_ENCODER};
-use crate::server::duration_to_sec;
 
 pub struct RocksClient {
     client: Arc<TransactionDB>,
@@ -28,35 +24,20 @@ impl RocksClient {
     pub fn get(&self, cf: ColumnFamilyRef, key: Key) -> RocksResult<Option<Value>> {
         let client = self.client.as_ref();
         let key: Vec<u8> = key.into();
-        client.get_cf(&cf, key).map_err(|e| {
-            ROCKS_ERR_COUNTER
-                .with_label_values(&["raw_client_error"])
-                .inc();
-            e.into()
-        })
+        client.get_cf(&cf, key).map_err(|e| e.into())
     }
 
     pub fn put(&self, cf: ColumnFamilyRef, key: Key, value: Value) -> RocksResult<()> {
         let client = self.client.as_ref();
         let key: Vec<u8> = key.into();
         let value: Vec<u8> = value;
-        client.put_cf(&cf, key, value).map_err(|e| {
-            ROCKS_ERR_COUNTER
-                .with_label_values(&["raw_client_error"])
-                .inc();
-            e.into()
-        })
+        client.put_cf(&cf, key, value).map_err(|e| e.into())
     }
 
     pub fn del(&self, cf: ColumnFamilyRef, key: Key) -> RocksResult<()> {
         let client = self.client.as_ref();
         let key: Vec<u8> = key.into();
-        client.delete_cf(&cf, key).map_err(|e| {
-            ROCKS_ERR_COUNTER
-                .with_label_values(&["raw_client_error"])
-                .inc();
-            e.into()
-        })
+        client.delete_cf(&cf, key).map_err(|e| e.into())
     }
 
     pub fn batch_get(&self, cf: ColumnFamilyRef, keys: Vec<Key>) -> RocksResult<Vec<KvPair>> {
@@ -71,19 +52,12 @@ impl RocksClient {
         let results = client.multi_get_cf(cf_key_pairs);
         let mut kvpairs = Vec::new();
         for i in 0..results.len() {
-            match results.get(i).unwrap() {
-                Ok(opt) => {
-                    let key = keys.get(i).unwrap().clone();
-                    let value = opt.clone();
-                    if let Some(val) = value {
-                        let kvpair = KvPair::from((key, val));
-                        kvpairs.push(kvpair);
-                    }
-                }
-                Err(_) => {
-                    ROCKS_ERR_COUNTER
-                        .with_label_values(&["raw_client_error"])
-                        .inc();
+            if let Ok(opt) = results.get(i).unwrap() {
+                let key = keys.get(i).unwrap().clone();
+                let value = opt.clone();
+                if let Some(val) = value {
+                    let kvpair = KvPair::from((key, val));
+                    kvpairs.push(kvpair);
                 }
             }
         }
@@ -97,12 +71,7 @@ impl RocksClient {
         for kv in kvs {
             write_batch.put_cf(&cf, kv.0, kv.1);
         }
-        client.write(write_batch).map_err(|e| {
-            ROCKS_ERR_COUNTER
-                .with_label_values(&["raw_client_error"])
-                .inc();
-            e.into()
-        })
+        client.write(write_batch).map_err(|e| e.into())
     }
 
     pub fn cf_handle(&self, name: &str) -> RocksResult<ColumnFamilyRef> {
@@ -153,18 +122,11 @@ impl RocksClient {
         let txn_opts = TransactionOptions::new();
         // txn_opts.set_lock_timeout(50);
         let txn = client.transaction_opt(&WriteOptions::default(), &txn_opts);
-        TXN_COUNTER.inc();
         let rock_txn = RocksTransaction::new(txn);
-        let start_at = Instant::now();
         let res = f(&rock_txn)?;
         if rock_txn.commit().is_err() {
-            ROCKS_ERR_COUNTER
-                .with_label_values(&["txn_client_error"])
-                .inc();
             return Err(TXN_ERROR);
         }
-        let duration = Instant::now() - start_at;
-        TXN_DURATION.observe(duration_to_sec(duration));
         Ok(res)
     }
 }

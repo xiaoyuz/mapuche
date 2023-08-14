@@ -5,7 +5,6 @@ use bytes::Bytes;
 use glob::Pattern;
 use regex::bytes::Regex;
 
-use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
 use crate::rocks::client::RocksClient;
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{RError, REDIS_WRONG_TYPE_ERR};
@@ -559,9 +558,6 @@ impl<'a> StringCommand<'a> {
         let ttl = KeyDecoder::decode_key_ttl(meta_value);
         if key_is_expired(ttl) {
             txn.del(cfs.meta_cf.clone(), ekey.to_owned())?;
-            REMOVED_EXPIRED_KEY_COUNTER
-                .with_label_values(&["string"])
-                .inc();
             return Ok(1);
         }
         Ok(0)

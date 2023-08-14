@@ -1,5 +1,4 @@
 use crate::config::{async_del_zset_threshold_or_default, async_expire_zset_threshold_or_default};
-use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
 use crate::rocks::client::{get_version_for_new, RocksClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{REDIS_VALUE_IS_NOT_VALID_FLOAT_ERR, REDIS_WRONG_TYPE_ERR};
@@ -1285,9 +1284,6 @@ impl TxnCommand for ZsetCommand<'_> {
                     }
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
                 }
-                REMOVED_EXPIRED_KEY_COUNTER
-                    .with_label_values(&["set"])
-                    .inc();
                 Ok(1)
             }
             None => Ok(0),

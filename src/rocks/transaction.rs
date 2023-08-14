@@ -1,4 +1,3 @@
-use crate::metrics::ROCKS_ERR_COUNTER;
 use rocksdb::{ColumnFamilyRef, Direction, IteratorMode, Transaction, TransactionDB};
 
 use crate::rocks::errors::TXN_ERROR;
@@ -19,45 +18,27 @@ impl<'a> RocksTransaction<'a> {
 
     pub fn get(&self, cf: ColumnFamilyRef, key: Key) -> RocksResult<Option<Value>> {
         let key: Vec<u8> = key.into();
-        self.inner_txn.get_cf(&cf, key).map_err(|_| {
-            ROCKS_ERR_COUNTER
-                .with_label_values(&["txn_client_error_get"])
-                .inc();
-            TXN_ERROR
-        })
+        self.inner_txn.get_cf(&cf, key).map_err(|_| TXN_ERROR)
     }
 
     pub fn get_for_update(&self, cf: ColumnFamilyRef, key: Key) -> RocksResult<Option<Value>> {
         let key: Vec<u8> = key.into();
         self.inner_txn
             .get_for_update_cf(&cf, key, false)
-            .map_err(|_| {
-                ROCKS_ERR_COUNTER
-                    .with_label_values(&["txn_client_error_gfu"])
-                    .inc();
-                TXN_ERROR
-            })
+            .map_err(|_| TXN_ERROR)
     }
 
     pub fn put(&self, cf: ColumnFamilyRef, key: Key, value: impl Into<Value>) -> RocksResult<()> {
         let key: Vec<u8> = key.into();
         let value: Vec<u8> = value.into();
-        self.inner_txn.put_cf(&cf, key, value).map_err(|_| {
-            ROCKS_ERR_COUNTER
-                .with_label_values(&["txn_client_error_put"])
-                .inc();
-            TXN_ERROR
-        })
+        self.inner_txn
+            .put_cf(&cf, key, value)
+            .map_err(|_| TXN_ERROR)
     }
 
     pub fn del(&self, cf: ColumnFamilyRef, key: Key) -> RocksResult<()> {
         let key: Vec<u8> = key.into();
-        self.inner_txn.delete_cf(&cf, key).map_err(|_| {
-            ROCKS_ERR_COUNTER
-                .with_label_values(&["txn_client_error_del"])
-                .inc();
-            TXN_ERROR
-        })
+        self.inner_txn.delete_cf(&cf, key).map_err(|_| TXN_ERROR)
     }
 
     pub fn batch_get(&self, cf: ColumnFamilyRef, keys: Vec<Key>) -> RocksResult<Vec<KvPair>> {
@@ -70,19 +51,12 @@ impl<'a> RocksTransaction<'a> {
         let results = self.inner_txn.multi_get_cf(cf_key_pairs);
         let mut kvpairs = Vec::new();
         for i in 0..results.len() {
-            match results.get(i).unwrap() {
-                Ok(opt) => {
-                    let key = keys.get(i).unwrap().clone();
-                    let value = opt.clone();
-                    if let Some(val) = value {
-                        let kvpair = KvPair::from((key, val));
-                        kvpairs.push(kvpair);
-                    }
-                }
-                Err(_) => {
-                    ROCKS_ERR_COUNTER
-                        .with_label_values(&["txn_client_error_bg"])
-                        .inc();
+            if let Ok(opt) = results.get(i).unwrap() {
+                let key = keys.get(i).unwrap().clone();
+                let value = opt.clone();
+                if let Some(val) = value {
+                    let kvpair = KvPair::from((key, val));
+                    kvpairs.push(kvpair);
                 }
             }
         }
@@ -105,12 +79,7 @@ impl<'a> RocksTransaction<'a> {
             let res = self
                 .inner_txn
                 .get_for_update_cf(cf_key_pair.0, cf_key_pair.1, false)
-                .map_err(|_| {
-                    ROCKS_ERR_COUNTER
-                        .with_label_values(&["txn_client_error_bgfu"])
-                        .inc();
-                    TXN_ERROR
-                })?;
+                .map_err(|_| TXN_ERROR)?;
             results.push(res);
         }
 
@@ -128,12 +97,7 @@ impl<'a> RocksTransaction<'a> {
     }
 
     pub fn commit(self) -> RocksResult<()> {
-        self.inner_txn.commit().map_err(|_| {
-            ROCKS_ERR_COUNTER
-                .with_label_values(&["txn_client_error_commit"])
-                .inc();
-            TXN_ERROR
-        })
+        self.inner_txn.commit().map_err(|_| TXN_ERROR)
     }
 
     pub fn scan(

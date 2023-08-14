@@ -1,38 +1,24 @@
-use crate::{
-    Command, Connection, Db, DbDropGuard, MapucheError, Shutdown, P2P_CLIENT, RAFT_CLIENT,
-    RING_NODES,
-};
+use crate::{Command, Connection, Db, DbDropGuard, Shutdown};
 use std::collections::HashMap;
 
 use crate::client::Client;
 use crate::config::{
-    async_gc_worker_number_or_default, config_cluster_or_default, config_infra_or_default,
-    config_local_pool_number, config_max_connection, is_auth_enabled, is_auth_matched, LOGGER,
+    async_gc_worker_number_or_default, config_local_pool_number, config_max_connection,
+    is_auth_enabled, is_auth_matched, LOGGER,
 };
 use crate::gc::GcMaster;
-use crate::metrics::{
-    CURRENT_CONNECTION_COUNTER, RAFT_REMOTE_COUNTER, RAFT_REMOTE_DURATION, REQUEST_CMD_COUNTER,
-    REQUEST_CMD_ERROR_COUNTER, REQUEST_CMD_FINISH_COUNTER, REQUEST_CMD_HANDLE_TIME,
-    REQUEST_CMD_REMOTE_COUNTER, REQUEST_COUNTER, TOTAL_CONNECTION_PROCESSED,
-};
-use crate::p2p::message::Message;
 use crate::rocks::errors::{
     REDIS_AUTH_INVALID_PASSWORD_ERR, REDIS_AUTH_REQUIRED_ERR, REDIS_AUTH_WHEN_DISABLED_ERR,
 };
-use crate::utils::{now_timestamp_in_millis, resp_err, resp_invalid_arguments, resp_ok};
-use local_ip_address::local_ip;
+use crate::utils::{resp_err, resp_invalid_arguments, resp_ok};
 use slog::{debug, error, info};
 use std::future::Future;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 
-use crate::cmd::CommandType;
-use crate::raft::store::RaftResponse;
-use crate::raft::RaftRequest;
 use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
-use tokio::time::{self, Duration, Instant};
+use tokio::time::{self, Duration};
 use tokio_util::task::LocalPoolHandle;
-use uuid::Uuid;
 
 /// Server listener state. Created in the `run` call. It includes a `run` method
 /// which performs the TCP listening and initialization of per-connection state.
@@ -221,8 +207,6 @@ impl Listener {
             };
             local_pool.spawn_pinned(|| async move {
                 // Process the connection. If an error is encountered, log it.
-                CURRENT_CONNECTION_COUNTER.inc();
-                TOTAL_CONNECTION_PROCESSED.inc();
                 if let Err(err) = handler.run().await {
                     error!(LOGGER, "connection error {:?}", err);
                 }
@@ -231,7 +215,6 @@ impl Listener {
                     .lock()
                     .await
                     .remove(&handler.cur_client.lock().await.id());
-                CURRENT_CONNECTION_COUNTER.dec();
                 drop(permit)
             });
         }
@@ -318,10 +301,6 @@ impl Handler {
                 w_client.interact(&cmd_name);
             }
 
-            let start_at = Instant::now();
-            REQUEST_COUNTER.inc();
-            REQUEST_CMD_COUNTER.with_label_values(&[&cmd_name]).inc();
-
             debug!(LOGGER, "req, {:?}", cmd);
 
             match cmd {
@@ -350,123 +329,24 @@ impl Handler {
                             .write_frame(&resp_err(REDIS_AUTH_REQUIRED_ERR))
                             .await?;
                     } else {
-                        let execute_res = if config_cluster_or_default().is_empty() {
-                            self.execute_locally(cmd).await
-                        } else {
-                            self.execute_on_ring(cmd).await
-                        };
+                        let execute_res = self.execute_locally(cmd).await;
                         match execute_res {
                             Ok(_) => (),
                             Err(e) => {
-                                REQUEST_CMD_ERROR_COUNTER
-                                    .with_label_values(&[&cmd_name])
-                                    .inc();
                                 return Err(e);
                             }
                         }
                     }
                 }
             }
-            let duration = Instant::now() - start_at;
-            REQUEST_CMD_HANDLE_TIME
-                .with_label_values(&[&cmd_name])
-                .observe(duration_to_sec(duration));
-            REQUEST_CMD_FINISH_COUNTER
-                .with_label_values(&[&cmd_name])
-                .inc();
         }
 
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    async fn execute_on_ring(&mut self, cmd: Command) -> crate::Result<()> {
-        let hash_ring_key = cmd.hash_ring_key()?;
-        let local_address = local_ip()?.to_string();
-        let message = Message::CmdReqMessage {
-            address: local_address.clone(),
-            cmd: cmd.clone(),
-            ts: now_timestamp_in_millis(),
-            req_id: Uuid::new_v4().to_string(),
-        };
-        unsafe {
-            if let Some(hash_ring) = &RING_NODES {
-                let remote_node = hash_ring
-                    .get_node(hash_ring_key)
-                    .ok_or(MapucheError::String("hash ring node not matched"))?;
-                let remote_url: String = remote_node.into();
-                if local_address == remote_url {
-                    self.execute_locally(cmd).await?;
-                } else {
-                    let cmd_name = cmd.get_name().to_owned();
-                    REQUEST_CMD_REMOTE_COUNTER
-                        .with_label_values(&[&cmd_name])
-                        .inc();
-                    self.do_remote_execute(message, &remote_url).await?;
-                }
-            } else {
-                Err(MapucheError::String("hash ring not inited"))?
-            }
-        }
-        Ok(())
-    }
-
-    async unsafe fn do_remote_execute(
-        &mut self,
-        message: Message,
-        remote_url: &str,
-    ) -> crate::Result<()> {
-        if let Some(client) = &P2P_CLIENT {
-            let rec = client.subscribe(remote_url).await;
-            client.call(remote_url, message).await?;
-            let res = rec
-                .ok_or(MapucheError::String("p2p client not inited"))?
-                .recv()
-                .await?;
-            if let Message::CmdRespMessage {
-                address,
-                frame,
-                ts: _,
-                req_id: _,
-            } = res
-            {
-                debug!(LOGGER, "res from remote address, {:?}, {}", frame, address);
-                self.connection.write_frame(&frame).await?;
-            }
-        } else {
-            Err(MapucheError::String("p2p client not inited"))?
-        }
         Ok(())
     }
 
     async fn execute_locally(&mut self, cmd: Command) -> crate::Result<()> {
-        if !config_infra_or_default().need_raft() {
-            return cmd
-                .apply(&self.db, &mut self.connection, &mut self.shutdown)
-                .await;
-        }
-        unsafe {
-            if let (Some(client), CommandType::WRITE) = (&RAFT_CLIENT, cmd.cmd_type()) {
-                RAFT_REMOTE_COUNTER.inc();
-                let start_at = Instant::now();
-                let response = client
-                    .write(&RaftRequest::CmdLog {
-                        id: Uuid::new_v4().to_string(),
-                        cmd,
-                    })
-                    .await?;
-                let duration = Instant::now() - start_at;
-                RAFT_REMOTE_DURATION.observe(duration_to_sec(duration));
-                if let RaftResponse::Frame(frame) = response.data {
-                    debug!(LOGGER, "res from raft, {:?}", frame);
-                    self.connection.write_frame(&frame).await?;
-                }
-            } else {
-                cmd.apply(&self.db, &mut self.connection, &mut self.shutdown)
-                    .await?;
-            }
-        }
-        Ok(())
+        cmd.apply(&self.db, &mut self.connection, &mut self.shutdown)
+            .await
     }
 }
 

@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate prometheus;
-
 pub mod client;
 
 pub mod config;
@@ -32,28 +29,18 @@ use parse::{Parse, ParseError};
 pub mod server;
 
 pub mod gc;
-pub mod hash_ring;
-pub mod metrics;
-pub mod p2p;
-pub mod raft;
 pub mod rocks;
 mod shutdown;
 pub mod utils;
 
-use crate::p2p::client::P2PClient;
 use shutdown::Shutdown;
 
-use crate::hash_ring::{HashRing, NodeInfo};
-use crate::raft::client::RaftClient;
 use thiserror::Error;
 
 /// Default port that a redis server listens on.
 ///
 /// Used if no port is specified.
 pub const DEFAULT_PORT: &str = "6380";
-pub const DEFAULT_RING_PORT: &str = "6123";
-pub const DEFAULT_RAFT_INTERNAL_PORT: &str = "16123";
-pub const DEFAULT_RAFT_API_PORT: &str = "26123";
 
 /// Error returned by most functions.
 ///
@@ -108,10 +95,6 @@ lazy_static! {
     pub static ref INDEX_COUNT: AtomicU16 =
         AtomicU16::new(SmallRng::from_entropy().gen_range(0..u16::MAX));
 }
-
-pub static mut P2P_CLIENT: Option<P2PClient> = None;
-pub static mut RING_NODES: Option<HashRing<NodeInfo>> = None;
-pub static mut RAFT_CLIENT: Option<RaftClient> = None;
 
 pub fn fetch_idx_and_add() -> u16 {
     // fetch_add wraps around on overflow, see https://github.com/rust-lang/rust/issues/34618

@@ -1,7 +1,6 @@
 use crate::config::{
     async_del_set_threshold_or_default, async_expire_set_threshold_or_default, LOGGER,
 };
-use crate::metrics::REMOVED_EXPIRED_KEY_COUNTER;
 use crate::rocks::client::{get_version_for_new, RocksClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::REDIS_WRONG_TYPE_ERR;
@@ -674,9 +673,6 @@ impl TxnCommand for SetCommand<'_> {
 
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
                 }
-                REMOVED_EXPIRED_KEY_COUNTER
-                    .with_label_values(&["set"])
-                    .inc();
                 Ok(1)
             }
             None => Ok(0),
