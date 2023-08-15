@@ -1,40 +1,23 @@
 pub mod client;
-
-pub mod config;
-
 pub mod cmd;
-
-pub use cmd::Command;
-use lazy_static::lazy_static;
-use rand::{rngs::SmallRng, Rng, SeedableRng};
-use std::sync::atomic::{AtomicU16, Ordering};
-
-mod connection;
-
-pub use connection::Connection;
-
+pub mod config;
 pub mod frame;
-
-pub use frame::Frame;
-
-mod db;
-
-use db::Db;
-use db::DbDropGuard;
-
-mod parse;
-
-use parse::{Parse, ParseError};
-
-pub mod server;
-
 pub mod gc;
 pub mod rocks;
-mod shutdown;
+pub mod server;
 pub mod utils;
 
-use shutdown::Shutdown;
+mod connection;
+mod db;
+mod parse;
+mod shutdown;
 
+pub use cmd::Command;
+pub use connection::Connection;
+pub use frame::Frame;
+
+use parse::{Parse, ParseError};
+use shutdown::Shutdown;
 use thiserror::Error;
 
 /// Default port that a redis server listens on.
@@ -90,13 +73,3 @@ impl From<&str> for MapucheInfra {
 ///
 /// This is defined as a convenience.
 pub type Result<T> = anyhow::Result<T, Error>;
-
-lazy_static! {
-    pub static ref INDEX_COUNT: AtomicU16 =
-        AtomicU16::new(SmallRng::from_entropy().gen_range(0..u16::MAX));
-}
-
-pub fn fetch_idx_and_add() -> u16 {
-    // fetch_add wraps around on overflow, see https://github.com/rust-lang/rust/issues/34618
-    INDEX_COUNT.fetch_add(1, Ordering::Relaxed)
-}

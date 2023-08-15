@@ -1,4 +1,4 @@
-use crate::{Command, Connection, Db, DbDropGuard, Shutdown};
+use crate::{Command, Connection, Shutdown};
 use std::collections::HashMap;
 
 use crate::client::Client;
@@ -24,15 +24,6 @@ use tokio_util::task::LocalPoolHandle;
 /// which performs the TCP listening and initialization of per-connection state.
 #[derive(Debug)]
 struct Listener {
-    /// Shared database handle.
-    ///
-    /// Contains the key / value store as well as the broadcast channels for
-    /// pub/sub.
-    ///
-    /// This holds a wrapper around an `Arc`. The internal `Db` can be
-    /// retrieved and passed into the per connection state (`Handler`).
-    db_holder: DbDropGuard,
-
     /// TCP listener supplied by the `run` caller.
     listener: TcpListener,
 
@@ -69,7 +60,6 @@ struct Listener {
 /// commands to `db`.
 #[derive(Debug)]
 struct Handler {
-    db: Db,
     cur_client: Arc<Mutex<Client>>,
     clients: Arc<Mutex<HashMap<u64, Arc<Mutex<Client>>>>>,
     connection: Connection,
@@ -95,12 +85,10 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) {
     // one.
     let (notify_shutdown, _) = broadcast::channel(1);
     let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
-    let db_holder = DbDropGuard::new();
 
     // Initialize the listener state
     let mut server = Listener {
         listener,
-        db_holder: db_holder.clone(),
         limit_connections: Arc::new(Semaphore::new(config_max_connection())),
         clients: Arc::new(Mutex::new(HashMap::new())),
         notify_shutdown,
@@ -197,7 +185,6 @@ impl Listener {
 
             // Create the necessary per-connection handler state.
             let mut handler = Handler {
-                db: self.db_holder.db(),
                 cur_client: arc_client.clone(),
                 clients: self.clients.clone(),
                 connection: Connection::new(socket),
@@ -345,8 +332,7 @@ impl Handler {
     }
 
     async fn execute_locally(&mut self, cmd: Command) -> crate::Result<()> {
-        cmd.apply(&self.db, &mut self.connection, &mut self.shutdown)
-            .await
+        cmd.apply(&mut self.connection).await
     }
 }
 

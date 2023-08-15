@@ -4,14 +4,8 @@ use futures::future::BoxFuture;
 pub use get::Get;
 use serde::{Deserialize, Serialize};
 
-mod publish;
-pub use publish::Publish;
-
 mod set;
 pub use set::Set;
-
-mod subscribe;
-pub use subscribe::{Subscribe, Unsubscribe};
 
 mod ping;
 pub use ping::Ping;
@@ -179,7 +173,7 @@ mod auth;
 pub use auth::Auth;
 
 use crate::config::txn_retry_count;
-use crate::{Connection, Db, Frame, Parse, ParseError, Shutdown};
+use crate::{Connection, Frame, Parse, ParseError};
 
 use crate::rocks::Result as RocksResult;
 
@@ -191,10 +185,7 @@ pub enum Command {
     Get(Get),
     Mget(Mget),
     Mset(Mset),
-    Publish(Publish),
     Set(Set),
-    Subscribe(Subscribe),
-    Unsubscribe(Unsubscribe),
     Del(Del),
     Ping(Ping),
     Strlen(Strlen),
@@ -271,12 +262,6 @@ pub enum Command {
     Unknown(Unknown),
 }
 
-pub enum CommandType {
-    READ,
-    WRITE,
-    MANAGE,
-}
-
 impl Command {
     /// Parse a command from a received frame.
     ///
@@ -305,10 +290,7 @@ impl Command {
             "get" => Command::Get(Get::parse_frames(&mut parse)?),
             "mget" => Command::Mget(transform_parse(Mget::parse_frames(&mut parse), &mut parse)),
             "mset" => Command::Mset(transform_parse(Mset::parse_frames(&mut parse), &mut parse)),
-            "publish" => Command::Publish(Publish::parse_frames(&mut parse)?),
             "set" => Command::Set(Set::parse_frames(&mut parse)?),
-            "subscribe" => Command::Subscribe(Subscribe::parse_frames(&mut parse)?),
-            "unsubscribe" => Command::Unsubscribe(Unsubscribe::parse_frames(&mut parse)?),
             "del" => Command::Del(transform_parse(Del::parse_frames(&mut parse), &mut parse)),
             "ping" => Command::Ping(Ping::parse_frames(&mut parse)?),
             "strlen" => Command::Strlen(transform_parse(
@@ -483,41 +465,14 @@ impl Command {
         Ok(command)
     }
 
-    pub fn cmd_type(&self) -> CommandType {
-        use Command::*;
-
-        match self {
-            Ping(_) | Type(_) | Auth(_) | Unknown(_) => CommandType::MANAGE,
-            Mset(_) | Set(_) | Del(_) | Incr(_) | Decr(_) | Expire(_) | ExpireAt(_)
-            | Pexpire(_) | PexpireAt(_) | Sadd(_) | Spop(_) | Srem(_) | Lpush(_) | Rpush(_)
-            | Lpop(_) | Rpop(_) | Ltrim(_) | Lset(_) | Lrem(_) | Linsert(_) | Hset(_)
-            | Hmset(_) | Hsetnx(_) | Hdel(_) | Hincrby(_) | Zadd(_) | Zrem(_)
-            | Zremrangebyscore(_) | Zremrangebyrank(_) | Zpopmin(_) | Zpopmax(_) | Zincrby(_) => {
-                CommandType::WRITE
-            }
-            _ => CommandType::READ,
-        }
-    }
-
-    /// Apply the command to the specified `Db` instance.
-    ///
-    /// The response is written to `dst`. This is called by the server in order
-    /// to execute a received command.
-    pub(crate) async fn apply(
-        mut self,
-        db: &Db,
-        dst: &mut Connection,
-        shutdown: &mut Shutdown,
-    ) -> crate::Result<()> {
+    pub(crate) async fn apply(mut self, dst: &mut Connection) -> crate::Result<()> {
         use Command::*;
 
         match &mut self {
             Get(cmd) => cmd.apply(dst).await,
             Mget(cmd) => cmd.apply(dst).await,
             Mset(cmd) => cmd.apply(dst).await,
-            Publish(cmd) => cmd.apply(db, dst).await,
             Set(cmd) => cmd.apply(dst).await,
-            Subscribe(cmd) => cmd.apply(db, dst, shutdown).await,
             Del(cmd) => cmd.apply(dst).await,
             Ping(cmd) => cmd.apply(dst).await,
             Strlen(cmd) => cmd.apply(dst).await,
@@ -582,9 +537,6 @@ impl Command {
             Zincrby(cmd) => cmd.apply(dst).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
-            // `Unsubscribe` cannot be applied. It may only be received from the
-            // context of a `Subscribe` command.
-            Unsubscribe(_) => Err("`Unsubscribe` is unsupported in this context".into()),
 
             _ => Ok(()),
         }
@@ -596,10 +548,7 @@ impl Command {
             Command::Get(_) => "get",
             Command::Mget(_) => "mget",
             Command::Mset(_) => "mset",
-            Command::Publish(_) => "pub",
             Command::Set(_) => "set",
-            Command::Subscribe(_) => "subscribe",
-            Command::Unsubscribe(_) => "unsubscribe",
             Command::Del(_) => "del",
             Command::Ping(_) => "ping",
             Command::Strlen(_) => "strlen",
