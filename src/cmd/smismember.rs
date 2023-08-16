@@ -1,10 +1,8 @@
 use crate::{Connection, Frame, Parse};
 
 use crate::cmd::Invalid;
-use crate::config::LOGGER;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::set::SetCommand;
 use crate::rocks::{get_client, Result as RocksResult};
@@ -62,7 +60,7 @@ impl Smismember {
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.smismember().await?;
-        debug!(LOGGER, "res, {:?}", response);
+
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -75,10 +73,6 @@ impl Smismember {
         SetCommand::new(&get_client())
             .sismember(&self.key, &self.members, true)
             .await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

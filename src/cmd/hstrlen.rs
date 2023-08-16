@@ -1,11 +1,9 @@
 use crate::{Connection, Frame, Parse};
 
 use crate::cmd::Invalid;
-use crate::config::LOGGER;
 use crate::rocks::hash::HashCommand;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
@@ -61,7 +59,7 @@ impl Hstrlen {
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.hstrlen().await?;
-        debug!(LOGGER, "res, {:?}", response);
+
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -74,10 +72,6 @@ impl Hstrlen {
         HashCommand::new(&get_client())
             .hstrlen(&self.key, &self.field)
             .await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

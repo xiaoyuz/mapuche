@@ -1,6 +1,6 @@
 use crate::config::{
     async_del_hash_threshold_or_default, async_expire_hash_threshold_or_default,
-    config_meta_key_number_or_default, LOGGER,
+    config_meta_key_number_or_default,
 };
 use crate::rocks::client::{get_version_for_new, RocksClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
@@ -19,7 +19,7 @@ use crate::utils::{
 };
 use crate::Frame;
 use rocksdb::ColumnFamilyRef;
-use slog::debug;
+
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -163,7 +163,6 @@ impl<'a> HashCommand<'a> {
                         cfs.gc_version_cf.clone(),
                         &key,
                     )?;
-                    debug!(LOGGER, "hset new key {} with version: {}", key, version);
 
                     // set sub meta key with a random index
                     let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, idx);

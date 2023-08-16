@@ -1,10 +1,8 @@
 use crate::cmd::Invalid;
-use crate::config::LOGGER;
 use crate::parse::Parse;
 use crate::{Connection, Frame};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::string::StringCommand;
 use crate::rocks::{get_client, Result as RocksResult};
@@ -46,8 +44,6 @@ impl Strlen {
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.strlen().await?;
 
-        debug!(LOGGER, "res, {:?}", response);
-
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -58,10 +54,6 @@ impl Strlen {
             return Ok(resp_invalid_arguments());
         }
         StringCommand::new(&get_client()).strlen(&self.key).await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

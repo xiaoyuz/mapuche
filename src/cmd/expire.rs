@@ -1,11 +1,9 @@
 use crate::cmd::{retry_call, Invalid};
-use crate::config::LOGGER;
 use crate::parse::Parse;
 use crate::{Connection, Frame};
 use bytes::Bytes;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::string::StringCommand;
 use crate::rocks::{get_client, Result as RocksResult};
@@ -69,7 +67,6 @@ impl Expire {
             async move { self.expire(is_millis, expire_at).await.map_err(Into::into) }.boxed()
         })
         .await?;
-        debug!(LOGGER, "res, {:?}", response);
 
         dst.write_frame(&response).await?;
 
@@ -90,10 +87,6 @@ impl Expire {
         StringCommand::new(&get_client())
             .expire(&self.key, ttl)
             .await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

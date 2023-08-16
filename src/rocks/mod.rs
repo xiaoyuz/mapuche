@@ -73,8 +73,8 @@ pub trait TxnCommand {
     ) -> Result<()>;
 }
 
-fn new_client() -> Result<RocksClient> {
-    let db = new_db()?;
+pub fn new_client() -> Result<RocksClient> {
+    let db: TransactionDB = new_db()?;
     Ok(RocksClient::new(Arc::new(db)))
 }
 

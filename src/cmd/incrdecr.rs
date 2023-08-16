@@ -1,12 +1,10 @@
 use crate::cmd::{retry_call, Invalid};
-use crate::config::LOGGER;
 use crate::parse::Parse;
 use crate::rocks::errors::DECREMENT_OVERFLOW;
 use crate::{Connection, Frame};
 use bytes::Bytes;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::string::StringCommand;
 use crate::rocks::{get_client, Result as RocksResult};
@@ -69,7 +67,6 @@ impl IncrDecr {
             .boxed()
         })
         .await?;
-        debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -90,10 +87,6 @@ impl IncrDecr {
         StringCommand::new(&get_client())
             .incr(&self.key, self.step)
             .await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

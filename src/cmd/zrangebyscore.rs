@@ -1,10 +1,8 @@
 use crate::{Connection, Frame, Parse};
 
 use crate::cmd::Invalid;
-use crate::config::LOGGER;
 use bytes::{Buf, Bytes};
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::zset::ZsetCommand;
 use crate::rocks::{get_client, Result as RocksResult};
@@ -167,7 +165,7 @@ impl Zrangebyscore {
 
     pub(crate) async fn apply(&self, dst: &mut Connection, reverse: bool) -> crate::Result<()> {
         let response = self.zrangebyscore(reverse).await?;
-        debug!(LOGGER, "res, {:?}", response);
+
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -188,10 +186,6 @@ impl Zrangebyscore {
                 reverse,
             )
             .await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

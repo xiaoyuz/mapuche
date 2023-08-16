@@ -1,12 +1,10 @@
 use crate::{Connection, Frame, Parse};
 
 use crate::cmd::{retry_call, Invalid};
-use crate::config::LOGGER;
 use crate::rocks::list::ListCommand;
 use bytes::Bytes;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
@@ -66,7 +64,7 @@ impl Push {
 
     pub(crate) async fn apply(&self, dst: &mut Connection, op_left: bool) -> crate::Result<()> {
         let response = retry_call(|| async move { self.push(op_left).await }.boxed()).await?;
-        debug!(LOGGER, "res, {:?}", response);
+
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -79,10 +77,6 @@ impl Push {
         ListCommand::new(&get_client())
             .push(&self.key, &self.items, op_left)
             .await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

@@ -1,10 +1,8 @@
 use crate::{Connection, Frame, Parse};
 
 use crate::cmd::Invalid;
-use crate::config::LOGGER;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::string::StringCommand;
 use crate::rocks::{get_client, Result as RocksResult};
@@ -83,8 +81,6 @@ impl Get {
         // Get the value from the shared database state
         let response = self.get().await?;
 
-        debug!(LOGGER, "res, {:?}", response);
-
         // Write the response back to the client
         dst.write_frame(&response).await?;
 
@@ -96,10 +92,6 @@ impl Get {
             return Ok(resp_invalid_arguments());
         }
         StringCommand::new(&get_client()).get(&self.key).await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

@@ -1,11 +1,9 @@
 use crate::{Connection, Frame, Parse};
 
 use crate::cmd::{retry_call, Invalid};
-use crate::config::LOGGER;
 use bytes::Bytes;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::zset::ZsetCommand;
 use crate::rocks::{get_client, Result as RocksResult};
@@ -54,7 +52,7 @@ impl Zincrby {
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = retry_call(|| async move { self.zincrby().await }.boxed()).await?;
-        debug!(LOGGER, "res, {:?}", response);
+
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -68,10 +66,6 @@ impl Zincrby {
         ZsetCommand::new(&get_client())
             .zincrby(&self.key, self.step, &self.member)
             .await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

@@ -1,11 +1,9 @@
 use crate::{Connection, Frame, Parse};
 
 use crate::cmd::{retry_call, Invalid};
-use crate::config::LOGGER;
 use bytes::Bytes;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::zset::ZsetCommand;
 use crate::rocks::{get_client, Result as RocksResult};
@@ -58,7 +56,7 @@ impl Zpop {
 
     pub(crate) async fn apply(&self, dst: &mut Connection, from_min: bool) -> crate::Result<()> {
         let response = retry_call(|| async move { self.zpop(from_min).await }.boxed()).await?;
-        debug!(LOGGER, "res, {:?}", response);
+
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -71,10 +69,6 @@ impl Zpop {
         ZsetCommand::new(&get_client())
             .zpop(&self.key, from_min, self.count as u64)
             .await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

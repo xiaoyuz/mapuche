@@ -1,10 +1,8 @@
-use crate::{Connection, Frame, MapucheError, Parse};
+use crate::{Connection, Frame, Parse};
 
 use crate::cmd::Invalid;
-use crate::config::LOGGER;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::string::StringCommand;
 use crate::rocks::{get_client, Result as RocksResult};
@@ -53,7 +51,7 @@ impl Del {
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.del().await?;
-        debug!(LOGGER, "res, {:?}", response);
+
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -64,13 +62,6 @@ impl Del {
             return Ok(resp_invalid_arguments());
         }
         StringCommand::new(&get_client()).del(&self.keys).await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        if self.keys.len() != 1 {
-            return Err(MapucheError::String("Cmd don't support cluster").into());
-        }
-        Ok((&self.keys.first().unwrap()).to_string())
     }
 }
 

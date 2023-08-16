@@ -1,12 +1,10 @@
 use crate::{Connection, Frame, Parse};
 
 use crate::cmd::{retry_call, Invalid};
-use crate::config::LOGGER;
 use crate::rocks::list::ListCommand;
 use bytes::Bytes;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::{get_client, Result as RocksResult};
 use crate::utils::resp_invalid_arguments;
@@ -56,7 +54,7 @@ impl Lrem {
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = retry_call(|| async move { self.lrem().await }.boxed()).await?;
-        debug!(LOGGER, "res, {:?}", response);
+
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -75,10 +73,6 @@ impl Lrem {
         ListCommand::new(&get_client())
             .lrem(&self.key, count as usize, from_head, &self.element)
             .await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

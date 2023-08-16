@@ -1,6 +1,4 @@
-use crate::config::{
-    async_del_set_threshold_or_default, async_expire_set_threshold_or_default, LOGGER,
-};
+use crate::config::{async_del_set_threshold_or_default, async_expire_set_threshold_or_default};
 use crate::rocks::client::{get_version_for_new, RocksClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::REDIS_WRONG_TYPE_ERR;
@@ -19,7 +17,7 @@ use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
 use rocksdb::ColumnFamilyRef;
-use slog::info;
+
 use std::collections::HashMap;
 
 const RANDOM_BASE: i64 = 100;
@@ -712,14 +710,12 @@ impl TxnCommand for SetCommand<'_> {
         let bound_range = KEY_ENCODER.encode_sub_meta_key_range(key, version);
         let iter = txn.scan_keys(cfs.sub_meta_cf.clone(), bound_range, u32::MAX)?;
         for k in iter {
-            info!(LOGGER, "Set found meta to gc, {}", k.clone().len());
             txn.del(cfs.sub_meta_cf.clone(), k)?;
         }
         // delete all data key of this key and version
         let bound_range = KEY_ENCODER.encode_set_data_key_range(key, version);
         let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
         for k in iter {
-            info!(LOGGER, "Set found data to gc, {}", k.clone().len());
             txn.del(cfs.data_cf.clone(), k)?;
         }
         Ok(())

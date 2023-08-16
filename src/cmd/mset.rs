@@ -1,14 +1,12 @@
 use crate::cmd::Invalid;
-use crate::config::LOGGER;
 use crate::parse::Parse;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::string::StringCommand;
 use crate::rocks::{get_client, KEY_ENCODER};
 use crate::utils::resp_invalid_arguments;
-use crate::{Connection, Frame, MapucheError};
+use crate::{Connection, Frame};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::Result as RocksResult;
 
@@ -67,8 +65,6 @@ impl Mset {
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.batch_put().await?;
 
-        debug!(LOGGER, "res, {:?}", response);
-
         // Write the response back to the client
         dst.write_frame(&response).await?;
 
@@ -88,13 +84,6 @@ impl Mset {
             kvs.push(kvpair);
         }
         StringCommand::new(&get_client()).batch_put(kvs).await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        if self.keys.len() != 1 {
-            return Err(MapucheError::String("Cmd don't support cluster").into());
-        }
-        Ok((&self.keys.first().unwrap()).to_string())
     }
 }
 

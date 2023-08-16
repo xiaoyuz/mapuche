@@ -1,10 +1,8 @@
 use crate::{Connection, Frame, Parse};
 
 use crate::cmd::Invalid;
-use crate::config::LOGGER;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::string::StringCommand;
 use crate::rocks::{get_client, Result as RocksResult};
@@ -100,7 +98,6 @@ impl Scan {
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.scan().await?;
-        debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;
         Ok(())
     }

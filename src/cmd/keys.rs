@@ -2,9 +2,6 @@ use crate::{Connection, Frame, Parse};
 use serde::{Deserialize, Serialize};
 
 use crate::cmd::Invalid;
-use crate::config::LOGGER;
-
-use slog::debug;
 
 use crate::rocks::string::StringCommand;
 use crate::rocks::{get_client, Result as RocksResult};
@@ -32,7 +29,6 @@ impl Keys {
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.keys().await?;
-        debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;
         Ok(())
     }

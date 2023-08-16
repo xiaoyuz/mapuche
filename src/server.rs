@@ -1,22 +1,15 @@
 use crate::{Command, Connection, Shutdown};
-use std::collections::HashMap;
 
-use crate::client::Client;
 use crate::config::{
     async_gc_worker_number_or_default, config_local_pool_number, config_max_connection,
-    is_auth_enabled, is_auth_matched, LOGGER,
 };
 use crate::gc::GcMaster;
-use crate::rocks::errors::{
-    REDIS_AUTH_INVALID_PASSWORD_ERR, REDIS_AUTH_REQUIRED_ERR, REDIS_AUTH_WHEN_DISABLED_ERR,
-};
-use crate::utils::{resp_err, resp_invalid_arguments, resp_ok};
-use slog::{debug, error, info};
+
 use std::future::Future;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 
-use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
+use tokio::sync::{broadcast, mpsc, Semaphore};
 use tokio::time::{self, Duration};
 use tokio_util::task::LocalPoolHandle;
 
@@ -28,7 +21,6 @@ struct Listener {
     listener: TcpListener,
 
     limit_connections: Arc<Semaphore>,
-    clients: Arc<Mutex<HashMap<u64, Arc<Mutex<Client>>>>>,
 
     /// Broadcasts a shutdown signal to all active connections.
     ///
@@ -60,12 +52,8 @@ struct Listener {
 /// commands to `db`.
 #[derive(Debug)]
 struct Handler {
-    cur_client: Arc<Mutex<Client>>,
-    clients: Arc<Mutex<HashMap<u64, Arc<Mutex<Client>>>>>,
     connection: Connection,
     shutdown: Shutdown,
-    authorized: bool,
-    _shutdown_complete: mpsc::Sender<()>,
 }
 
 /// Run the mapuche server.
@@ -90,7 +78,6 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) {
     let mut server = Listener {
         listener,
         limit_connections: Arc::new(Semaphore::new(config_max_connection())),
-        clients: Arc::new(Mutex::new(HashMap::new())),
         notify_shutdown,
         shutdown_complete_tx,
         shutdown_complete_rx,
@@ -100,23 +87,11 @@ pub async fn run(listener: TcpListener, shutdown: impl Future) {
     gc_master.start_workers().await;
 
     tokio::select! {
-        res = server.run() => {
-            // If an error is received here, accepting connections from the TCP
-            // listener failed multiple times and the server is giving up and
-            // shutting down.
-            //
-            // Errors encountered when handling individual connections do not
-            // bubble up to this point.
-            if let Err(err) = res {
-                error!(LOGGER, "failed to accept, case {}", err.to_string());
-            }
+        _ = server.run() => {
         }
         _ = gc_master.run() => {
-            error!(LOGGER, "gc master exit");
         }
         _ = shutdown => {
-            // The shutdown signal has been received.
-            info!(LOGGER, "shutting down");
         }
     }
 
@@ -160,8 +135,6 @@ impl Listener {
     /// itself. One strategy for handling this is to implement a back off
     /// strategy, which is what we do here.
     async fn run(&mut self) -> crate::Result<()> {
-        info!(LOGGER, "accepting inbound connections");
-
         let local_pool_number = config_local_pool_number();
         let local_pool = LocalPoolHandle::new(local_pool_number);
 
@@ -174,34 +147,16 @@ impl Listener {
                 .unwrap();
 
             let socket = self.accept().await?;
-            let (kill_tx, kill_rx) = mpsc::channel(1);
-            let client = Client::new(&socket, kill_tx);
-            let client_id = client.id();
-            let arc_client = Arc::new(Mutex::new(client));
-            self.clients
-                .lock()
-                .await
-                .insert(client_id, arc_client.clone());
+            let (_kill_tx, kill_rx) = mpsc::channel(1);
 
             // Create the necessary per-connection handler state.
             let mut handler = Handler {
-                cur_client: arc_client.clone(),
-                clients: self.clients.clone(),
                 connection: Connection::new(socket),
                 shutdown: Shutdown::new(self.notify_shutdown.subscribe(), kill_rx),
-                authorized: !is_auth_enabled(),
-                _shutdown_complete: self.shutdown_complete_tx.clone(),
             };
             local_pool.spawn_pinned(|| async move {
                 // Process the connection. If an error is encountered, log it.
-                if let Err(err) = handler.run().await {
-                    error!(LOGGER, "connection error {:?}", err);
-                }
-                handler
-                    .clients
-                    .lock()
-                    .await
-                    .remove(&handler.cur_client.lock().await.id());
+                handler.run().await;
                 drop(permit)
             });
         }
@@ -224,7 +179,6 @@ impl Listener {
             match self.listener.accept().await {
                 Ok((socket, _)) => return Ok(socket),
                 Err(err) => {
-                    error!(LOGGER, "Accept Error! {:?}", &err);
                     if backoff > 64 {
                         // Accept has failed too many times. Return the error.
                         return Err(err.into());
@@ -281,49 +235,12 @@ impl Handler {
             // error if the frame is not a valid redis command or it is an
             // unsupported command.
             let cmd = Command::from_frame(frame)?;
-            let cmd_name = cmd.get_name().to_owned();
 
-            {
-                let mut w_client = self.cur_client.lock().await;
-                w_client.interact(&cmd_name);
-            }
-
-            debug!(LOGGER, "req, {:?}", cmd);
-
-            match cmd {
-                Command::Auth(c) => {
-                    if !c.valid() {
-                        self.connection
-                            .write_frame(&resp_invalid_arguments())
-                            .await?;
-                    } else if !is_auth_enabled() {
-                        // check password and update connection authorized flag
-                        self.connection
-                            .write_frame(&resp_err(REDIS_AUTH_WHEN_DISABLED_ERR))
-                            .await?;
-                    } else if is_auth_matched(c.passwd()) {
-                        self.connection.write_frame(&resp_ok()).await?;
-                        self.authorized = true;
-                    } else {
-                        self.connection
-                            .write_frame(&resp_err(REDIS_AUTH_INVALID_PASSWORD_ERR))
-                            .await?;
-                    }
-                }
-                _ => {
-                    if !self.authorized {
-                        self.connection
-                            .write_frame(&resp_err(REDIS_AUTH_REQUIRED_ERR))
-                            .await?;
-                    } else {
-                        let execute_res = self.execute_locally(cmd).await;
-                        match execute_res {
-                            Ok(_) => (),
-                            Err(e) => {
-                                return Err(e);
-                            }
-                        }
-                    }
+            let execute_res = self.execute_locally(cmd).await;
+            match execute_res {
+                Ok(_) => (),
+                Err(e) => {
+                    return Err(e);
                 }
             }
         }

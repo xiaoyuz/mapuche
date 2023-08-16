@@ -1,11 +1,9 @@
 use crate::{Connection, Frame, Parse};
 
 use crate::cmd::{retry_call, Invalid};
-use crate::config::LOGGER;
 use bytes::Bytes;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::set::SetCommand;
 use crate::rocks::{get_client, Result as RocksResult};
@@ -64,7 +62,7 @@ impl Sadd {
 
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = retry_call(|| async move { self.sadd().await }.boxed()).await?;
-        debug!(LOGGER, "res, {:?}", response);
+
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -77,10 +75,6 @@ impl Sadd {
         SetCommand::new(&get_client())
             .sadd(&self.key, &self.members)
             .await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

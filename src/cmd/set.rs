@@ -1,10 +1,8 @@
 use crate::cmd::{Invalid, Parse, ParseError};
 use crate::{Connection, Frame};
 
-use crate::config::LOGGER;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use slog::debug;
 
 use crate::rocks::string::StringCommand;
 use crate::utils::{resp_invalid_arguments, timestamp_from_ttl};
@@ -197,7 +195,6 @@ impl Set {
     pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
         let response = self.set().await?;
 
-        debug!(LOGGER, "res, {:?}", response);
         dst.write_frame(&response).await?;
 
         Ok(())
@@ -224,10 +221,6 @@ impl Set {
         StringCommand::new(&get_client())
             .put(&self.key, &self.value, ttl)
             .await
-    }
-
-    pub fn hash_ring_key(&self) -> crate::Result<String> {
-        Ok(self.key.to_string())
     }
 }
 

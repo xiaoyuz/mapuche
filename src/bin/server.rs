@@ -6,8 +6,8 @@ use tokio::net::TcpListener;
 use tokio::{fs, signal};
 
 use mapuche::config::{
-    config_instance_id_or_default, config_listen_or_default, config_max_connection,
-    config_port_or_default, set_global_config, Config,
+    config_listen_or_default, config_max_connection, config_port_or_default, set_global_config,
+    Config,
 };
 use mapuche::rocks::set_instance_id;
 
@@ -43,15 +43,8 @@ pub async fn main() -> mapuche::Result<()> {
     let port = cli.port.as_deref().unwrap_or(&c_port);
     let c_listen = config_listen_or_default();
     let listen_addr = cli.listen_addr.as_deref().unwrap_or(&c_listen);
-    let c_instance_id = config_instance_id_or_default();
-    let instance_id_str = cli.instance_id.as_deref().unwrap_or(&c_instance_id);
 
-    match instance_id_str.parse::<u64>() {
-        Ok(val) => {
-            set_instance_id(val);
-        }
-        Err(_) => set_instance_id(0),
-    };
+    set_instance_id(1);
 
     if !set_open_files_limit((config_max_connection() * 2) as isize) {
         println!("failed to update the open files limit...");

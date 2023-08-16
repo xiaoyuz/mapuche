@@ -7,9 +7,6 @@ use serde::{Deserialize, Serialize};
 mod set;
 pub use set::Set;
 
-mod ping;
-pub use ping::Ping;
-
 mod unknown;
 pub use unknown::Unknown;
 
@@ -169,9 +166,6 @@ pub use zremrangebyscore::Zremrangebyscore;
 mod keys;
 pub use keys::Keys;
 
-mod auth;
-pub use auth::Auth;
-
 use crate::config::txn_retry_count;
 use crate::{Connection, Frame, Parse, ParseError};
 
@@ -187,7 +181,6 @@ pub enum Command {
     Mset(Mset),
     Set(Set),
     Del(Del),
-    Ping(Ping),
     Strlen(Strlen),
     Type(Type),
     Exists(Exists),
@@ -257,8 +250,6 @@ pub enum Command {
     Zrank(Zrank),
     Zincrby(Zincrby),
 
-    Auth(Auth),
-
     Unknown(Unknown),
 }
 
@@ -292,7 +283,6 @@ impl Command {
             "mset" => Command::Mset(transform_parse(Mset::parse_frames(&mut parse), &mut parse)),
             "set" => Command::Set(Set::parse_frames(&mut parse)?),
             "del" => Command::Del(transform_parse(Del::parse_frames(&mut parse), &mut parse)),
-            "ping" => Command::Ping(Ping::parse_frames(&mut parse)?),
             "strlen" => Command::Strlen(transform_parse(
                 Strlen::parse_frames(&mut parse),
                 &mut parse,
@@ -443,7 +433,6 @@ impl Command {
                 Zincrby::parse_frames(&mut parse),
                 &mut parse,
             )),
-            "auth" => Command::Auth(transform_parse(Auth::parse_frames(&mut parse), &mut parse)),
 
             _ => {
                 // The command is not recognized and an Unknown command is
@@ -474,7 +463,6 @@ impl Command {
             Mset(cmd) => cmd.apply(dst).await,
             Set(cmd) => cmd.apply(dst).await,
             Del(cmd) => cmd.apply(dst).await,
-            Ping(cmd) => cmd.apply(dst).await,
             Strlen(cmd) => cmd.apply(dst).await,
             Type(cmd) => cmd.apply(dst).await,
             Exists(cmd) => cmd.apply(dst).await,
@@ -537,83 +525,6 @@ impl Command {
             Zincrby(cmd) => cmd.apply(dst).await,
 
             Unknown(cmd) => cmd.apply(dst).await,
-
-            _ => Ok(()),
-        }
-    }
-
-    /// Returns the command name
-    pub(crate) fn get_name(&self) -> &str {
-        match self {
-            Command::Get(_) => "get",
-            Command::Mget(_) => "mget",
-            Command::Mset(_) => "mset",
-            Command::Set(_) => "set",
-            Command::Del(_) => "del",
-            Command::Ping(_) => "ping",
-            Command::Strlen(_) => "strlen",
-            Command::Type(_) => "type",
-            Command::Exists(_) => "exists",
-            Command::Incr(_) => "incr",
-            Command::Decr(_) => "decr",
-            Command::Expire(_) => "expire",
-            Command::ExpireAt(_) => "expireat",
-            Command::Pexpire(_) => "pexpire",
-            Command::PexpireAt(_) => "pexpireat",
-            Command::TTL(_) => "ttl",
-            Command::PTTL(_) => "pttl",
-            Command::Scan(_) => "scan",
-            Command::Keys(_) => "keys",
-            Command::Sadd(_) => "sadd",
-            Command::Scard(_) => "scard",
-            Command::Sismember(_) => "sismember",
-            Command::Smismember(_) => "smismember",
-            Command::Smembers(_) => "smembers",
-            Command::Srandmember(_) => "srandmember",
-            Command::Spop(_) => "spop",
-            Command::Srem(_) => "srem",
-            Command::Lpush(_) => "lpush",
-            Command::Rpush(_) => "rpush",
-            Command::Lpop(_) => "lpop",
-            Command::Rpop(_) => "rpop",
-            Command::Lrange(_) => "lrange",
-            Command::Ltrim(_) => "ltrim",
-            Command::Llen(_) => "llen",
-            Command::Lindex(_) => "lindex",
-            Command::Lset(_) => "lset",
-            Command::Lrem(_) => "lrem",
-            Command::Linsert(_) => "linsert",
-            Command::Hset(_) => "hset",
-            Command::Hmset(_) => "hmset",
-            Command::Hsetnx(_) => "hsetnx",
-            Command::Hget(_) => "hget",
-            Command::Hmget(_) => "hmget",
-            Command::Hlen(_) => "hlen",
-            Command::Hgetall(_) => "hgetall",
-            Command::Hdel(_) => "hdel",
-            Command::Hkeys(_) => "hkeys",
-            Command::Hvals(_) => "hvals",
-            Command::Hincrby(_) => "hincrby",
-            Command::Hexists(_) => "hexists",
-            Command::Hstrlen(_) => "hstrlen",
-            Command::Zadd(_) => "zadd",
-            Command::Zcard(_) => "zcard",
-            Command::Zscore(_) => "zscore",
-            Command::Zrem(_) => "zrem",
-            Command::Zremrangebyscore(_) => "zremrangebyscore",
-            Command::Zremrangebyrank(_) => "zremrangebyrank",
-            Command::Zrange(_) => "zrange",
-            Command::Zrevrange(_) => "zrevrange",
-            Command::Zrangebyscore(_) => "zrangebyscore",
-            Command::Zrevrangebyscore(_) => "zrevrangebyscore",
-            Command::Zcount(_) => "zcount",
-            Command::Zpopmin(_) => "zpopmin",
-            Command::Zpopmax(_) => "zpopmax",
-            Command::Zrank(_) => "zrank",
-            Command::Zincrby(_) => "zincrby",
-            Command::Auth(_) => "auth",
-
-            Command::Unknown(cmd) => cmd.get_name(),
         }
     }
 }
