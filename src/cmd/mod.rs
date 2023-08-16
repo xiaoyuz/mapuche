@@ -167,7 +167,8 @@ mod keys;
 pub use keys::Keys;
 
 use crate::config::txn_retry_count;
-use crate::{Connection, Frame, Parse, ParseError};
+use crate::db::DBInner;
+use crate::{Frame, Parse};
 
 use crate::rocks::Result as RocksResult;
 
@@ -254,278 +255,80 @@ pub enum Command {
 }
 
 impl Command {
-    /// Parse a command from a received frame.
-    ///
-    /// The `Frame` must represent a Redis command supported by `mapuche` and
-    /// be the array variant.
-    ///
-    /// # Returns
-    ///
-    /// On success, the command value is returned, otherwise, `Err` is returned.
-    pub fn from_frame(frame: Frame) -> crate::Result<Command> {
-        // The frame  value is decorated with `Parse`. `Parse` provides a
-        // "cursor" like API which makes parsing the command easier.
-        //
-        // The frame value must be an array variant. Any other frame variants
-        // result in an error being returned.
-        let mut parse = Parse::new(frame)?;
-
-        // All redis commands begin with the command name as a string. The name
-        // is read and converted to lower cases in order to do case sensitive
-        // matching.
-        let command_name = parse.next_string()?.to_lowercase();
-
-        // Match the command name, delegating the rest of the parsing to the
-        // specific command.
-        let command = match &command_name[..] {
-            "get" => Command::Get(Get::parse_frames(&mut parse)?),
-            "mget" => Command::Mget(transform_parse(Mget::parse_frames(&mut parse), &mut parse)),
-            "mset" => Command::Mset(transform_parse(Mset::parse_frames(&mut parse), &mut parse)),
-            "set" => Command::Set(Set::parse_frames(&mut parse)?),
-            "del" => Command::Del(transform_parse(Del::parse_frames(&mut parse), &mut parse)),
-            "strlen" => Command::Strlen(transform_parse(
-                Strlen::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "type" => Command::Type(transform_parse(Type::parse_frames(&mut parse), &mut parse)),
-            "exists" => Command::Exists(transform_parse(
-                Exists::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "incr" => Command::Incr(transform_parse(
-                IncrDecr::parse_frames(&mut parse, true),
-                &mut parse,
-            )),
-            "decr" => Command::Decr(transform_parse(
-                IncrDecr::parse_frames(&mut parse, true),
-                &mut parse,
-            )),
-            "expire" => Command::Expire(transform_parse(
-                Expire::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "expireat" => Command::ExpireAt(transform_parse(
-                Expire::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "pexpire" => Command::Pexpire(transform_parse(
-                Expire::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "pexpireat" => Command::PexpireAt(transform_parse(
-                Expire::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "ttl" => Command::TTL(transform_parse(TTL::parse_frames(&mut parse), &mut parse)),
-            "pttl" => Command::PTTL(transform_parse(TTL::parse_frames(&mut parse), &mut parse)),
-            "scan" => Command::Scan(transform_parse(Scan::parse_frames(&mut parse), &mut parse)),
-            "keys" => Command::Keys(transform_parse(Keys::parse_frames(&mut parse), &mut parse)),
-            "sadd" => Command::Sadd(transform_parse(Sadd::parse_frames(&mut parse), &mut parse)),
-            "scard" => Command::Scard(transform_parse(Scard::parse_frames(&mut parse), &mut parse)),
-            "sismember" => Command::Sismember(transform_parse(
-                Sismember::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "smismember" => Command::Smismember(transform_parse(
-                Smismember::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "smembers" => Command::Smembers(transform_parse(
-                Smembers::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "srandmember" => Command::Srandmember(transform_parse(
-                Srandmember::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "spop" => Command::Spop(transform_parse(Spop::parse_frames(&mut parse), &mut parse)),
-            "srem" => Command::Srem(transform_parse(Srem::parse_frames(&mut parse), &mut parse)),
-            "lpush" => Command::Lpush(transform_parse(Push::parse_frames(&mut parse), &mut parse)),
-            "rpush" => Command::Rpush(transform_parse(Push::parse_frames(&mut parse), &mut parse)),
-            "lpop" => Command::Lpop(transform_parse(Pop::parse_frames(&mut parse), &mut parse)),
-            "rpop" => Command::Rpop(transform_parse(Pop::parse_frames(&mut parse), &mut parse)),
-            "lrange" => Command::Lrange(transform_parse(
-                Lrange::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "ltrim" => Command::Ltrim(transform_parse(Ltrim::parse_frames(&mut parse), &mut parse)),
-            "llen" => Command::Llen(transform_parse(Llen::parse_frames(&mut parse), &mut parse)),
-            "lindex" => Command::Lindex(transform_parse(
-                Lindex::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "lset" => Command::Lset(transform_parse(Lset::parse_frames(&mut parse), &mut parse)),
-            "lrem" => Command::Lrem(transform_parse(Lrem::parse_frames(&mut parse), &mut parse)),
-            "linsert" => Command::Linsert(transform_parse(
-                Linsert::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "hset" => Command::Hset(transform_parse(Hset::parse_frames(&mut parse), &mut parse)),
-            "hsetnx" => {
-                Command::Hsetnx(transform_parse(Hset::parse_frames(&mut parse), &mut parse))
-            }
-            "hmset" => Command::Hmset(transform_parse(Hset::parse_frames(&mut parse), &mut parse)),
-            "hget" => Command::Hget(transform_parse(Hget::parse_frames(&mut parse), &mut parse)),
-            "hmget" => Command::Hmget(transform_parse(Hmget::parse_frames(&mut parse), &mut parse)),
-            "hlen" => Command::Hlen(transform_parse(Hlen::parse_frames(&mut parse), &mut parse)),
-            "hgetall" => Command::Hgetall(transform_parse(
-                Hgetall::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "hdel" => Command::Hdel(transform_parse(Hdel::parse_frames(&mut parse), &mut parse)),
-            "hkeys" => Command::Hkeys(transform_parse(Hkeys::parse_frames(&mut parse), &mut parse)),
-            "hvals" => Command::Hvals(transform_parse(Hvals::parse_frames(&mut parse), &mut parse)),
-            "hincrby" => Command::Hincrby(transform_parse(
-                Hincrby::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "hexists" => Command::Hexists(transform_parse(
-                Hexists::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "hstrlen" => Command::Hstrlen(transform_parse(
-                Hstrlen::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "zadd" => Command::Zadd(transform_parse(Zadd::parse_frames(&mut parse), &mut parse)),
-            "zcard" => Command::Zcard(transform_parse(Zcard::parse_frames(&mut parse), &mut parse)),
-            "zscore" => Command::Zscore(transform_parse(
-                Zscore::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "zrem" => Command::Zrem(transform_parse(Zrem::parse_frames(&mut parse), &mut parse)),
-            "zremrangebyscore" => Command::Zremrangebyscore(transform_parse(
-                Zremrangebyscore::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "zremrangebyrank" => Command::Zremrangebyrank(transform_parse(
-                Zremrangebyrank::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "zrange" => Command::Zrange(transform_parse(
-                Zrange::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "zrevrange" => Command::Zrevrange(transform_parse(
-                Zrevrange::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "zrangebyscore" => Command::Zrangebyscore(transform_parse(
-                Zrangebyscore::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "zrevrangebyscore" => Command::Zrevrangebyscore(transform_parse(
-                Zrangebyscore::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "zcount" => Command::Zcount(transform_parse(
-                Zcount::parse_frames(&mut parse),
-                &mut parse,
-            )),
-            "zpopmin" => {
-                Command::Zpopmin(transform_parse(Zpop::parse_frames(&mut parse), &mut parse))
-            }
-            "zpopmax" => {
-                Command::Zpopmax(transform_parse(Zpop::parse_frames(&mut parse), &mut parse))
-            }
-            "zrank" => Command::Zrank(transform_parse(Zrank::parse_frames(&mut parse), &mut parse)),
-            "zincrby" => Command::Zincrby(transform_parse(
-                Zincrby::parse_frames(&mut parse),
-                &mut parse,
-            )),
-
-            _ => {
-                // The command is not recognized and an Unknown command is
-                // returned.
-                //
-                // `return` is called here to skip the `finish()` call below. As
-                // the command is not recognized, there is most likely
-                // unconsumed fields remaining in the `Parse` instance.
-                return Ok(Command::Unknown(Unknown::new(command_name)));
-            }
-        };
-
-        // Check if there is any remaining unconsumed fields in the `Parse`
-        // value. If fields remain, this indicates an unexpected frame format
-        // and an error is returned.
-        parse.finish()?;
-
-        // The command has been successfully parsed
-        Ok(command)
-    }
-
-    pub(crate) async fn apply(mut self, dst: &mut Connection) -> crate::Result<()> {
+    pub(crate) async fn execute(mut self, inner_db: &DBInner) -> crate::Result<Frame> {
         use Command::*;
 
-        match &mut self {
-            Get(cmd) => cmd.apply(dst).await,
-            Mget(cmd) => cmd.apply(dst).await,
-            Mset(cmd) => cmd.apply(dst).await,
-            Set(cmd) => cmd.apply(dst).await,
-            Del(cmd) => cmd.apply(dst).await,
-            Strlen(cmd) => cmd.apply(dst).await,
-            Type(cmd) => cmd.apply(dst).await,
-            Exists(cmd) => cmd.apply(dst).await,
-            Incr(cmd) => cmd.apply(dst, true).await,
-            Decr(cmd) => cmd.apply(dst, false).await,
-            Expire(cmd) => cmd.apply(dst, false, false).await,
-            ExpireAt(cmd) => cmd.apply(dst, false, true).await,
-            Pexpire(cmd) => cmd.apply(dst, true, false).await,
-            PexpireAt(cmd) => cmd.apply(dst, true, true).await,
-            TTL(cmd) => cmd.apply(dst, false).await,
-            PTTL(cmd) => cmd.apply(dst, true).await,
-            Scan(cmd) => cmd.apply(dst).await,
-            Keys(cmd) => cmd.apply(dst).await,
-            Sadd(cmd) => cmd.apply(dst).await,
-            Scard(cmd) => cmd.apply(dst).await,
-            Sismember(cmd) => cmd.apply(dst).await,
-            Smismember(cmd) => cmd.apply(dst).await,
-            Smembers(cmd) => cmd.apply(dst).await,
-            Srandmember(cmd) => cmd.apply(dst).await,
-            Spop(cmd) => cmd.apply(dst).await,
-            Srem(cmd) => cmd.apply(dst).await,
-            Lpush(cmd) => cmd.apply(dst, true).await,
-            Rpush(cmd) => cmd.apply(dst, false).await,
-            Lpop(cmd) => cmd.apply(dst, true).await,
-            Rpop(cmd) => cmd.apply(dst, false).await,
-            Lrange(cmd) => cmd.apply(dst).await,
-            Ltrim(cmd) => cmd.apply(dst).await,
-            Llen(cmd) => cmd.apply(dst).await,
-            Lindex(cmd) => cmd.apply(dst).await,
-            Lset(cmd) => cmd.apply(dst).await,
-            Lrem(cmd) => cmd.apply(dst).await,
-            Linsert(cmd) => cmd.apply(dst).await,
-            Hset(cmd) => cmd.apply(dst, false, false).await,
-            Hmset(cmd) => cmd.apply(dst, true, false).await,
-            Hsetnx(cmd) => cmd.apply(dst, false, true).await,
-            Hget(cmd) => cmd.apply(dst).await,
-            Hmget(cmd) => cmd.apply(dst).await,
-            Hlen(cmd) => cmd.apply(dst).await,
-            Hgetall(cmd) => cmd.apply(dst).await,
-            Hdel(cmd) => cmd.apply(dst).await,
-            Hkeys(cmd) => cmd.apply(dst).await,
-            Hvals(cmd) => cmd.apply(dst).await,
-            Hincrby(cmd) => cmd.apply(dst).await,
-            Hexists(cmd) => cmd.apply(dst).await,
-            Hstrlen(cmd) => cmd.apply(dst).await,
-            Zadd(cmd) => cmd.apply(dst).await,
-            Zcard(cmd) => cmd.apply(dst).await,
-            Zscore(cmd) => cmd.apply(dst).await,
-            Zrem(cmd) => cmd.apply(dst).await,
-            Zremrangebyscore(cmd) => cmd.apply(dst).await,
-            Zremrangebyrank(cmd) => cmd.apply(dst).await,
-            Zrange(cmd) => cmd.apply(dst).await,
-            Zrevrange(cmd) => cmd.apply(dst).await,
-            Zrangebyscore(cmd) => cmd.apply(dst, false).await,
-            Zrevrangebyscore(cmd) => cmd.apply(dst, true).await,
-            Zcount(cmd) => cmd.apply(dst).await,
-            Zpopmin(cmd) => cmd.apply(dst, true).await,
-            Zpopmax(cmd) => cmd.apply(dst, false).await,
-            Zrank(cmd) => cmd.apply(dst).await,
-            Zincrby(cmd) => cmd.apply(dst).await,
+        let response = match &mut self {
+            Get(cmd) => cmd.execute(inner_db).await,
+            Mget(cmd) => cmd.execute(inner_db).await,
+            Mset(cmd) => cmd.execute(inner_db).await,
+            Set(cmd) => cmd.execute(inner_db).await,
+            Del(cmd) => cmd.execute(inner_db).await,
+            Strlen(cmd) => cmd.execute(inner_db).await,
+            Type(cmd) => cmd.execute(inner_db).await,
+            Exists(cmd) => cmd.execute(inner_db).await,
+            Incr(cmd) => cmd.execute(inner_db, true).await,
+            Decr(cmd) => cmd.execute(inner_db, false).await,
+            Expire(cmd) => cmd.execute(inner_db, false, false).await,
+            ExpireAt(cmd) => cmd.execute(inner_db, false, true).await,
+            Pexpire(cmd) => cmd.execute(inner_db, true, false).await,
+            PexpireAt(cmd) => cmd.execute(inner_db, true, true).await,
+            TTL(cmd) => cmd.execute(inner_db, false).await,
+            PTTL(cmd) => cmd.execute(inner_db, true).await,
+            Scan(cmd) => cmd.execute(inner_db).await,
+            Keys(cmd) => cmd.execute(inner_db).await,
+            Sadd(cmd) => cmd.execute(inner_db).await,
+            Scard(cmd) => cmd.execute(inner_db).await,
+            Sismember(cmd) => cmd.execute(inner_db).await,
+            Smismember(cmd) => cmd.execute(inner_db).await,
+            Smembers(cmd) => cmd.execute(inner_db).await,
+            Srandmember(cmd) => cmd.execute(inner_db).await,
+            Spop(cmd) => cmd.execute(inner_db).await,
+            Srem(cmd) => cmd.execute(inner_db).await,
+            Lpush(cmd) => cmd.execute(inner_db, true).await,
+            Rpush(cmd) => cmd.execute(inner_db, false).await,
+            Lpop(cmd) => cmd.execute(inner_db, true).await,
+            Rpop(cmd) => cmd.execute(inner_db, false).await,
+            Lrange(cmd) => cmd.execute(inner_db).await,
+            Ltrim(cmd) => cmd.execute(inner_db).await,
+            Llen(cmd) => cmd.execute(inner_db).await,
+            Lindex(cmd) => cmd.execute(inner_db).await,
+            Lset(cmd) => cmd.execute(inner_db).await,
+            Lrem(cmd) => cmd.execute(inner_db).await,
+            Linsert(cmd) => cmd.execute(inner_db).await,
+            Hset(cmd) => cmd.execute(inner_db, false, false).await,
+            Hmset(cmd) => cmd.execute(inner_db, true, false).await,
+            Hsetnx(cmd) => cmd.execute(inner_db, false, true).await,
+            Hget(cmd) => cmd.execute(inner_db).await,
+            Hmget(cmd) => cmd.execute(inner_db).await,
+            Hlen(cmd) => cmd.execute(inner_db).await,
+            Hgetall(cmd) => cmd.execute(inner_db).await,
+            Hdel(cmd) => cmd.execute(inner_db).await,
+            Hkeys(cmd) => cmd.execute(inner_db).await,
+            Hvals(cmd) => cmd.execute(inner_db).await,
+            Hincrby(cmd) => cmd.execute(inner_db).await,
+            Hexists(cmd) => cmd.execute(inner_db).await,
+            Hstrlen(cmd) => cmd.execute(inner_db).await,
+            Zadd(cmd) => cmd.execute(inner_db).await,
+            Zcard(cmd) => cmd.execute(inner_db).await,
+            Zscore(cmd) => cmd.execute(inner_db).await,
+            Zrem(cmd) => cmd.execute(inner_db).await,
+            Zremrangebyscore(cmd) => cmd.execute(inner_db).await,
+            Zremrangebyrank(cmd) => cmd.execute(inner_db).await,
+            Zrange(cmd) => cmd.execute(inner_db).await,
+            Zrevrange(cmd) => cmd.execute(inner_db).await,
+            Zrangebyscore(cmd) => cmd.execute(inner_db, false).await,
+            Zrevrangebyscore(cmd) => cmd.execute(inner_db, true).await,
+            Zcount(cmd) => cmd.execute(inner_db).await,
+            Zpopmin(cmd) => cmd.execute(inner_db, true).await,
+            Zpopmax(cmd) => cmd.execute(inner_db, false).await,
+            Zrank(cmd) => cmd.execute(inner_db).await,
+            Zincrby(cmd) => cmd.execute(inner_db).await,
 
-            Unknown(cmd) => cmd.apply(dst).await,
-        }
+            Unknown(cmd) => cmd.apply().await,
+        }?;
+
+        Ok(response)
     }
 }
 

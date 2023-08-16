@@ -2,6 +2,7 @@ use crate::config::{
     async_del_list_threshold_or_default, async_expire_list_threshold_or_default,
     cmd_linsert_length_limit_or_default, cmd_lrem_length_limit_or_default,
 };
+use crate::db::DBInner;
 use crate::rocks::client::{get_version_for_new, RocksClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{
@@ -14,7 +15,7 @@ use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
 use crate::rocks::{
     Result as RocksResult, TxnCommand, CF_NAME_GC, CF_NAME_GC_VERSION, CF_NAME_LIST_DATA,
-    CF_NAME_META, KEY_ENCODER,
+    CF_NAME_META,
 };
 use crate::utils::{key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil, resp_ok};
 use crate::Frame;
@@ -43,21 +44,21 @@ impl<'a> ListCF<'a> {
 }
 
 pub struct ListCommand<'a> {
-    client: &'a RocksClient,
+    inner_db: &'a DBInner,
 }
 
 impl<'a> ListCommand<'a> {
-    pub fn new(client: &'a RocksClient) -> Self {
-        Self { client }
+    pub fn new(inner_db: &'a DBInner) -> Self {
+        Self { inner_db }
     }
 
     pub async fn push(self, key: &str, values: &Vec<Bytes>, op_left: bool) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = ListCF::new(client);
         let key = key.to_owned();
         let values = values.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
 
         let resp = client.exec_txn(|txn| {
             match txn.get_for_update(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -77,6 +78,7 @@ impl<'a> ListCommand<'a> {
                             cfs.gc_cf.clone(),
                             cfs.gc_version_cf.clone(),
                             &key,
+                            &self.inner_db.key_encoder,
                         )?;
                     }
 
@@ -90,13 +92,18 @@ impl<'a> ListCommand<'a> {
                             right += 1;
                         }
 
-                        let data_key = KEY_ENCODER.encode_list_data_key(&key, idx, version);
+                        let data_key = self
+                            .inner_db
+                            .key_encoder
+                            .encode_list_data_key(&key, idx, version);
                         txn.put(cfs.data_cf.clone(), data_key, value.to_vec())?;
                     }
 
                     // update meta key
-                    let new_meta_value =
-                        KEY_ENCODER.encode_list_meta_value(ttl, version, left, right);
+                    let new_meta_value = self
+                        .inner_db
+                        .key_encoder
+                        .encode_list_meta_value(ttl, version, left, right);
                     txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
 
                     Ok(right - left)
@@ -108,6 +115,7 @@ impl<'a> ListCommand<'a> {
                         cfs.gc_cf.clone(),
                         cfs.gc_version_cf.clone(),
                         &key,
+                        &self.inner_db.key_encoder,
                     )?;
 
                     let mut left = INIT_INDEX;
@@ -124,12 +132,18 @@ impl<'a> ListCommand<'a> {
                         }
 
                         // add data key
-                        let data_key = KEY_ENCODER.encode_list_data_key(&key, idx, version);
+                        let data_key = self
+                            .inner_db
+                            .key_encoder
+                            .encode_list_data_key(&key, idx, version);
                         txn.put(cfs.data_cf.clone(), data_key, value.to_vec())?;
                     }
 
                     // add meta key
-                    let meta_value = KEY_ENCODER.encode_list_meta_value(0, version, left, right);
+                    let meta_value = self
+                        .inner_db
+                        .key_encoder
+                        .encode_list_meta_value(0, version, left, right);
                     txn.put(cfs.meta_cf.clone(), meta_key, meta_value)?;
 
                     Ok(right - left)
@@ -144,11 +158,11 @@ impl<'a> ListCommand<'a> {
     }
 
     pub async fn pop(self, key: &str, op_left: bool, count: i64) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = ListCF::new(client);
         let key = key.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
             let mut values = Vec::new();
             match txn.get_for_update(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -173,7 +187,10 @@ impl<'a> ListCommand<'a> {
                             right -= 1;
                             idx = right;
                         }
-                        let data_key = KEY_ENCODER.encode_list_data_key(&key, idx, version);
+                        let data_key = self
+                            .inner_db
+                            .key_encoder
+                            .encode_list_data_key(&key, idx, version);
                         // get data and delete
                         let value = txn
                             .get(cfs.data_cf.clone(), data_key.clone())
@@ -188,8 +205,10 @@ impl<'a> ListCommand<'a> {
                             txn.del(cfs.meta_cf.clone(), meta_key)?;
                         } else {
                             // update meta key
-                            let new_meta_value =
-                                KEY_ENCODER.encode_list_meta_value(ttl, version, left, right);
+                            let new_meta_value = self
+                                .inner_db
+                                .key_encoder
+                                .encode_list_meta_value(ttl, version, left, right);
                             txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
                         }
                         Ok(values)
@@ -208,7 +227,11 @@ impl<'a> ListCommand<'a> {
                                 idx = right - 1;
                                 right -= 1;
                             }
-                            data_keys.push(KEY_ENCODER.encode_list_data_key(&key, idx, version));
+                            data_keys.push(
+                                self.inner_db
+                                    .key_encoder
+                                    .encode_list_data_key(&key, idx, version),
+                            );
                         }
                         for pair in txn.batch_get(cfs.data_cf.clone(), data_keys)? {
                             values.push(resp_bulk(pair.1));
@@ -220,8 +243,10 @@ impl<'a> ListCommand<'a> {
                             txn.del(cfs.meta_cf.clone(), meta_key)?;
                         } else {
                             // update meta key
-                            let new_meta_value =
-                                KEY_ENCODER.encode_list_meta_value(ttl, version, left, right);
+                            let new_meta_value = self
+                                .inner_db
+                                .key_encoder
+                                .encode_list_meta_value(ttl, version, left, right);
                             txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
                         }
                         Ok(values)
@@ -246,11 +271,11 @@ impl<'a> ListCommand<'a> {
     }
 
     pub async fn ltrim(self, key: &str, mut start: i64, mut end: i64) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = ListCF::new(client);
         let key = key.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
             match txn.get_for_update(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -294,7 +319,10 @@ impl<'a> ListCommand<'a> {
                     end += left as i64;
 
                     for idx in left..start as u64 {
-                        let data_key = KEY_ENCODER.encode_list_data_key(&key, idx, version);
+                        let data_key = self
+                            .inner_db
+                            .key_encoder
+                            .encode_list_data_key(&key, idx, version);
                         txn.del(cfs.data_cf.clone(), data_key)?;
                     }
                     let left_trim = start - left as i64;
@@ -304,7 +332,10 @@ impl<'a> ListCommand<'a> {
 
                     // trim end+1->right
                     for idx in (end + 1) as u64..right {
-                        let data_key = KEY_ENCODER.encode_list_data_key(&key, idx, version);
+                        let data_key = self
+                            .inner_db
+                            .key_encoder
+                            .encode_list_data_key(&key, idx, version);
                         txn.del(cfs.data_cf.clone(), data_key)?;
                     }
 
@@ -319,8 +350,10 @@ impl<'a> ListCommand<'a> {
                         txn.del(cfs.meta_cf.clone(), meta_key)?;
                     } else {
                         // update meta key
-                        let new_meta_value =
-                            KEY_ENCODER.encode_list_meta_value(ttl, version, left, right);
+                        let new_meta_value = self
+                            .inner_db
+                            .key_encoder
+                            .encode_list_meta_value(ttl, version, left, right);
                         txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
                     }
                     Ok(())
@@ -336,11 +369,11 @@ impl<'a> ListCommand<'a> {
     }
 
     pub async fn lrange(self, key: &str, mut r_left: i64, mut r_right: i64) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = ListCF::new(client);
         let key = key.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
         client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -373,8 +406,11 @@ impl<'a> ListCommand<'a> {
                         real_length = llen;
                     }
 
-                    let data_key_start =
-                        KEY_ENCODER.encode_list_data_key(&key, real_left as u64, version);
+                    let data_key_start = self.inner_db.key_encoder.encode_list_data_key(
+                        &key,
+                        real_left as u64,
+                        version,
+                    );
                     let range: RangeFrom<Key> = data_key_start..;
                     let from_range: BoundRange = range.into();
                     let iter = txn.scan(
@@ -392,11 +428,11 @@ impl<'a> ListCommand<'a> {
     }
 
     pub async fn llen(self, key: &str) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = ListCF::new(client);
         let key = key.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
         client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -420,11 +456,11 @@ impl<'a> ListCommand<'a> {
     }
 
     pub async fn lindex(self, key: &str, mut idx: i64) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = ListCF::new(client);
         let key = key.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
         client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -447,7 +483,11 @@ impl<'a> ListCommand<'a> {
                     let real_idx = left as i64 + idx;
 
                     // get value from data key
-                    let data_key = KEY_ENCODER.encode_list_data_key(&key, real_idx as u64, version);
+                    let data_key = self.inner_db.key_encoder.encode_list_data_key(
+                        &key,
+                        real_idx as u64,
+                        version,
+                    );
                     if let Some(value) = txn.get(cfs.data_cf.clone(), data_key)? {
                         Ok(resp_bulk(value))
                     } else {
@@ -460,12 +500,12 @@ impl<'a> ListCommand<'a> {
     }
 
     pub async fn lset(self, key: &str, mut idx: i64, ele: &Bytes) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = ListCF::new(client);
         let key = key.to_owned();
         let ele = ele.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
             match txn.get_for_update(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -489,7 +529,10 @@ impl<'a> ListCommand<'a> {
                         return Err(REDIS_INDEX_OUT_OF_RANGE_ERR);
                     }
 
-                    let data_key = KEY_ENCODER.encode_list_data_key(&key, uidx as u64, version);
+                    let data_key =
+                        self.inner_db
+                            .key_encoder
+                            .encode_list_data_key(&key, uidx as u64, version);
                     // data keys exists, update it to new value
                     txn.put(cfs.data_cf.clone(), data_key, ele.to_vec())?;
                     Ok(())
@@ -511,13 +554,13 @@ impl<'a> ListCommand<'a> {
         pivot: &Bytes,
         element: &Bytes,
     ) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = ListCF::new(client);
         let key = key.to_owned();
         let pivot = pivot.to_owned();
         let element = element.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
             match txn.get_for_update(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -539,7 +582,10 @@ impl<'a> ListCommand<'a> {
                     }
 
                     // get list items bound range
-                    let bound_range = KEY_ENCODER.encode_list_data_key_range(&key, version);
+                    let bound_range = self
+                        .inner_db
+                        .key_encoder
+                        .encode_list_data_key_range(&key, version);
 
                     // iter will only return the matched kvpair
                     let mut iter = txn
@@ -565,18 +611,19 @@ impl<'a> ListCommand<'a> {
                             // move data key from left to left-1
                             // move backwards for elements in idx [left, idx_op], add the new element to idx_op
                             if idx_op >= left {
-                                let left_range = KEY_ENCODER
+                                let left_range = self
+                                    .inner_db
+                                    .key_encoder
                                     .encode_list_data_key_idx_range(&key, left, idx_op, version);
                                 let iter = txn.scan(cfs.data_cf.clone(), left_range, u32::MAX)?;
 
                                 for kv in iter {
                                     let key_idx =
                                         KeyDecoder::decode_key_list_idx_from_datakey(&key, kv.0);
-                                    let new_data_key = KEY_ENCODER.encode_list_data_key(
-                                        &key,
-                                        key_idx - 1,
-                                        version,
-                                    );
+                                    let new_data_key = self
+                                        .inner_db
+                                        .key_encoder
+                                        .encode_list_data_key(&key, key_idx - 1, version);
                                     txn.put(cfs.data_cf.clone(), new_data_key, kv.1)?;
                                 }
                             }
@@ -588,22 +635,22 @@ impl<'a> ListCommand<'a> {
                             // move forwards for elements in idx [idx_op, right-1], add the new element to idx_op
                             // if idx_op == right, no need to move data key
                             if idx_op < right {
-                                let right_range = KEY_ENCODER.encode_list_data_key_idx_range(
-                                    &key,
-                                    idx_op,
-                                    right - 1,
-                                    version,
-                                );
+                                let right_range =
+                                    self.inner_db.key_encoder.encode_list_data_key_idx_range(
+                                        &key,
+                                        idx_op,
+                                        right - 1,
+                                        version,
+                                    );
                                 let iter = txn.scan(cfs.data_cf.clone(), right_range, u32::MAX)?;
 
                                 for kv in iter {
                                     let key_idx =
                                         KeyDecoder::decode_key_list_idx_from_datakey(&key, kv.0);
-                                    let new_data_key = KEY_ENCODER.encode_list_data_key(
-                                        &key,
-                                        key_idx + 1,
-                                        version,
-                                    );
+                                    let new_data_key = self
+                                        .inner_db
+                                        .key_encoder
+                                        .encode_list_data_key(&key, key_idx + 1, version);
                                     txn.put(cfs.data_cf.clone(), new_data_key, kv.1)?;
                                 }
                             }
@@ -612,13 +659,17 @@ impl<'a> ListCommand<'a> {
                         }
 
                         // fill the pivot
-                        let pivot_data_key =
-                            KEY_ENCODER.encode_list_data_key(&key, idx_op, version);
+                        let pivot_data_key = self
+                            .inner_db
+                            .key_encoder
+                            .encode_list_data_key(&key, idx_op, version);
                         txn.put(cfs.data_cf.clone(), pivot_data_key, element.to_vec())?;
 
                         // update meta key
-                        let new_meta_value =
-                            KEY_ENCODER.encode_list_meta_value(ttl, version, left, right);
+                        let new_meta_value = self
+                            .inner_db
+                            .key_encoder
+                            .encode_list_meta_value(ttl, version, left, right);
                         txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
 
                         let len = (right - left) as i64;
@@ -645,12 +696,12 @@ impl<'a> ListCommand<'a> {
         from_head: bool,
         ele: &Bytes,
     ) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = ListCF::new(client);
         let key = key.to_owned();
         let ele = ele.to_owned();
 
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
         let resp = client.exec_txn(|txn| {
             match txn.get_for_update(cfs.meta_cf.clone(), meta_key.clone())? {
                 Some(meta_value) => {
@@ -673,7 +724,10 @@ impl<'a> ListCommand<'a> {
                     }
 
                     // get list items bound range
-                    let bound_range = KEY_ENCODER.encode_list_data_key_range(&key, version);
+                    let bound_range = self
+                        .inner_db
+                        .key_encoder
+                        .encode_list_data_key_range(&key, version);
 
                     // iter will only return the matched kvpair
                     let iter = txn
@@ -722,7 +776,7 @@ impl<'a> ListCommand<'a> {
 
                             // check if key idx need to be backward move
                             if removed_count > 0 {
-                                let new_data_key = KEY_ENCODER.encode_list_data_key(
+                                let new_data_key = self.inner_db.key_encoder.encode_list_data_key(
                                     &key,
                                     key_idx - removed_count as u64,
                                     version,
@@ -736,7 +790,7 @@ impl<'a> ListCommand<'a> {
                         if len == removed_count as u64 {
                             txn.del(cfs.meta_cf.clone(), meta_key)?;
                         } else {
-                            let new_meta_value = KEY_ENCODER.encode_list_meta_value(
+                            let new_meta_value = self.inner_db.key_encoder.encode_list_meta_value(
                                 ttl,
                                 version,
                                 left,
@@ -765,7 +819,7 @@ impl<'a> ListCommand<'a> {
 
                             // check if key idx need to be forward move
                             if removed_count > 0 {
-                                let new_data_key = KEY_ENCODER.encode_list_data_key(
+                                let new_data_key = self.inner_db.key_encoder.encode_list_data_key(
                                     &key,
                                     key_idx + removed_count as u64,
                                     version,
@@ -779,7 +833,7 @@ impl<'a> ListCommand<'a> {
                         if len == removed_count as u64 {
                             txn.del(cfs.meta_cf.clone(), meta_key)?;
                         } else {
-                            let new_meta_value = KEY_ENCODER.encode_list_meta_value(
+                            let new_meta_value = self.inner_db.key_encoder.encode_list_meta_value(
                                 ttl,
                                 version,
                                 left + removed_count as u64,
@@ -804,7 +858,7 @@ impl<'a> ListCommand<'a> {
 impl TxnCommand for ListCommand<'_> {
     fn txn_del(&self, txn: &RocksTransaction, client: &RocksClient, key: &str) -> RocksResult<()> {
         let key = key.to_owned();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
         let cfs = ListCF::new(client);
 
         match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -817,17 +871,23 @@ impl TxnCommand for ListCommand<'_> {
                     // delete meta key and create gc key and gc version key with the version
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
 
-                    let gc_key = KEY_ENCODER.encode_gc_key(&key);
+                    let gc_key = self.inner_db.key_encoder.encode_gc_key(&key);
                     txn.put(cfs.gc_cf.clone(), gc_key, version.to_be_bytes().to_vec())?;
 
-                    let gc_version_key = KEY_ENCODER.encode_gc_version_key(&key, version);
+                    let gc_version_key = self
+                        .inner_db
+                        .key_encoder
+                        .encode_gc_version_key(&key, version);
                     txn.put(
                         cfs.gc_version_cf.clone(),
                         gc_version_key,
-                        vec![KEY_ENCODER.get_type_bytes(DataType::List)],
+                        vec![self.inner_db.key_encoder.get_type_bytes(DataType::List)],
                     )?;
                 } else {
-                    let bound_range = KEY_ENCODER.encode_list_data_key_range(&key, version);
+                    let bound_range = self
+                        .inner_db
+                        .key_encoder
+                        .encode_list_data_key_range(&key, version);
                     let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
 
                     for k in iter {
@@ -848,7 +908,7 @@ impl TxnCommand for ListCommand<'_> {
         key: &str,
     ) -> RocksResult<i64> {
         let key = key.to_owned();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
         let cfs = ListCF::new(client);
 
         match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -864,17 +924,23 @@ impl TxnCommand for ListCommand<'_> {
                     // delete meta key and create gc key and gc version key with the version
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
 
-                    let gc_key = KEY_ENCODER.encode_gc_key(&key);
+                    let gc_key = self.inner_db.key_encoder.encode_gc_key(&key);
                     txn.put(cfs.gc_cf.clone(), gc_key, version.to_be_bytes().to_vec())?;
 
-                    let gc_version_key = KEY_ENCODER.encode_gc_version_key(&key, version);
+                    let gc_version_key = self
+                        .inner_db
+                        .key_encoder
+                        .encode_gc_version_key(&key, version);
                     txn.put(
                         cfs.gc_version_cf.clone(),
                         gc_version_key,
-                        vec![KEY_ENCODER.get_type_bytes(DataType::List)],
+                        vec![self.inner_db.key_encoder.get_type_bytes(DataType::List)],
                     )?;
                 } else {
-                    let bound_range = KEY_ENCODER.encode_list_data_key_range(&key, version);
+                    let bound_range = self
+                        .inner_db
+                        .key_encoder
+                        .encode_list_data_key_range(&key, version);
                     let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
 
                     for k in iter {
@@ -897,14 +963,17 @@ impl TxnCommand for ListCommand<'_> {
         meta_value: &Value,
     ) -> RocksResult<i64> {
         let cfs = ListCF::new(client);
-        let meta_key = KEY_ENCODER.encode_meta_key(key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(key);
         let ttl = KeyDecoder::decode_key_ttl(meta_value);
         if key_is_expired(ttl) {
             self.txn_expire_if_needed(txn, client, key)?;
             return Ok(0);
         }
         let (_, version, left, right) = KeyDecoder::decode_key_list_meta(meta_value);
-        let new_meta_value = KEY_ENCODER.encode_list_meta_value(timestamp, version, left, right);
+        let new_meta_value = self
+            .inner_db
+            .key_encoder
+            .encode_list_meta_value(timestamp, version, left, right);
         txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
         Ok(1)
     }
@@ -918,7 +987,10 @@ impl TxnCommand for ListCommand<'_> {
     ) -> RocksResult<()> {
         let cfs = ListCF::new(client);
         // delete all data key of this key and version
-        let bound_range = KEY_ENCODER.encode_list_data_key_range(key, version);
+        let bound_range = self
+            .inner_db
+            .key_encoder
+            .encode_list_data_key_range(key, version);
         let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
         for k in iter {
             txn.del(cfs.data_cf.clone(), k)?;

@@ -1,28 +1,21 @@
 pub mod cmd;
 pub mod config;
 pub mod frame;
-pub mod gc;
-pub mod rocks;
-pub mod server;
-pub mod utils;
 
-mod connection;
 mod db;
+mod gc;
 mod parse;
+mod rocks;
 mod shutdown;
+mod utils;
 
-pub use cmd::Command;
-pub use connection::Connection;
-pub use frame::Frame;
+use cmd::Command;
+use config::Config;
 
-use parse::{Parse, ParseError};
-use shutdown::Shutdown;
-use thiserror::Error;
-
-/// Default port that a redis server listens on.
-///
-/// Used if no port is specified.
-pub const DEFAULT_PORT: &str = "6380";
+use db::DBInner;
+use frame::Frame;
+use parse::Parse;
+use std::sync::Arc;
 
 /// Error returned by most functions.
 ///
@@ -37,38 +30,35 @@ pub const DEFAULT_PORT: &str = "6380";
 /// it to be converted to `Box<dyn std::error::Error>`.
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
-#[derive(Error, Debug)]
-pub enum MapucheError {
-    #[error("{0}")]
-    String(&'static str),
-    #[error("{0}")]
-    Owned(String),
-}
-
-#[derive(Debug, Clone)]
-pub enum MapucheInfra {
-    Single,
-    Replica,
-    Cluster,
-}
-
-impl MapucheInfra {
-    pub fn need_raft(&self) -> bool {
-        matches!(self, MapucheInfra::Replica | MapucheInfra::Cluster)
-    }
-}
-
-impl From<&str> for MapucheInfra {
-    fn from(value: &str) -> Self {
-        match value {
-            "replica" => Self::Replica,
-            "cluster" => Self::Cluster,
-            _ => Self::Replica,
-        }
-    }
-}
-
 /// A specialized `Result` type for mapuche operations.
 ///
 /// This is defined as a convenience.
 pub type Result<T> = anyhow::Result<T, Error>;
+
+pub struct DB {
+    pub(crate) inner: Arc<DBInner>,
+}
+
+impl DB {
+    pub async fn new(config: Config) -> Result<Self> {
+        let inner = DBInner::new(config).await?;
+        let inner = Arc::new(inner);
+        Ok(Self { inner })
+    }
+
+    pub fn conn(&self) -> Conn {
+        Conn {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+pub struct Conn {
+    pub(crate) inner: Arc<DBInner>,
+}
+
+impl Conn {
+    pub async fn execute(&self, cmd: Command) -> crate::Result<Frame> {
+        cmd.execute(&self.inner).await
+    }
+}

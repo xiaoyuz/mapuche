@@ -1,10 +1,11 @@
-use crate::{Connection, Frame, Parse};
+use crate::db::DBInner;
+use crate::Frame;
 use serde::{Deserialize, Serialize};
 
 use crate::cmd::Invalid;
 
 use crate::rocks::string::StringCommand;
-use crate::rocks::{get_client, Result as RocksResult};
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -22,22 +23,11 @@ impl Keys {
         self.valid
     }
 
-    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Keys> {
-        let regex = parse.next_string()?;
-        Ok(Keys { regex, valid: true })
-    }
-
-    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = self.keys().await?;
-        dst.write_frame(&response).await?;
-        Ok(())
-    }
-
-    pub async fn keys(&self) -> RocksResult<Frame> {
+    pub async fn execute(&mut self, inner_db: &DBInner) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        StringCommand::new(&get_client()).keys(&self.regex).await
+        StringCommand::new(inner_db).keys(&self.regex).await
     }
 }
 

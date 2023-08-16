@@ -2,7 +2,8 @@ use crate::rocks::encoding::encode::DATA_TYPE_META;
 use crate::rocks::encoding::{DataType, ENC_GROUP_SIZE, ENC_MARKER, SIGN_MASK};
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
-use crate::rocks::KEY_ENCODER;
+
+use super::encode_bytes;
 
 pub struct KeyDecoder {}
 
@@ -112,7 +113,7 @@ impl KeyDecoder {
 
     pub fn decode_key_set_member_from_datakey(ukey: &str, key: Key) -> Vec<u8> {
         let key: Vec<u8> = key.into();
-        let enc_ukey = KEY_ENCODER.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let idx = 8 + enc_ukey.len();
         key[idx..].to_vec()
     }
@@ -138,35 +139,35 @@ impl KeyDecoder {
 
     pub fn decode_key_list_idx_from_datakey(ukey: &str, key: Key) -> u64 {
         let key: Vec<u8> = key.into();
-        let enc_ukey = KEY_ENCODER.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let idx = 8 + enc_ukey.len();
         u64::from_be_bytes(key[idx..].try_into().unwrap())
     }
 
     pub fn decode_key_hash_userkey_from_datakey(ukey: &str, key: Key) -> Vec<u8> {
         let key: Vec<u8> = key.into();
-        let enc_ukey = KEY_ENCODER.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let idx = 8 + enc_ukey.len();
         key[idx..].to_vec()
     }
 
     pub fn decode_key_zset_score_from_scorekey(ukey: &str, key: Key) -> f64 {
         let key: Vec<u8> = key.into();
-        let enc_ukey = KEY_ENCODER.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let idx = 8 + enc_ukey.len();
         Self::decode_cmp_uint64_to_f64(u64::from_be_bytes(key[idx..idx + 8].try_into().unwrap()))
     }
 
     pub fn decode_key_zset_member_from_scorekey(ukey: &str, key: Key) -> Vec<u8> {
         let key: Vec<u8> = key.into();
-        let enc_ukey = KEY_ENCODER.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let idx = 17 + enc_ukey.len();
         key[idx..].to_vec()
     }
 
     pub fn decode_key_zset_member_from_datakey(ukey: &str, key: Key) -> Vec<u8> {
         let key: Vec<u8> = key.into();
-        let enc_ukey = KEY_ENCODER.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let idx = 8 + enc_ukey.len();
         key[idx..].to_vec()
     }

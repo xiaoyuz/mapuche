@@ -1,12 +1,12 @@
-use crate::{Connection, Frame, Parse};
+use crate::db::DBInner;
+use crate::Frame;
 
-use crate::cmd::{retry_call, Invalid};
+use crate::cmd::Invalid;
 use crate::rocks::list::ListCommand;
-use bytes::Bytes;
-use futures::FutureExt;
+
 use serde::{Deserialize, Serialize};
 
-use crate::rocks::{get_client, Result as RocksResult};
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -31,50 +31,11 @@ impl Ltrim {
         &self.key
     }
 
-    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Ltrim> {
-        let key = parse.next_string()?;
-        let start = parse.next_int()?;
-        let end = parse.next_int()?;
-
-        Ok(Ltrim {
-            key,
-            start,
-            end,
-            valid: true,
-        })
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Ltrim> {
-        if argv.len() != 3 {
-            return Ok(Ltrim::new_invalid());
-        }
-        let key = &String::from_utf8_lossy(&argv[0]);
-        let start = match String::from_utf8_lossy(&argv[1]).parse::<i64>() {
-            Ok(v) => v,
-            Err(_) => return Ok(Ltrim::new_invalid()),
-        };
-
-        let end = match String::from_utf8_lossy(&argv[2]).parse::<i64>() {
-            Ok(v) => v,
-            Err(_) => return Ok(Ltrim::new_invalid()),
-        };
-        Ok(Ltrim::new(key, start, end))
-    }
-
-    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = retry_call(|| async move { self.ltrim().await }.boxed()).await?;
-
-        dst.write_frame(&response).await?;
-
-        Ok(())
-    }
-
-    pub async fn ltrim(&self) -> RocksResult<Frame> {
+    pub async fn execute(&mut self, inner_db: &DBInner) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ListCommand::new(&get_client())
+        ListCommand::new(inner_db)
             .ltrim(&self.key, self.start, self.end)
             .await
     }

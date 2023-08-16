@@ -1,14 +1,12 @@
-use crate::config::{config_meta_key_number_or_default, data_store_dir_or_default};
+use crate::config::data_store_dir_or_default;
 use crate::rocks::client::RocksClient;
-use crate::rocks::encoding::KeyEncoder;
+
 use crate::rocks::errors::RError;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
-use lazy_static::lazy_static;
-use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
+
 use rocksdb::{MultiThreaded, Options, TransactionDB, TransactionDBOptions};
-use std::sync::atomic::{AtomicU16, Ordering};
+
 use std::sync::Arc;
 
 pub mod client;
@@ -37,13 +35,6 @@ pub const CF_NAME_ZSET_SCORE: &str = "zset_score";
 pub type Result<T> = anyhow::Result<T, RError>;
 
 pub static mut INSTANCE_ID: u64 = 0;
-
-lazy_static! {
-    pub static ref KEY_ENCODER: KeyEncoder = KeyEncoder::new();
-    static ref ROCKS_CLIENT: Arc<RocksClient> = Arc::new(new_client().unwrap());
-    static ref INDEX_COUNT: AtomicU16 =
-        AtomicU16::new(SmallRng::from_entropy().gen_range(0..u16::MAX));
-}
 
 pub trait TxnCommand {
     fn txn_del(&self, txn: &RocksTransaction, client: &RocksClient, key: &str) -> Result<()>;
@@ -107,23 +98,8 @@ fn new_db() -> Result<TransactionDB<MultiThreaded>> {
     .map_err(|e| e.into())
 }
 
-pub fn set_instance_id(id: u64) {
-    unsafe {
-        INSTANCE_ID = id;
-    }
-}
-
 pub fn get_instance_id() -> u64 {
     unsafe { INSTANCE_ID }
-}
-
-pub fn get_client() -> Arc<RocksClient> {
-    ROCKS_CLIENT.clone()
-}
-
-pub fn gen_next_meta_index() -> u16 {
-    let idx = INDEX_COUNT.fetch_add(1, Ordering::Relaxed);
-    idx % config_meta_key_number_or_default()
 }
 
 #[cfg(test)]

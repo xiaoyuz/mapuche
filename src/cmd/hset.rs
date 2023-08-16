@@ -1,13 +1,13 @@
-use crate::{Connection, Frame, Parse};
+use crate::db::DBInner;
+use crate::Frame;
 
-use crate::cmd::{retry_call, Invalid};
+use crate::cmd::Invalid;
 use crate::rocks::hash::HashCommand;
 use crate::rocks::kv::kvpair::KvPair;
-use bytes::Bytes;
-use futures::FutureExt;
+
 use serde::{Deserialize, Serialize};
 
-use crate::rocks::{get_client, Result as RocksResult};
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -23,74 +23,21 @@ impl Hset {
         &self.key
     }
 
-    pub fn set_key(&mut self, key: &str) {
-        self.key = key.to_owned();
-    }
-
     /// Get the field and value pairs
     pub fn fields(&self) -> &Vec<KvPair> {
         &self.field_and_value
     }
 
-    pub fn add_field_value(&mut self, kv: KvPair) {
-        self.field_and_value.push(kv);
-    }
-
-    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Hset> {
-        let mut hset = Hset::default();
-
-        let key = parse.next_string()?;
-        hset.set_key(&key);
-
-        while let Ok(field) = parse.next_string() {
-            if let Ok(value) = parse.next_bytes() {
-                let kv = KvPair::new(field, value.to_vec());
-                hset.add_field_value(kv);
-            } else {
-                return Err("protocol error".into());
-            }
-        }
-        Ok(hset)
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Hset> {
-        if argv.len() % 2 != 1 {
-            return Ok(Hset::new_invalid());
-        }
-        let key = String::from_utf8_lossy(&argv[0]).to_string();
-        let mut hset = Hset::default();
-        hset.set_key(&key);
-
-        for idx in (1..argv.len()).step_by(2) {
-            let field = String::from_utf8_lossy(&argv[idx]);
-            let value = argv[idx + 1].clone();
-            let kv = KvPair::new(field.to_string(), value);
-            hset.add_field_value(kv);
-        }
-        Ok(hset)
-    }
-
-    pub(crate) async fn apply(
+    pub async fn execute(
         &self,
-        dst: &mut Connection,
+        inner_db: &DBInner,
         is_hmset: bool,
         is_nx: bool,
-    ) -> crate::Result<()> {
-        let response =
-            retry_call(|| async move { self.hset(is_hmset, is_nx).await }.boxed()).await?;
-
-        dst.write_frame(&response).await?;
-
-        Ok(())
-    }
-
-    pub async fn hset(&self, is_hmset: bool, is_nx: bool) -> RocksResult<Frame> {
+    ) -> RocksResult<Frame> {
         if !self.valid || (is_nx && self.field_and_value.len() != 1) {
             return Ok(resp_invalid_arguments());
         }
-
-        HashCommand::new(&get_client())
+        HashCommand::new(inner_db)
             .hset(&self.key, &self.field_and_value, is_hmset, is_nx)
             .await
     }

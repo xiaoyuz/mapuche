@@ -10,7 +10,9 @@ use crate::rocks::kv::key::Key;
 use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
-use crate::rocks::{Result as RocksResult, KEY_ENCODER};
+use crate::rocks::Result as RocksResult;
+
+use super::encoding::KeyEncoder;
 
 pub struct RocksClient {
     client: Arc<TransactionDB>,
@@ -137,13 +139,14 @@ pub fn get_version_for_new(
     gc_cf: ColumnFamilyRef,
     gc_version_cf: ColumnFamilyRef,
     key: &str,
+    key_encoder: &KeyEncoder,
 ) -> RocksResult<u16> {
     // check if async deletion is enabled, return ASAP if not
     if !async_deletion_enabled_or_default() {
         return Ok(0);
     }
 
-    let gc_key = KEY_ENCODER.encode_gc_key(key);
+    let gc_key = key_encoder.encode_gc_key(key);
     let next_version = txn.get(gc_cf.clone(), gc_key)?.map_or_else(
         || 0,
         |v| {
@@ -156,7 +159,7 @@ pub fn get_version_for_new(
         },
     );
     // check next version available
-    let gc_version_key = KEY_ENCODER.encode_gc_version_key(key, next_version);
+    let gc_version_key = key_encoder.encode_gc_version_key(key, next_version);
     txn.get(gc_version_cf, gc_version_key)?
         .map_or_else(|| Ok(next_version), |_| Err(KEY_VERSION_EXHUSTED_ERR))
 }

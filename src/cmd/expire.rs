@@ -1,12 +1,13 @@
 use crate::cmd::{retry_call, Invalid};
-use crate::parse::Parse;
-use crate::{Connection, Frame};
-use bytes::Bytes;
+use crate::db::DBInner;
+
+use crate::Frame;
+
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 
 use crate::rocks::string::StringCommand;
-use crate::rocks::{get_client, Result as RocksResult};
+use crate::rocks::Result as RocksResult;
 use crate::utils::{resp_invalid_arguments, timestamp_from_ttl};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -34,59 +35,33 @@ impl Expire {
         self.seconds
     }
 
-    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Expire> {
-        let key = parse.next_string()?;
-        let seconds = parse.next_int()?;
-
-        Ok(Expire {
-            key,
-            seconds,
-            valid: true,
-        })
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Expire> {
-        if argv.len() != 2 {
-            return Ok(Expire::new_invalid());
-        }
-        let key = String::from_utf8_lossy(&argv[0]);
-        match String::from_utf8_lossy(&argv[1]).parse::<i64>() {
-            Ok(v) => Ok(Expire::new(key, v)),
-            Err(_) => Ok(Expire::new_invalid()),
-        }
-    }
-
-    pub(crate) async fn apply(
+    pub async fn execute(
         &self,
-        dst: &mut Connection,
+        inner_db: &DBInner,
         is_millis: bool,
         expire_at: bool,
-    ) -> crate::Result<()> {
+    ) -> RocksResult<Frame> {
         let response = retry_call(|| {
-            async move { self.expire(is_millis, expire_at).await.map_err(Into::into) }.boxed()
+            async move {
+                if !self.valid {
+                    return Ok(resp_invalid_arguments());
+                }
+                let mut ttl = self.seconds;
+                if !is_millis {
+                    ttl *= 1000;
+                }
+                if !expire_at {
+                    ttl = timestamp_from_ttl(ttl);
+                }
+                StringCommand::new(inner_db)
+                    .expire(&self.key, ttl)
+                    .await
+                    .map_err(Into::into)
+            }
+            .boxed()
         })
         .await?;
-
-        dst.write_frame(&response).await?;
-
-        Ok(())
-    }
-
-    pub async fn expire(&self, is_millis: bool, expire_at: bool) -> RocksResult<Frame> {
-        if !self.valid {
-            return Ok(resp_invalid_arguments());
-        }
-        let mut ttl = self.seconds;
-        if !is_millis {
-            ttl *= 1000;
-        }
-        if !expire_at {
-            ttl = timestamp_from_ttl(ttl);
-        }
-        StringCommand::new(&get_client())
-            .expire(&self.key, ttl)
-            .await
+        Ok(response)
     }
 }
 

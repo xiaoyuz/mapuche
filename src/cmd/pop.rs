@@ -1,11 +1,12 @@
-use crate::{Connection, Frame, Parse};
+use crate::db::DBInner;
+use crate::Frame;
 
 use crate::cmd::Invalid;
 use crate::rocks::list::ListCommand;
-use bytes::Bytes;
+
 use serde::{Deserialize, Serialize};
 
-use crate::rocks::{get_client, Result as RocksResult};
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -28,50 +29,11 @@ impl Pop {
         &self.key
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Pop> {
-        if argv.is_empty() || argv.len() > 2 {
-            return Ok(Pop::new_invalid());
-        }
-        let key = &String::from_utf8_lossy(&argv[0]);
-        let mut count = 1;
-        if argv.len() == 2 {
-            match String::from_utf8_lossy(&argv[1]).parse::<i64>() {
-                Ok(v) => count = v,
-                Err(_) => {
-                    return Ok(Pop::new_invalid());
-                }
-            }
-        }
-        Ok(Pop::new(key, count))
-    }
-
-    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Pop> {
-        let key = parse.next_string()?;
-        let mut count = 1;
-
-        if let Ok(n) = parse.next_int() {
-            count = n;
-        }
-
-        let pop = Pop::new(&key, count);
-
-        Ok(pop)
-    }
-
-    pub(crate) async fn apply(&self, dst: &mut Connection, op_left: bool) -> crate::Result<()> {
-        let response = self.pop(op_left).await?;
-
-        dst.write_frame(&response).await?;
-
-        Ok(())
-    }
-
-    pub async fn pop(&self, op_left: bool) -> RocksResult<Frame> {
+    pub async fn execute(&mut self, inner_db: &DBInner, op_left: bool) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ListCommand::new(&get_client())
+        ListCommand::new(inner_db)
             .pop(&self.key, op_left, self.count)
             .await
     }

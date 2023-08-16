@@ -1,11 +1,12 @@
-use crate::{Connection, Frame, Parse};
+use crate::db::DBInner;
+use crate::Frame;
 
 use crate::cmd::Invalid;
-use bytes::{Buf, Bytes};
+
 use serde::{Deserialize, Serialize};
 
 use crate::rocks::zset::ZsetCommand;
-use crate::rocks::{get_client, Result as RocksResult};
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -30,81 +31,11 @@ impl Zcount {
         }
     }
 
-    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Zcount> {
-        let key = parse.next_string()?;
-        let mut min_inclusive = true;
-        let mut max_inclusive = true;
-
-        // parse score range as bytes, to handle exclusive bounder
-        let mut bmin = parse.next_bytes()?;
-        // check first byte
-        if bmin[0] == b'(' {
-            // drain the first byte
-            bmin.advance(1);
-            min_inclusive = false;
-        }
-        let min = String::from_utf8_lossy(&bmin).parse::<f64>().unwrap();
-
-        let mut bmax = parse.next_bytes()?;
-        if bmax[0] == b'(' {
-            bmax.advance(1);
-            max_inclusive = false;
-        }
-        let max = String::from_utf8_lossy(&bmax).parse::<f64>().unwrap();
-
-        let z = Zcount::new(&key, min, min_inclusive, max, max_inclusive);
-
-        Ok(z)
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zcount> {
-        if argv.len() < 3 {
-            return Ok(Zcount::new_invalid());
-        }
-        let mut min_inclusive = true;
-        let mut max_inclusive = true;
-
-        // parse score range as bytes, to handle exclusive bounder
-        let mut bmin = argv[1].clone();
-        // check first byte
-        if bmin[0] == b'(' {
-            // drain the first byte
-            bmin.advance(1);
-            min_inclusive = false;
-        }
-        let min = String::from_utf8_lossy(&bmin).parse::<f64>().unwrap();
-
-        let mut bmax = argv[2].clone();
-        if bmax[0] == b'(' {
-            bmax.advance(1);
-            max_inclusive = false;
-        }
-        let max = String::from_utf8_lossy(&bmax).parse::<f64>().unwrap();
-
-        let z = Zcount::new(
-            &String::from_utf8_lossy(&argv[0]),
-            min,
-            min_inclusive,
-            max,
-            max_inclusive,
-        );
-        Ok(z)
-    }
-
-    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = self.zcount().await?;
-
-        dst.write_frame(&response).await?;
-
-        Ok(())
-    }
-
-    pub async fn zcount(&self) -> RocksResult<Frame> {
+    pub async fn execute(&mut self, inner_db: &DBInner) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand::new(&get_client())
+        ZsetCommand::new(inner_db)
             .zcount(
                 &self.key,
                 self.min,

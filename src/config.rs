@@ -1,22 +1,7 @@
-use crate::DEFAULT_PORT;
-
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
-    server: Server,
-    backend: Backend,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct Server {
-    listen: Option<String>,
-    port: Option<u16>,
-    log_level: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct Backend {
     data_store_dir: Option<String>,
 }
 
@@ -27,59 +12,6 @@ pub fn set_global_config(config: Config) {
     unsafe {
         SERVER_CONFIG.replace(config);
     }
-}
-
-pub fn config_listen_or_default() -> String {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if let Some(s) = c.server.listen.clone() {
-                return s;
-            }
-        }
-    }
-
-    "0.0.0.0".to_owned()
-}
-
-pub fn config_port_or_default() -> String {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if let Some(s) = c.server.port {
-                return s.to_string();
-            }
-        }
-    }
-
-    DEFAULT_PORT.to_owned()
-}
-
-fn log_level_str() -> String {
-    unsafe {
-        if let Some(c) = &SERVER_CONFIG {
-            if let Some(l) = c.server.log_level.clone() {
-                return l;
-            }
-        }
-    }
-    "info".to_owned()
-}
-
-pub fn log_level() -> usize {
-    let level_str = log_level_str();
-    match level_str.as_str() {
-        "off" => 0,
-        "critical" => 1,
-        "error" => 2,
-        "warning" => 3,
-        "info" => 4,
-        "debug" => 5,
-        "trace" => 6,
-        _ => 0,
-    }
-}
-
-pub fn log_file() -> String {
-    format!("{}/{}", data_store_dir_or_default(), "/rocksdb-service.log")
 }
 
 pub fn config_meta_key_number_or_default() -> u16 {
@@ -121,7 +53,7 @@ pub fn async_gc_interval_or_default() -> u64 {
 pub fn data_store_dir_or_default() -> String {
     unsafe {
         if let Some(c) = &SERVER_CONFIG {
-            if let Some(b) = c.backend.data_store_dir.clone() {
+            if let Some(b) = c.data_store_dir.clone() {
                 return b;
             }
         }

@@ -1,10 +1,12 @@
 use crate::config::config_meta_key_number_or_default;
-use crate::rocks::encoding::{DataType, ENC_ASC_PADDING, ENC_GROUP_SIZE, ENC_MARKER, SIGN_MASK};
+use crate::rocks::encoding::{DataType, SIGN_MASK};
 use crate::rocks::get_instance_id;
 use crate::rocks::kv::bound_range::BoundRange;
 use crate::rocks::kv::key::Key;
 use crate::rocks::kv::value::Value;
 use std::ops::{Range, RangeInclusive};
+
+use super::encode_bytes;
 
 pub struct KeyEncoder {
     // instance_id will be encoded to 2 bytes vec
@@ -39,26 +41,6 @@ impl KeyEncoder {
         }
     }
 
-    pub fn encode_bytes(&self, key: &[u8]) -> Vec<u8> {
-        let len = key.len();
-        let mut index = 0;
-        let mut enc = vec![];
-        while index <= len {
-            let remain = len - index;
-            let mut pad: usize = 0;
-            if remain > ENC_GROUP_SIZE {
-                enc.extend_from_slice(&key[index..index + ENC_GROUP_SIZE]);
-            } else {
-                pad = ENC_GROUP_SIZE - remain;
-                enc.extend_from_slice(&key[index..]);
-                enc.extend_from_slice(&ENC_ASC_PADDING[..pad]);
-            }
-            enc.push(ENC_MARKER - pad as u8);
-            index += ENC_GROUP_SIZE;
-        }
-        enc
-    }
-
     pub fn get_type_bytes(&self, dt: DataType) -> u8 {
         match dt {
             DataType::String => 0,
@@ -71,7 +53,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_string(&self, ukey: &str) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(5 + enc_ukey.len());
 
         key.push(TXN_KEY_PREFIX);
@@ -116,7 +98,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_meta_key(&self, ukey: &str) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(5 + enc_ukey.len());
 
         self.encode_meta_common_prefix(&enc_ukey, &mut key);
@@ -132,7 +114,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_sub_meta_key(&self, ukey: &str, version: u16, idx: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(10 + enc_ukey.len());
 
         self.encode_meta_common_prefix(&enc_ukey, &mut key);
@@ -144,7 +126,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_sub_meta_key_start(&self, ukey: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
         self.encode_meta_common_prefix(&enc_ukey, &mut key);
@@ -155,7 +137,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_sub_meta_key_end(&self, ukey: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + ukey.len());
 
         self.encode_meta_common_prefix(&enc_ukey, &mut key);
@@ -173,7 +155,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_gc_key_prefix(&self, ukey: &str, data_type: u8, extra: usize) -> Vec<u8> {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(extra + enc_ukey.len());
         key.push(TXN_KEY_PREFIX);
         key.extend_from_slice(self.instance_id.as_slice());
@@ -209,7 +191,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_set_data_key_start(&self, ukey: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_SET, &enc_ukey, &mut key, version);
@@ -218,7 +200,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_set_data_key_end(&self, ukey: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_SET, &enc_ukey, &mut key, version);
@@ -234,7 +216,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_set_data_key(&self, ukey: &str, member: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len() + member.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_SET, &enc_ukey, &mut key, version);
@@ -284,7 +266,7 @@ impl KeyEncoder {
     /// right initial value 1<<32, right is point to the next right position of right element
     /// list is indicated as null if left index equal to right
     pub fn encode_list_data_key(&self, ukey: &str, idx: u64, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(16 + enc_ukey.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_LIST, &enc_ukey, &mut key, version);
@@ -307,7 +289,7 @@ impl KeyEncoder {
     }
 
     fn encode_list_data_key_start(&self, ukey: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_LIST, &enc_ukey, &mut key, version);
@@ -316,7 +298,7 @@ impl KeyEncoder {
     }
 
     fn encode_list_data_key_end(&self, ukey: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_LIST, &enc_ukey, &mut key, version);
@@ -344,7 +326,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_hash_data_key(&self, ukey: &str, field: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len() + field.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_HASH, &enc_ukey, &mut key, version);
@@ -354,7 +336,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_hash_data_key_start(&self, ukey: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_HASH, &enc_ukey, &mut key, version);
@@ -363,7 +345,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_hash_data_key_end(&self, ukey: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_HASH, &enc_ukey, &mut key, version);
@@ -413,7 +395,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_zset_data_key(&self, ukey: &str, member: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len() + member.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_ZSET, &enc_ukey, &mut key, version);
@@ -423,7 +405,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_zset_data_key_start(&self, ukey: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_ZSET, &enc_ukey, &mut key, version);
@@ -432,7 +414,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_zset_data_key_end(&self, ukey: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_ZSET, &enc_ukey, &mut key, version);
@@ -464,7 +446,7 @@ impl KeyEncoder {
 
     // encode the member to score key
     pub fn encode_zset_score_key(&self, ukey: &str, score: f64, member: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(17 + enc_ukey.len() + member.len());
         let score = self.encode_f64_to_cmp_uint64(score);
 
@@ -477,7 +459,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_zset_score_key_start(&self, ukey: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
@@ -486,7 +468,7 @@ impl KeyEncoder {
     }
 
     pub fn encode_zset_score_key_end(&self, ukey: &str, version: u16) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(8 + enc_ukey.len());
 
         self.encode_type_data_key_prefix(DATA_TYPE_SCORE, &enc_ukey, &mut key, version);
@@ -508,7 +490,7 @@ impl KeyEncoder {
         with_frontier: bool,
         version: u16,
     ) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(17 + enc_ukey.len());
         let mut score = self.encode_f64_to_cmp_uint64(score);
         if !with_frontier {
@@ -530,7 +512,7 @@ impl KeyEncoder {
         with_frontier: bool,
         version: u16,
     ) -> Key {
-        let enc_ukey = self.encode_bytes(ukey.as_bytes());
+        let enc_ukey = encode_bytes(ukey.as_bytes());
         let mut key = Vec::with_capacity(17 + enc_ukey.len());
         let mut score = self.encode_f64_to_cmp_uint64(score);
         if !with_frontier {

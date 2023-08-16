@@ -1,12 +1,13 @@
-use crate::{Connection, Frame, Parse};
+use crate::db::DBInner;
+use crate::Frame;
 
-use crate::cmd::{retry_call, Invalid};
+use crate::cmd::Invalid;
 use crate::rocks::list::ListCommand;
 use bytes::Bytes;
-use futures::FutureExt;
+
 use serde::{Deserialize, Serialize};
 
-use crate::rocks::{get_client, Result as RocksResult};
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -27,40 +28,7 @@ impl Lrem {
         }
     }
 
-    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Lrem> {
-        let key = parse.next_string()?;
-        let count = parse.next_int()?;
-        let element = parse.next_bytes()?;
-
-        Ok(Lrem {
-            key,
-            count,
-            element,
-            valid: true,
-        })
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Lrem> {
-        if argv.len() != 3 {
-            return Ok(Lrem::new_invalid());
-        }
-        let key = &String::from_utf8_lossy(&argv[0]);
-        let count = String::from_utf8_lossy(&argv[1]).parse::<i64>()?;
-
-        let element = argv[2].clone();
-        Ok(Lrem::new(key, count, element))
-    }
-
-    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = retry_call(|| async move { self.lrem().await }.boxed()).await?;
-
-        dst.write_frame(&response).await?;
-
-        Ok(())
-    }
-
-    pub async fn lrem(&self) -> RocksResult<Frame> {
+    pub async fn execute(&mut self, inner_db: &DBInner) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
@@ -70,7 +38,7 @@ impl Lrem {
             from_head = false;
             count = -count;
         }
-        ListCommand::new(&get_client())
+        ListCommand::new(inner_db)
             .lrem(&self.key, count as usize, from_head, &self.element)
             .await
     }

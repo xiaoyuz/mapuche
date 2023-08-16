@@ -1,26 +1,15 @@
+use std::sync::atomic::Ordering;
 use std::sync::{atomic::AtomicU16, Arc};
 
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 use crate::{
-    config::{set_global_config, Config},
+    config::{config_meta_key_number_or_default, set_global_config, Config},
     rocks::{client::RocksClient, encoding::KeyEncoder, new_client},
     Result,
 };
 
-pub struct DB {
-    pub(crate) inner: Arc<DBInner>,
-}
-
-impl DB {
-    pub async fn new(config: Config) -> Result<Self> {
-        let inner = DBInner::new(config).await?;
-        let inner = Arc::new(inner);
-        Ok(Self { inner })
-    }
-}
-
-pub(crate) struct DBInner {
+pub struct DBInner {
     pub(crate) client: Arc<RocksClient>,
     pub(crate) key_encoder: KeyEncoder,
     pub(crate) index_count: AtomicU16,
@@ -38,5 +27,10 @@ impl DBInner {
             key_encoder,
             index_count,
         })
+    }
+
+    pub(crate) fn gen_next_meta_index(&self) -> u16 {
+        let idx = self.index_count.fetch_add(1, Ordering::Relaxed);
+        idx % config_meta_key_number_or_default()
     }
 }

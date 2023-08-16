@@ -1,12 +1,13 @@
-use crate::{Connection, Frame, Parse};
+use crate::db::DBInner;
+use crate::Frame;
 
-use crate::cmd::{retry_call, Invalid};
+use crate::cmd::Invalid;
 use crate::rocks::list::ListCommand;
 use bytes::Bytes;
-use futures::FutureExt;
+
 use serde::{Deserialize, Serialize};
 
-use crate::rocks::{get_client, Result as RocksResult};
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -29,60 +30,11 @@ impl Linsert {
         }
     }
 
-    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Linsert> {
-        let key = parse.next_string()?;
-        let pos = parse.next_string()?;
-        let before_pivot = match pos.to_lowercase().as_str() {
-            "before" => true,
-            "after" => false,
-            _ => {
-                return Ok(Linsert::new_invalid());
-            }
-        };
-        let pivot = parse.next_bytes()?;
-        let element = parse.next_bytes()?;
-
-        Ok(Linsert {
-            key,
-            before_pivot,
-            pivot,
-            element,
-            valid: true,
-        })
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Linsert> {
-        if argv.len() != 4 {
-            return Ok(Linsert::new_invalid());
-        }
-        let key = &String::from_utf8_lossy(&argv[0]);
-        let before_pivot = match String::from_utf8_lossy(&argv[1]).to_lowercase().as_str() {
-            "before" => true,
-            "after" => false,
-            _ => {
-                return Ok(Linsert::new_invalid());
-            }
-        };
-
-        let pivot = argv[2].clone();
-        let element = argv[3].clone();
-        Ok(Linsert::new(key, before_pivot, pivot, element))
-    }
-
-    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = retry_call(|| async move { self.linsert().await }.boxed()).await?;
-
-        dst.write_frame(&response).await?;
-
-        Ok(())
-    }
-
-    pub async fn linsert(&self) -> RocksResult<Frame> {
+    pub async fn execute(&mut self, inner_db: &DBInner) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ListCommand::new(&get_client())
+        ListCommand::new(inner_db)
             .linsert(&self.key, self.before_pivot, &self.pivot, &self.element)
             .await
     }

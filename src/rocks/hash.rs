@@ -2,6 +2,7 @@ use crate::config::{
     async_del_hash_threshold_or_default, async_expire_hash_threshold_or_default,
     config_meta_key_number_or_default,
 };
+use crate::db::DBInner;
 use crate::rocks::client::{get_version_for_new, RocksClient};
 use crate::rocks::encoding::{DataType, KeyDecoder};
 use crate::rocks::errors::{REDIS_VALUE_IS_NOT_INTEGER_ERR, REDIS_WRONG_TYPE_ERR};
@@ -11,8 +12,8 @@ use crate::rocks::kv::kvpair::KvPair;
 use crate::rocks::kv::value::Value;
 use crate::rocks::transaction::RocksTransaction;
 use crate::rocks::{
-    gen_next_meta_index, Result as RocksResult, TxnCommand, CF_NAME_GC, CF_NAME_GC_VERSION,
-    CF_NAME_HASH_DATA, CF_NAME_HASH_SUB_META, CF_NAME_META, KEY_ENCODER,
+    Result as RocksResult, TxnCommand, CF_NAME_GC, CF_NAME_GC_VERSION, CF_NAME_HASH_DATA,
+    CF_NAME_HASH_SUB_META, CF_NAME_META,
 };
 use crate::utils::{
     count_unique_keys, key_is_expired, resp_array, resp_bulk, resp_err, resp_int, resp_nil, resp_ok,
@@ -44,12 +45,12 @@ impl<'a> HashCF<'a> {
 }
 
 pub struct HashCommand<'a> {
-    client: &'a RocksClient,
+    inner_db: &'a DBInner,
 }
 
 impl<'a> HashCommand<'a> {
-    pub fn new(client: &'a RocksClient) -> Self {
-        Self { client }
+    pub fn new(inner_db: &'a DBInner) -> Self {
+        Self { inner_db }
     }
 
     pub async fn hset(
@@ -59,13 +60,13 @@ impl<'a> HashCommand<'a> {
         is_hmset: bool,
         is_nx: bool,
     ) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = HashCF::new(client);
         let key = key.to_owned();
         let fvs_copy = fvs.to_vec();
         let fvs_len = fvs_copy.len();
-        let idx = gen_next_meta_index();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let idx = self.inner_db.gen_next_meta_index();
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
 
         let resp = client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -79,7 +80,10 @@ impl<'a> HashCommand<'a> {
                     let (ttl, mut version, _meta_size) = KeyDecoder::decode_key_meta(&meta_value);
 
                     // gerate a random index, update sub meta key, create a new sub meta key with this index
-                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, idx);
+                    let sub_meta_key = self
+                        .inner_db
+                        .key_encoder
+                        .encode_sub_meta_key(&key, version, idx);
                     // create or update it
                     let sub_meta_value_res =
                         txn.get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?;
@@ -94,12 +98,13 @@ impl<'a> HashCommand<'a> {
                             cfs.gc_cf.clone(),
                             cfs.gc_version_cf.clone(),
                             &key,
+                            &self.inner_db.key_encoder,
                         )?;
                     } else if is_nx {
                         // when is_nx == true, fvs_len must be 1
                         let kv = fvs_copy.get(0).unwrap();
                         let field: Vec<u8> = kv.clone().0.into();
-                        let data_key = KEY_ENCODER.encode_hash_data_key(
+                        let data_key = self.inner_db.key_encoder.encode_hash_data_key(
                             &key,
                             &String::from_utf8_lossy(&field),
                             version,
@@ -114,7 +119,7 @@ impl<'a> HashCommand<'a> {
                         let mut fields_data_key = Vec::with_capacity(fvs_len);
                         for kv in fvs_copy.clone() {
                             let field: Vec<u8> = kv.0.into();
-                            let datakey = KEY_ENCODER.encode_hash_data_key(
+                            let datakey = self.inner_db.key_encoder.encode_hash_data_key(
                                 &key,
                                 &String::from_utf8_lossy(&field),
                                 version,
@@ -131,7 +136,7 @@ impl<'a> HashCommand<'a> {
 
                     for kv in fvs_copy {
                         let field: Vec<u8> = kv.0.into();
-                        let data_key = KEY_ENCODER.encode_hash_data_key(
+                        let data_key = self.inner_db.key_encoder.encode_hash_data_key(
                             &key,
                             &String::from_utf8_lossy(&field),
                             version,
@@ -151,8 +156,10 @@ impl<'a> HashCommand<'a> {
                     if expired {
                         // add meta key
                         let meta_size = config_meta_key_number_or_default();
-                        let new_metaval =
-                            KEY_ENCODER.encode_hash_meta_value(ttl, version, meta_size);
+                        let new_metaval = self
+                            .inner_db
+                            .key_encoder
+                            .encode_hash_meta_value(ttl, version, meta_size);
                         txn.put(cfs.meta_cf.clone(), meta_key, new_metaval)?;
                     }
                 }
@@ -162,10 +169,14 @@ impl<'a> HashCommand<'a> {
                         cfs.gc_cf.clone(),
                         cfs.gc_version_cf.clone(),
                         &key,
+                        &self.inner_db.key_encoder,
                     )?;
 
                     // set sub meta key with a random index
-                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, idx);
+                    let sub_meta_key = self
+                        .inner_db
+                        .key_encoder
+                        .encode_sub_meta_key(&key, version, idx);
                     // lock sub meta key
                     txn.get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?;
 
@@ -174,7 +185,7 @@ impl<'a> HashCommand<'a> {
                     let mut fields_data_key = vec![];
                     for kv in fvs_copy.clone() {
                         let field: Vec<u8> = kv.0.into();
-                        let datakey = KEY_ENCODER.encode_hash_data_key(
+                        let datakey = self.inner_db.key_encoder.encode_hash_data_key(
                             &key,
                             &String::from_utf8_lossy(&field),
                             version,
@@ -185,7 +196,7 @@ impl<'a> HashCommand<'a> {
 
                     for kv in fvs_copy {
                         let field: Vec<u8> = kv.0.into();
-                        let datakey = KEY_ENCODER.encode_hash_data_key(
+                        let datakey = self.inner_db.key_encoder.encode_hash_data_key(
                             &key,
                             &String::from_utf8_lossy(&field),
                             version,
@@ -195,7 +206,10 @@ impl<'a> HashCommand<'a> {
 
                     // set meta key
                     let meta_size = config_meta_key_number_or_default();
-                    let new_metaval = KEY_ENCODER.encode_hash_meta_value(ttl, version, meta_size);
+                    let new_metaval = self
+                        .inner_db
+                        .key_encoder
+                        .encode_hash_meta_value(ttl, version, meta_size);
                     txn.put(cfs.meta_cf.clone(), meta_key, new_metaval)?;
 
                     txn.put(
@@ -221,11 +235,11 @@ impl<'a> HashCommand<'a> {
     }
 
     pub async fn hget(self, key: &str, field: &str) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = HashCF::new(client);
         let key = key.to_owned();
         let field = field.to_owned();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
 
         client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -242,7 +256,10 @@ impl<'a> HashCommand<'a> {
                         return Ok(resp_nil());
                     }
 
-                    let data_key = KEY_ENCODER.encode_hash_data_key(&key, &field, version);
+                    let data_key = self
+                        .inner_db
+                        .key_encoder
+                        .encode_hash_data_key(&key, &field, version);
 
                     txn.get(cfs.data_cf.clone(), data_key)?
                         .map_or_else(|| Ok(resp_nil()), |data| Ok(resp_bulk(data)))
@@ -253,11 +270,11 @@ impl<'a> HashCommand<'a> {
     }
 
     pub async fn hstrlen(self, key: &str, field: &str) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = HashCF::new(client);
         let key = key.to_owned();
         let field = field.to_owned();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
 
         client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -274,7 +291,10 @@ impl<'a> HashCommand<'a> {
                         return Ok(resp_int(0));
                     }
 
-                    let data_key = KEY_ENCODER.encode_hash_data_key(&key, &field, version);
+                    let data_key = self
+                        .inner_db
+                        .key_encoder
+                        .encode_hash_data_key(&key, &field, version);
 
                     txn.get(cfs.data_cf.clone(), data_key)?
                         .map_or_else(|| Ok(resp_int(0)), |data| Ok(resp_int(data.len() as i64)))
@@ -285,11 +305,11 @@ impl<'a> HashCommand<'a> {
     }
 
     pub async fn hexists(self, key: &str, field: &str) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = HashCF::new(client);
         let key = key.to_owned();
         let field = field.to_owned();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
 
         client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -306,7 +326,10 @@ impl<'a> HashCommand<'a> {
                         return Ok(resp_int(0));
                     }
 
-                    let data_key = KEY_ENCODER.encode_hash_data_key(&key, &field, version);
+                    let data_key = self
+                        .inner_db
+                        .key_encoder
+                        .encode_hash_data_key(&key, &field, version);
 
                     if txn.get(cfs.data_cf.clone(), data_key)?.is_some() {
                         Ok(resp_int(1))
@@ -320,11 +343,11 @@ impl<'a> HashCommand<'a> {
     }
 
     pub async fn hmget(self, key: &str, fields: &[String]) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = HashCF::new(client);
         let key = key.to_owned();
         let fields = fields.to_owned();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
 
         let mut resp = Vec::with_capacity(fields.len());
 
@@ -345,7 +368,10 @@ impl<'a> HashCommand<'a> {
 
                     let mut field_data_keys = Vec::with_capacity(fields.len());
                     for field in &fields {
-                        let data_key = KEY_ENCODER.encode_hash_data_key(&key, field, version);
+                        let data_key = self
+                            .inner_db
+                            .key_encoder
+                            .encode_hash_data_key(&key, field, version);
                         field_data_keys.push(data_key);
                     }
 
@@ -357,7 +383,10 @@ impl<'a> HashCommand<'a> {
                         .collect::<HashMap<Key, Value>>();
 
                     for field in &fields {
-                        let data_key = KEY_ENCODER.encode_hash_data_key(&key, field, version);
+                        let data_key = self
+                            .inner_db
+                            .key_encoder
+                            .encode_hash_data_key(&key, field, version);
                         match fields_result.get(&data_key) {
                             Some(data) => resp.push(resp_bulk(data.to_vec())),
                             None => resp.push(resp_nil()),
@@ -375,10 +404,10 @@ impl<'a> HashCommand<'a> {
     }
 
     pub async fn hlen(self, key: &str) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = HashCF::new(client);
         let key = key.to_owned();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
 
         client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -409,10 +438,10 @@ impl<'a> HashCommand<'a> {
         with_field: bool,
         with_value: bool,
     ) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = HashCF::new(client);
         let key = key.to_owned();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
 
         client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -429,8 +458,14 @@ impl<'a> HashCommand<'a> {
                         return Ok(resp_nil());
                     }
 
-                    let range: Range<Key> = KEY_ENCODER.encode_hash_data_key_start(&key, version)
-                        ..KEY_ENCODER.encode_hash_data_key_end(&key, version);
+                    let range: Range<Key> = self
+                        .inner_db
+                        .key_encoder
+                        .encode_hash_data_key_start(&key, version)
+                        ..self
+                            .inner_db
+                            .key_encoder
+                            .encode_hash_data_key_end(&key, version);
                     let bound_range: BoundRange = range.into();
                     // scan return iterator
                     let iter = txn.scan(cfs.data_cf.clone(), bound_range, u32::MAX)?;
@@ -463,11 +498,11 @@ impl<'a> HashCommand<'a> {
     }
 
     pub async fn hdel(self, key: &str, fields: &[String]) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = HashCF::new(client);
         let key = key.to_owned();
         let fields = fields.to_vec();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
 
         let resp = client.exec_txn(|txn| {
             match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -487,14 +522,18 @@ impl<'a> HashCommand<'a> {
                     let mut deleted: i64 = 0;
                     let data_keys: Vec<Key> = fields
                         .iter()
-                        .map(|field| KEY_ENCODER.encode_hash_data_key(&key, field, version))
+                        .map(|field| {
+                            self.inner_db
+                                .key_encoder
+                                .encode_hash_data_key(&key, field, version)
+                        })
                         .collect();
                     for pair in txn.batch_get_for_update(cfs.data_cf.clone(), data_keys)? {
                         txn.del(cfs.data_cf.clone(), pair.0)?;
                         deleted += 1;
                     }
 
-                    let idx = gen_next_meta_index();
+                    let idx = self.inner_db.gen_next_meta_index();
 
                     // txn lock will be called in txnkv_sum_key_size, so release txn lock first
                     let old_size = self.sum_key_size(&key, version)?;
@@ -502,14 +541,20 @@ impl<'a> HashCommand<'a> {
                     // update sub meta key or clear all meta and sub meta key if needed
                     if old_size <= deleted {
                         txn.del(cfs.meta_cf.clone(), meta_key)?;
-                        let bound_range = KEY_ENCODER.encode_sub_meta_key_range(&key, version);
+                        let bound_range = self
+                            .inner_db
+                            .key_encoder
+                            .encode_sub_meta_key_range(&key, version);
                         let iter = txn.scan_keys(cfs.sub_meta_cf.clone(), bound_range, u32::MAX)?;
                         for k in iter {
                             txn.del(cfs.sub_meta_cf.clone(), k)?;
                         }
                     } else {
                         // set sub meta key with a random index
-                        let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, idx);
+                        let sub_meta_key = self
+                            .inner_db
+                            .key_encoder
+                            .encode_sub_meta_key(&key, version, idx);
                         // create it with negtive value if sub meta key not exists
                         let new_size = txn
                             .get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
@@ -539,12 +584,12 @@ impl<'a> HashCommand<'a> {
     }
 
     pub async fn hincrby(self, key: &str, field: &str, step: i64) -> RocksResult<Frame> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = HashCF::new(client);
         let key = key.to_owned();
         let field = field.to_owned();
-        let idx = gen_next_meta_index();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let idx = self.inner_db.gen_next_meta_index();
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
 
         let resp = client.exec_txn(|txn| {
             let prev_int;
@@ -567,10 +612,14 @@ impl<'a> HashCommand<'a> {
                             cfs.gc_cf.clone(),
                             cfs.gc_version_cf.clone(),
                             &key,
+                            &self.inner_db.key_encoder,
                         )?;
                     }
 
-                    data_key = KEY_ENCODER.encode_hash_data_key(&key, &field, version);
+                    data_key = self
+                        .inner_db
+                        .key_encoder
+                        .encode_hash_data_key(&key, &field, version);
 
                     match txn.get_for_update(cfs.data_cf.clone(), data_key.clone())? {
                         Some(data_value) => {
@@ -588,7 +637,10 @@ impl<'a> HashCommand<'a> {
                             // filed not exist
                             prev_int = 0;
                             // add size to a random sub meta key
-                            let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, idx);
+                            let sub_meta_key = self
+                                .inner_db
+                                .key_encoder
+                                .encode_sub_meta_key(&key, version, idx);
 
                             let sub_size = txn
                                 .get_for_update(cfs.sub_meta_cf.clone(), sub_meta_key.clone())?
@@ -608,8 +660,10 @@ impl<'a> HashCommand<'a> {
                             if expired {
                                 // add meta key
                                 let meta_size = config_meta_key_number_or_default();
-                                let meta_value =
-                                    KEY_ENCODER.encode_hash_meta_value(ttl, version, meta_size);
+                                let meta_value = self
+                                    .inner_db
+                                    .key_encoder
+                                    .encode_hash_meta_value(ttl, version, meta_size);
                                 txn.put(cfs.meta_cf.clone(), meta_key, meta_value)?;
                             }
                         }
@@ -621,22 +675,32 @@ impl<'a> HashCommand<'a> {
                         cfs.gc_cf.clone(),
                         cfs.gc_version_cf.clone(),
                         &key,
+                        &self.inner_db.key_encoder,
                     )?;
 
                     prev_int = 0;
                     // create new meta key first
                     let meta_size = config_meta_key_number_or_default();
-                    let meta_value = KEY_ENCODER.encode_hash_meta_value(0, version, meta_size);
+                    let meta_value = self
+                        .inner_db
+                        .key_encoder
+                        .encode_hash_meta_value(0, version, meta_size);
                     txn.put(cfs.meta_cf.clone(), meta_key, meta_value)?;
 
                     // add a sub meta key with a random index
-                    let sub_meta_key = KEY_ENCODER.encode_sub_meta_key(&key, version, idx);
+                    let sub_meta_key = self
+                        .inner_db
+                        .key_encoder
+                        .encode_sub_meta_key(&key, version, idx);
                     txn.put(
                         cfs.sub_meta_cf.clone(),
                         sub_meta_key,
                         1_i64.to_be_bytes().to_vec(),
                     )?;
-                    data_key = KEY_ENCODER.encode_hash_data_key(&key, &field, version);
+                    data_key = self
+                        .inner_db
+                        .key_encoder
+                        .encode_hash_data_key(&key, &field, version);
                 }
             }
             let new_int = prev_int + step;
@@ -656,20 +720,23 @@ impl<'a> HashCommand<'a> {
     }
 
     fn sum_key_size(&self, key: &str, version: u16) -> RocksResult<i64> {
-        let client = self.client;
+        let client = &self.inner_db.client;
         let cfs = HashCF::new(client);
         let key = key.to_owned();
 
         client.exec_txn(move |txn| {
             // check if meta key exists or already expired
-            let meta_key = KEY_ENCODER.encode_meta_key(&key);
+            let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
             match txn.get(cfs.meta_cf, meta_key)? {
                 Some(meta_value) => {
                     if !matches!(KeyDecoder::decode_key_type(&meta_value), DataType::Hash) {
                         return Err(REDIS_WRONG_TYPE_ERR);
                     }
 
-                    let bound_range = KEY_ENCODER.encode_sub_meta_key_range(&key, version);
+                    let bound_range = self
+                        .inner_db
+                        .key_encoder
+                        .encode_sub_meta_key_range(&key, version);
                     let iter = txn.scan(cfs.sub_meta_cf.clone(), bound_range, u32::MAX)?;
 
                     let sum = iter
@@ -686,7 +753,7 @@ impl<'a> HashCommand<'a> {
 impl TxnCommand for HashCommand<'_> {
     fn txn_del(&self, txn: &RocksTransaction, client: &RocksClient, key: &str) -> RocksResult<()> {
         let key = key.to_owned();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
         let cfs = HashCF::new(client);
 
         match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -698,17 +765,23 @@ impl TxnCommand for HashCommand<'_> {
                     // do async del
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
 
-                    let gc_key = KEY_ENCODER.encode_gc_key(&key);
+                    let gc_key = self.inner_db.key_encoder.encode_gc_key(&key);
                     txn.put(cfs.gc_cf.clone(), gc_key, version.to_be_bytes().to_vec())?;
 
-                    let gc_version_key = KEY_ENCODER.encode_gc_version_key(&key, version);
+                    let gc_version_key = self
+                        .inner_db
+                        .key_encoder
+                        .encode_gc_version_key(&key, version);
                     txn.put(
                         cfs.gc_version_cf.clone(),
                         gc_version_key,
-                        vec![KEY_ENCODER.get_type_bytes(DataType::Hash)],
+                        vec![self.inner_db.key_encoder.get_type_bytes(DataType::Hash)],
                     )?;
                 } else {
-                    let bound_range = KEY_ENCODER.encode_hash_data_key_range(&key, version);
+                    let bound_range = self
+                        .inner_db
+                        .key_encoder
+                        .encode_hash_data_key_range(&key, version);
                     // scan return iterator
                     let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
 
@@ -716,7 +789,10 @@ impl TxnCommand for HashCommand<'_> {
                         txn.del(cfs.data_cf.clone(), k)?;
                     }
 
-                    let sub_meta_bound_range = KEY_ENCODER.encode_sub_meta_key_range(&key, version);
+                    let sub_meta_bound_range = self
+                        .inner_db
+                        .key_encoder
+                        .encode_sub_meta_key_range(&key, version);
                     let sub_meta_iter =
                         txn.scan_keys(cfs.sub_meta_cf.clone(), sub_meta_bound_range, u32::MAX)?;
                     for k in sub_meta_iter {
@@ -738,7 +814,7 @@ impl TxnCommand for HashCommand<'_> {
         key: &str,
     ) -> RocksResult<i64> {
         let key = key.to_owned();
-        let meta_key = KEY_ENCODER.encode_meta_key(&key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
         let cfs = HashCF::new(client);
 
         match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
@@ -753,17 +829,23 @@ impl TxnCommand for HashCommand<'_> {
                     // do async del
                     txn.del(cfs.meta_cf.clone(), meta_key)?;
 
-                    let gc_key = KEY_ENCODER.encode_gc_key(&key);
+                    let gc_key = self.inner_db.key_encoder.encode_gc_key(&key);
                     txn.put(cfs.gc_cf.clone(), gc_key, version.to_be_bytes().to_vec())?;
 
-                    let gc_version_key = KEY_ENCODER.encode_gc_version_key(&key, version);
+                    let gc_version_key = self
+                        .inner_db
+                        .key_encoder
+                        .encode_gc_version_key(&key, version);
                     txn.put(
                         cfs.gc_version_cf.clone(),
                         gc_version_key,
-                        vec![KEY_ENCODER.get_type_bytes(DataType::Hash)],
+                        vec![self.inner_db.key_encoder.get_type_bytes(DataType::Hash)],
                     )?;
                 } else {
-                    let bound_range = KEY_ENCODER.encode_hash_data_key_range(&key, version);
+                    let bound_range = self
+                        .inner_db
+                        .key_encoder
+                        .encode_hash_data_key_range(&key, version);
                     // scan return iterator
                     let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
 
@@ -771,7 +853,10 @@ impl TxnCommand for HashCommand<'_> {
                         txn.del(cfs.data_cf.clone(), k)?;
                     }
 
-                    let sub_meta_bound_range = KEY_ENCODER.encode_sub_meta_key_range(&key, version);
+                    let sub_meta_bound_range = self
+                        .inner_db
+                        .key_encoder
+                        .encode_sub_meta_key_range(&key, version);
                     let sub_meta_iter =
                         txn.scan_keys(cfs.sub_meta_cf.clone(), sub_meta_bound_range, u32::MAX)?;
                     for k in sub_meta_iter {
@@ -795,14 +880,17 @@ impl TxnCommand for HashCommand<'_> {
         meta_value: &Value,
     ) -> RocksResult<i64> {
         let cfs = HashCF::new(client);
-        let meta_key = KEY_ENCODER.encode_meta_key(key);
+        let meta_key = self.inner_db.key_encoder.encode_meta_key(key);
         let ttl = KeyDecoder::decode_key_ttl(meta_value);
         if key_is_expired(ttl) {
             self.txn_expire_if_needed(txn, client, key)?;
             return Ok(0);
         }
         let version = KeyDecoder::decode_key_version(meta_value);
-        let new_meta_value = KEY_ENCODER.encode_hash_meta_value(timestamp, version, 0);
+        let new_meta_value = self
+            .inner_db
+            .key_encoder
+            .encode_hash_meta_value(timestamp, version, 0);
         txn.put(cfs.meta_cf.clone(), meta_key, new_meta_value)?;
         Ok(1)
     }
@@ -816,13 +904,19 @@ impl TxnCommand for HashCommand<'_> {
     ) -> RocksResult<()> {
         let cfs = HashCF::new(client);
         // delete all sub meta key of this key and version
-        let bound_range = KEY_ENCODER.encode_sub_meta_key_range(key, version);
+        let bound_range = self
+            .inner_db
+            .key_encoder
+            .encode_sub_meta_key_range(key, version);
         let iter = txn.scan_keys(cfs.sub_meta_cf.clone(), bound_range, u32::MAX)?;
         for k in iter {
             txn.del(cfs.sub_meta_cf.clone(), k)?;
         }
         // delete all data key of this key and version
-        let bound_range = KEY_ENCODER.encode_hash_data_key_range(key, version);
+        let bound_range = self
+            .inner_db
+            .key_encoder
+            .encode_hash_data_key_range(key, version);
         let iter = txn.scan_keys(cfs.data_cf.clone(), bound_range, u32::MAX)?;
         for k in iter {
             txn.del(cfs.data_cf.clone(), k)?;

@@ -247,10 +247,6 @@ impl Handler {
 
         Ok(())
     }
-
-    async fn execute_locally(&mut self, cmd: Command) -> crate::Result<()> {
-        cmd.apply(&mut self.connection).await
-    }
 }
 
 #[inline]

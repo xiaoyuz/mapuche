@@ -1,11 +1,12 @@
-use crate::{Connection, Frame, Parse};
+use crate::db::DBInner;
+use crate::Frame;
 
 use crate::cmd::Invalid;
-use bytes::Bytes;
+
 use serde::{Deserialize, Serialize};
 
 use crate::rocks::set::SetCommand;
-use crate::rocks::{get_client, Result as RocksResult};
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -27,36 +28,11 @@ impl Scard {
         &self.key
     }
 
-    pub fn set_key(&mut self, key: &str) {
-        self.key = key.to_owned();
-    }
-
-    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Scard> {
-        let key = parse.next_string()?;
-        Ok(Scard::new(&key))
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Scard> {
-        if argv.len() != 1 {
-            return Ok(Scard::new_invalid());
-        }
-        Ok(Scard::new(&String::from_utf8_lossy(&argv[0])))
-    }
-
-    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = self.scard().await?;
-
-        dst.write_frame(&response).await?;
-
-        Ok(())
-    }
-
-    pub async fn scard(&self) -> RocksResult<Frame> {
+    pub async fn execute(&mut self, inner_db: &DBInner) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        SetCommand::new(&get_client()).scard(&self.key).await
+        SetCommand::new(inner_db).scard(&self.key).await
     }
 }
 

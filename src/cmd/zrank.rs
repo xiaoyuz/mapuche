@@ -1,11 +1,12 @@
-use crate::{Connection, Frame, Parse};
+use crate::db::DBInner;
+use crate::Frame;
 
 use crate::cmd::Invalid;
-use bytes::Bytes;
+
 use serde::{Deserialize, Serialize};
 
 use crate::rocks::zset::ZsetCommand;
-use crate::rocks::{get_client, Result as RocksResult};
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -24,41 +25,11 @@ impl Zrank {
         }
     }
 
-    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Zrank> {
-        let key = parse.next_string()?;
-        let member = parse.next_string()?;
-
-        Ok(Zrank {
-            key,
-            member,
-            valid: true,
-        })
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Zrank> {
-        if argv.len() != 2 {
-            return Ok(Zrank::new_invalid());
-        }
-        Ok(Zrank::new(
-            &String::from_utf8_lossy(&argv[0]),
-            &String::from_utf8_lossy(&argv[1]),
-        ))
-    }
-
-    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = self.zrank().await?;
-
-        dst.write_frame(&response).await?;
-
-        Ok(())
-    }
-
-    pub async fn zrank(&self) -> RocksResult<Frame> {
+    pub async fn execute(&mut self, inner_db: &DBInner) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        ZsetCommand::new(&get_client())
+        ZsetCommand::new(inner_db)
             .zrank(&self.key, &self.member)
             .await
     }

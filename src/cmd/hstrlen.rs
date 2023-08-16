@@ -1,11 +1,12 @@
-use crate::{Connection, Frame, Parse};
+use crate::db::DBInner;
+use crate::Frame;
 
 use crate::cmd::Invalid;
 use crate::rocks::hash::HashCommand;
-use bytes::Bytes;
+
 use serde::{Deserialize, Serialize};
 
-use crate::rocks::{get_client, Result as RocksResult};
+use crate::rocks::Result as RocksResult;
 use crate::utils::resp_invalid_arguments;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -40,36 +41,11 @@ impl Hstrlen {
         &self.field
     }
 
-    pub(crate) fn parse_frames(parse: &mut Parse) -> crate::Result<Hstrlen> {
-        let key = parse.next_string()?;
-        let field = parse.next_string()?;
-        Ok(Hstrlen::new(&key, &field))
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn parse_argv(argv: &Vec<Bytes>) -> crate::Result<Hstrlen> {
-        if argv.len() != 2 {
-            return Ok(Hstrlen::new_invalid());
-        }
-        Ok(Hstrlen::new(
-            &String::from_utf8_lossy(&argv[0]),
-            &String::from_utf8_lossy(&argv[1]),
-        ))
-    }
-
-    pub(crate) async fn apply(&self, dst: &mut Connection) -> crate::Result<()> {
-        let response = self.hstrlen().await?;
-
-        dst.write_frame(&response).await?;
-
-        Ok(())
-    }
-
-    pub async fn hstrlen(&self) -> RocksResult<Frame> {
+    pub async fn execute(&self, inner_db: &DBInner) -> RocksResult<Frame> {
         if !self.valid {
             return Ok(resp_invalid_arguments());
         }
-        HashCommand::new(&get_client())
+        HashCommand::new(inner_db)
             .hstrlen(&self.key, &self.field)
             .await
     }
