@@ -16,7 +16,7 @@ pub struct Scard {
 }
 
 impl Scard {
-    pub fn new(key: &str) -> Scard {
+    pub fn new(key: impl ToString) -> Scard {
         Scard {
             key: key.to_string(),
             valid: true,

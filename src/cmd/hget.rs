@@ -17,10 +17,10 @@ pub struct Hget {
 }
 
 impl Hget {
-    pub fn new(key: &str, field: &str) -> Hget {
+    pub fn new(key: impl ToString, field: impl ToString) -> Hget {
         Hget {
-            field: field.to_owned(),
-            key: key.to_owned(),
+            field: field.to_string(),
+            key: key.to_string(),
             valid: true,
         }
     }

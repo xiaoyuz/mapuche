@@ -20,12 +20,17 @@ pub struct Linsert {
 }
 
 impl Linsert {
-    pub fn new(key: &str, before_pivot: bool, pivot: Bytes, element: Bytes) -> Linsert {
+    pub fn new(
+        key: impl ToString,
+        before_pivot: bool,
+        pivot: impl ToString,
+        element: impl ToString,
+    ) -> Linsert {
         Linsert {
-            key: key.to_owned(),
+            key: key.to_string(),
             before_pivot,
-            pivot,
-            element,
+            pivot: pivot.to_string().into(),
+            element: element.to_string().into(),
             valid: true,
         }
     }

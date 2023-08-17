@@ -18,7 +18,7 @@ pub struct Hincrby {
 }
 
 impl Hincrby {
-    pub fn new(key: &str, field: &str, step: i64) -> Hincrby {
+    pub fn new(key: impl ToString, field: impl ToString, step: i64) -> Hincrby {
         Hincrby {
             key: key.to_string(),
             field: field.to_string(),

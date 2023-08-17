@@ -17,10 +17,10 @@ pub struct Hdel {
 }
 
 impl Hdel {
-    pub fn new(key: &str) -> Hdel {
+    pub fn new(key: impl ToString, fields: &[impl ToString]) -> Hdel {
         Hdel {
-            fields: vec![],
-            key: key.to_owned(),
+            fields: fields.iter().map(|it| it.to_string()).collect(),
+            key: key.to_string(),
             valid: true,
         }
     }

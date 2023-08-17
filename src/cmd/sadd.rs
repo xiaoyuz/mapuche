@@ -17,10 +17,10 @@ pub struct Sadd {
 }
 
 impl Sadd {
-    pub fn new(key: &str) -> Sadd {
+    pub fn new(key: impl ToString, members: &[impl ToString]) -> Sadd {
         Sadd {
             key: key.to_string(),
-            members: vec![],
+            members: members.iter().map(|it| it.to_string()).collect(),
             valid: true,
         }
     }

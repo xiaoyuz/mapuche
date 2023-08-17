@@ -18,9 +18,9 @@ pub struct Ltrim {
 }
 
 impl Ltrim {
-    pub fn new(key: &str, start: i64, end: i64) -> Ltrim {
+    pub fn new(key: impl ToString, start: i64, end: i64) -> Ltrim {
         Ltrim {
-            key: key.to_owned(),
+            key: key.to_string(),
             start,
             end,
             valid: true,

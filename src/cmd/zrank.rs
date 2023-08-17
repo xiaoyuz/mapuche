@@ -17,7 +17,7 @@ pub struct Zrank {
 }
 
 impl Zrank {
-    pub fn new(key: &str, member: &str) -> Zrank {
+    pub fn new(key: impl ToString, member: impl ToString) -> Zrank {
         Zrank {
             key: key.to_string(),
             member: member.to_string(),

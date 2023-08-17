@@ -18,10 +18,10 @@ pub struct Push {
 }
 
 impl Push {
-    pub fn new(key: &str) -> Push {
+    pub fn new(key: impl ToString, items: &[impl ToString]) -> Push {
         Push {
-            items: vec![],
-            key: key.to_owned(),
+            items: items.iter().map(|it| it.to_string().into()).collect(),
+            key: key.to_string(),
             valid: true,
         }
     }

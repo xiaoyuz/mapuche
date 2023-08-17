@@ -17,10 +17,10 @@ pub struct Hexists {
 }
 
 impl Hexists {
-    pub fn new(key: &str, field: &str) -> Hexists {
+    pub fn new(key: impl ToString, field: impl ToString) -> Hexists {
         Hexists {
-            field: field.to_owned(),
-            key: key.to_owned(),
+            field: field.to_string(),
+            key: key.to_string(),
             valid: true,
         }
     }

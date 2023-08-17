@@ -17,10 +17,10 @@ pub struct Smismember {
 }
 
 impl Smismember {
-    pub fn new(key: &str) -> Smismember {
+    pub fn new(key: impl ToString, members: &[impl ToString]) -> Smismember {
         Smismember {
             key: key.to_string(),
-            members: vec![],
+            members: members.iter().map(|it| it.to_string()).collect(),
             valid: true,
         }
     }

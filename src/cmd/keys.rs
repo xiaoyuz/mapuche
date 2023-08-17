@@ -15,8 +15,11 @@ pub struct Keys {
 }
 
 impl Keys {
-    pub fn new(regex: String) -> Keys {
-        Keys { regex, valid: true }
+    pub fn new(regex: impl ToString) -> Keys {
+        Keys {
+            regex: regex.to_string(),
+            valid: true,
+        }
     }
 
     pub fn valid(&self) -> bool {

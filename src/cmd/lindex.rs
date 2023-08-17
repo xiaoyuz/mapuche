@@ -17,9 +17,9 @@ pub struct Lindex {
 }
 
 impl Lindex {
-    pub fn new(key: &str, idx: i64) -> Lindex {
+    pub fn new(key: impl ToString, idx: i64) -> Lindex {
         Lindex {
-            key: key.to_owned(),
+            key: key.to_string(),
             idx,
             valid: true,
         }

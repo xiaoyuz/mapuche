@@ -16,7 +16,7 @@ pub struct Hgetall {
 }
 
 impl Hgetall {
-    pub fn new(key: &str) -> Hgetall {
+    pub fn new(key: impl ToString) -> Hgetall {
         Hgetall {
             key: key.to_string(),
             valid: true,

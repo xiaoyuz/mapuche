@@ -17,7 +17,7 @@ pub struct Zscore {
 }
 
 impl Zscore {
-    pub fn new(key: &str, member: &str) -> Zscore {
+    pub fn new(key: impl ToString, member: impl ToString) -> Zscore {
         Zscore {
             key: key.to_string(),
             member: member.to_string(),

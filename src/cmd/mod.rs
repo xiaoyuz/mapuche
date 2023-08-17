@@ -168,7 +168,7 @@ pub use keys::Keys;
 
 use crate::config::txn_retry_count;
 use crate::db::DBInner;
-use crate::{Frame, Parse};
+use crate::Frame;
 
 use crate::rocks::Result as RocksResult;
 
@@ -347,19 +347,6 @@ impl From<&Command> for String {
 /// All commands should be implement new_invalid() for invalid check
 pub trait Invalid {
     fn new_invalid() -> Self;
-}
-
-fn transform_parse<T: Invalid>(parse_res: crate::Result<T>, parse: &mut Parse) -> T {
-    match parse_res {
-        Ok(cmd) => {
-            if parse.check_finish() {
-                cmd
-            } else {
-                T::new_invalid()
-            }
-        }
-        Err(_) => T::new_invalid(),
-    }
 }
 
 async fn retry_call<'a, F>(mut f: F) -> RocksResult<Frame>

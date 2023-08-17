@@ -17,7 +17,7 @@ pub struct Srandmember {
 }
 
 impl Srandmember {
-    pub fn new(key: &str, count: Option<i64>) -> Srandmember {
+    pub fn new(key: impl ToString, count: Option<i64>) -> Srandmember {
         Srandmember {
             key: key.to_string(),
             count,

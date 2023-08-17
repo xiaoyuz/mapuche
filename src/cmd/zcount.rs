@@ -20,7 +20,13 @@ pub struct Zcount {
 }
 
 impl Zcount {
-    pub fn new(key: &str, min: f64, min_inclusive: bool, max: f64, max_inclusive: bool) -> Zcount {
+    pub fn new(
+        key: impl ToString,
+        min: f64,
+        min_inclusive: bool,
+        max: f64,
+        max_inclusive: bool,
+    ) -> Zcount {
         Zcount {
             key: key.to_string(),
             min,

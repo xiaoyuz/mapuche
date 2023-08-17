@@ -17,7 +17,7 @@ pub struct Sismember {
 }
 
 impl Sismember {
-    pub fn new(key: &str, member: &str) -> Sismember {
+    pub fn new(key: impl ToString, member: impl ToString) -> Sismember {
         Sismember {
             key: key.to_string(),
             member: member.to_string(),

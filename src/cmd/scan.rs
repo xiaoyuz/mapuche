@@ -18,11 +18,11 @@ pub struct Scan {
 }
 
 impl Scan {
-    pub fn new(start: String, count: i64, regex: String) -> Scan {
+    pub fn new(start: impl ToString, count: i64, regex: impl ToString) -> Scan {
         Scan {
-            start,
+            start: start.to_string(),
             count,
-            regex,
+            regex: regex.to_string(),
             valid: true,
         }
     }

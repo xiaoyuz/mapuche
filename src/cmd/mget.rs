@@ -17,6 +17,13 @@ pub struct Mget {
 }
 
 impl Mget {
+    pub fn new(keys: &[impl ToString]) -> Mget {
+        Mget {
+            keys: keys.iter().map(|it| it.to_string()).collect(),
+            valid: true,
+        }
+    }
+
     /// Get the keys
     pub fn keys(&self) -> &Vec<String> {
         &self.keys

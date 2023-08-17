@@ -20,13 +20,19 @@ pub struct Zadd {
 }
 
 impl Zadd {
-    pub fn new(key: &str) -> Zadd {
+    pub fn new(
+        key: impl ToString,
+        members: &[impl ToString],
+        scores: &[f64],
+        exists: Option<bool>,
+        changed_only: bool,
+    ) -> Zadd {
         Zadd {
             key: key.to_string(),
-            members: vec![],
-            scores: vec![],
-            exists: None,
-            changed_only: false,
+            members: members.iter().map(|it| it.to_string()).collect(),
+            scores: scores.to_vec(),
+            exists,
+            changed_only,
             valid: true,
         }
     }

@@ -19,6 +19,14 @@ pub struct Mset {
 }
 
 impl Mset {
+    pub fn new(keys: &[impl ToString], vals: &[impl ToString]) -> Mset {
+        Mset {
+            keys: keys.iter().map(|it| it.to_string()).collect(),
+            vals: vals.iter().map(|it| it.to_string().into()).collect(),
+            valid: true,
+        }
+    }
+
     /// Get the keys
     pub fn keys(&self) -> &Vec<String> {
         &self.keys

@@ -18,7 +18,7 @@ pub struct Zremrangebyrank {
 }
 
 impl Zremrangebyrank {
-    pub fn new(key: &str, min: i64, max: i64) -> Zremrangebyrank {
+    pub fn new(key: impl ToString, min: i64, max: i64) -> Zremrangebyrank {
         Zremrangebyrank {
             key: key.to_string(),
             min,

@@ -19,11 +19,11 @@ pub struct Lrem {
 }
 
 impl Lrem {
-    pub fn new(key: &str, count: i64, element: Bytes) -> Lrem {
+    pub fn new(key: impl ToString, count: i64, element: impl ToString) -> Lrem {
         Lrem {
-            key: key.to_owned(),
+            key: key.to_string(),
             count,
-            element,
+            element: element.to_string().into(),
             valid: true,
         }
     }

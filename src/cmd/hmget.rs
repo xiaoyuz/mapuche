@@ -17,10 +17,10 @@ pub struct Hmget {
 }
 
 impl Hmget {
-    pub fn new(key: &str) -> Hmget {
+    pub fn new(key: impl ToString, fields: &[impl ToString]) -> Hmget {
         Hmget {
-            key: key.to_owned(),
-            fields: vec![],
+            key: key.to_string(),
+            fields: fields.iter().map(|it| it.to_string()).collect(),
             valid: true,
         }
     }

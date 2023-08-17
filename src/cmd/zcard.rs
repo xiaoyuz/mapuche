@@ -16,7 +16,7 @@ pub struct Zcard {
 }
 
 impl Zcard {
-    pub fn new(key: &str) -> Zcard {
+    pub fn new(key: impl ToString) -> Zcard {
         Zcard {
             key: key.to_string(),
             valid: true,

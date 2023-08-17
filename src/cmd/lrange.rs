@@ -18,9 +18,9 @@ pub struct Lrange {
 }
 
 impl Lrange {
-    pub fn new(key: &str, left: i64, right: i64) -> Lrange {
+    pub fn new(key: impl ToString, left: i64, right: i64) -> Lrange {
         Lrange {
-            key: key.to_owned(),
+            key: key.to_string(),
             left,
             right,
             valid: true,

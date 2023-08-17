@@ -17,10 +17,10 @@ pub struct Zrem {
 }
 
 impl Zrem {
-    pub fn new(key: &str) -> Zrem {
+    pub fn new(key: impl ToString, members: &[impl ToString]) -> Zrem {
         Zrem {
             key: key.to_string(),
-            members: vec![],
+            members: members.iter().map(|it| it.to_string()).collect(),
             valid: true,
         }
     }

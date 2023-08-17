@@ -18,6 +18,17 @@ pub struct Hset {
 }
 
 impl Hset {
+    pub fn new(key: impl ToString, field_and_value: &[(impl ToString, impl ToString)]) -> Hset {
+        Hset {
+            key: key.to_string(),
+            field_and_value: field_and_value
+                .iter()
+                .map(|it| (it.0.to_string(), it.1.to_string()).into())
+                .collect(),
+            valid: true,
+        }
+    }
+
     /// Get the key
     pub fn key(&self) -> &str {
         &self.key

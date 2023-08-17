@@ -1,4 +1,3 @@
-use crate::config::data_store_dir_or_default;
 use crate::rocks::client::RocksClient;
 
 use crate::rocks::errors::RError;
@@ -7,7 +6,7 @@ use crate::rocks::transaction::RocksTransaction;
 
 use rocksdb::{MultiThreaded, Options, TransactionDB, TransactionDBOptions};
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 pub mod client;
 pub mod encoding;
@@ -64,12 +63,12 @@ pub trait TxnCommand {
     ) -> Result<()>;
 }
 
-pub fn new_client() -> Result<RocksClient> {
-    let db: TransactionDB = new_db()?;
+pub fn new_client<P: AsRef<Path>>(path: P) -> Result<RocksClient> {
+    let db: TransactionDB = new_db(path)?;
     Ok(RocksClient::new(Arc::new(db)))
 }
 
-fn new_db() -> Result<TransactionDB<MultiThreaded>> {
+fn new_db<P: AsRef<Path>>(path: P) -> Result<TransactionDB<MultiThreaded>> {
     let mut opts = Options::default();
     let transaction_opts = TransactionDBOptions::default();
     opts.create_if_missing(true);
@@ -89,54 +88,9 @@ fn new_db() -> Result<TransactionDB<MultiThreaded>> {
         CF_NAME_ZSET_SCORE,
     ];
 
-    TransactionDB::open_cf(
-        &opts,
-        &transaction_opts,
-        data_store_dir_or_default(),
-        cf_names,
-    )
-    .map_err(|e| e.into())
+    TransactionDB::open_cf(&opts, &transaction_opts, path, cf_names).map_err(|e| e.into())
 }
 
 pub fn get_instance_id() -> u64 {
     unsafe { INSTANCE_ID }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::config::data_store_dir_or_default;
-    use rocksdb::{Direction, IteratorMode, TransactionDB, WriteBatchWithTransaction};
-
-    #[test]
-    fn test_rocksdb() {
-        let db: TransactionDB = TransactionDB::open_default(data_store_dir_or_default()).unwrap();
-        db.put(b"my key", b"my value").unwrap();
-        match db.get(b"my key") {
-            Ok(Some(value)) => println!("retrieved value {}", String::from_utf8(value).unwrap()),
-            Ok(None) => println!("value not found"),
-            Err(e) => println!("operational problem encountered: {e}"),
-        }
-        db.delete(b"my key").unwrap();
-
-        let mut batch = WriteBatchWithTransaction::default();
-        batch.put(b"test000001", b"t1");
-        batch.put(b"test000002", b"t2");
-        batch.put(b"test000010", b"t3");
-        batch.put(b"test001111", b"t3");
-        batch.put(b"yyyyy", b"a1");
-        db.write(batch).unwrap();
-
-        let txn = db.transaction();
-
-        let it = txn.iterator(IteratorMode::From(b"test000003", Direction::Forward));
-        let mut it_stop = txn.iterator(IteratorMode::From(b"yyyyy", Direction::Reverse));
-        let stop = it_stop.next().unwrap().unwrap();
-        for inner in it {
-            let inner_res = inner.unwrap();
-            if inner_res == stop {
-                break;
-            }
-            println!("{inner_res:?}");
-        }
-    }
 }

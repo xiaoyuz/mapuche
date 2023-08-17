@@ -16,7 +16,7 @@ pub struct Hvals {
 }
 
 impl Hvals {
-    pub fn new(key: &str) -> Hvals {
+    pub fn new(key: impl ToString) -> Hvals {
         Hvals {
             key: key.to_string(),
             valid: true,

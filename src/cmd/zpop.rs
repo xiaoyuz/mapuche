@@ -17,7 +17,7 @@ pub struct Zpop {
 }
 
 impl Zpop {
-    pub fn new(key: &str, count: i64) -> Zpop {
+    pub fn new(key: impl ToString, count: i64) -> Zpop {
         Zpop {
             key: key.to_string(),
             count,

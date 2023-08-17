@@ -18,7 +18,7 @@ pub struct Zincrby {
 }
 
 impl Zincrby {
-    pub fn new(key: &str, step: f64, member: &str) -> Zincrby {
+    pub fn new(key: impl ToString, step: f64, member: impl ToString) -> Zincrby {
         Zincrby {
             key: key.to_string(),
             step,

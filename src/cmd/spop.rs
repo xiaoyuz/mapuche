@@ -17,7 +17,7 @@ pub struct Spop {
 }
 
 impl Spop {
-    pub fn new(key: &str, count: i64) -> Spop {
+    pub fn new(key: impl ToString, count: i64) -> Spop {
         Spop {
             key: key.to_string(),
             count,

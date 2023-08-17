@@ -44,12 +44,17 @@ impl Set {
     ///
     /// If `expire` is `Some`, the value should expire after the specified
     /// duration.
-    pub fn new(key: impl ToString, value: Bytes, expire: Option<i64>) -> Set {
+    pub fn new(
+        key: impl ToString,
+        value: impl ToString,
+        expire: Option<i64>,
+        nx: Option<bool>,
+    ) -> Set {
         Set {
             key: key.to_string(),
-            value,
+            value: value.to_string().into(),
             expire,
-            nx: None,
+            nx,
             valid: true,
         }
     }

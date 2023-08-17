@@ -19,7 +19,7 @@ pub struct Zrevrange {
 }
 
 impl Zrevrange {
-    pub fn new(key: &str, min: i64, max: i64, withscores: bool) -> Zrevrange {
+    pub fn new(key: impl ToString, min: i64, max: i64, withscores: bool) -> Zrevrange {
         Zrevrange {
             key: key.to_string(),
             min,

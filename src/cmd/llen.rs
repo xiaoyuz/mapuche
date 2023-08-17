@@ -16,9 +16,9 @@ pub struct Llen {
 }
 
 impl Llen {
-    pub fn new(key: &str) -> Llen {
+    pub fn new(key: impl ToString) -> Llen {
         Llen {
-            key: key.to_owned(),
+            key: key.to_string(),
             valid: true,
         }
     }

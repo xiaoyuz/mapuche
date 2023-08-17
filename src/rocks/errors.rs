@@ -57,9 +57,6 @@ pub const REDIS_VALUE_IS_NOT_INTEGER_ERR: RError =
     RError::String("ERR value is not an integer or out of range");
 pub const REDIS_VALUE_IS_NOT_VALID_FLOAT_ERR: RError =
     RError::String("ERR value is not a valid float");
-pub const REDIS_BACKEND_NOT_CONNECTED_ERR: RError = RError::String("ERR backend not connected");
-pub const REDIS_COMPARE_AND_SWAP_EXHAUSTED_ERR: RError =
-    RError::String("ERR compare-and-swap exhausted");
 pub const REDIS_NO_SUCH_KEY_ERR: RError = RError::String("ERR no such key");
 pub const REDIS_INDEX_OUT_OF_RANGE_ERR: RError = RError::String("ERR index out of range");
 pub const REDIS_LIST_TOO_LARGE_ERR: RError = RError::String("ERR list is too large to execute");
@@ -67,8 +64,3 @@ pub const DECREMENT_OVERFLOW: RError = RError::String("Decrement would overflow"
 pub const TXN_ERROR: RError = RError::Txn("Txn commit failed");
 pub const KEY_VERSION_EXHUSTED_ERR: RError = RError::String("ERR key version exhausted");
 pub const CF_NOT_EXISTS_ERR: RError = RError::String("Column family not existed");
-pub const REDIS_AUTH_WHEN_DISABLED_ERR: RError =
-    RError::String("ERR Client sent AUTH, but no password is set");
-pub const REDIS_AUTH_INVALID_PASSWORD_ERR: RError = RError::String("ERR invalid password");
-pub const REDIS_AUTH_REQUIRED_ERR: RError = RError::String("NOAUTH Authentication required.");
-pub const REDIS_NOT_SUPPORTED_ERR: RError = RError::String("Cmd not supported.");

@@ -16,7 +16,7 @@ pub struct Hlen {
 }
 
 impl Hlen {
-    pub fn new(key: &str) -> Hlen {
+    pub fn new(key: impl ToString) -> Hlen {
         Hlen {
             key: key.to_string(),
             valid: true,

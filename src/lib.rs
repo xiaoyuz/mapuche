@@ -1,21 +1,17 @@
 pub mod cmd;
-pub mod config;
 pub mod frame;
 
+mod config;
 mod db;
 mod gc;
-mod parse;
 mod rocks;
-mod shutdown;
 mod utils;
 
 use cmd::Command;
-use config::Config;
 
 use db::DBInner;
 use frame::Frame;
-use parse::Parse;
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 /// Error returned by most functions.
 ///
@@ -35,15 +31,33 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 /// This is defined as a convenience.
 pub type Result<T> = anyhow::Result<T, Error>;
 
+pub struct OpenOptions {}
+
+impl OpenOptions {
+    pub fn new() -> Self {
+        OpenOptions {}
+    }
+
+    pub async fn open<P: AsRef<Path>>(self, path: P) -> Result<DB> {
+        let inner = DBInner::open(path).await?;
+        let inner = Arc::new(inner);
+        Ok(DB { inner })
+    }
+}
+
+impl Default for OpenOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct DB {
     pub(crate) inner: Arc<DBInner>,
 }
 
 impl DB {
-    pub async fn new(config: Config) -> Result<Self> {
-        let inner = DBInner::new(config).await?;
-        let inner = Arc::new(inner);
-        Ok(Self { inner })
+    pub async fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
+        OpenOptions::new().open(path).await
     }
 
     pub fn conn(&self) -> Conn {

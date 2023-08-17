@@ -22,7 +22,7 @@ pub struct Zrangebyscore {
 
 impl Zrangebyscore {
     pub fn new(
-        key: &str,
+        key: impl ToString,
         min: f64,
         min_inclusive: bool,
         max: f64,

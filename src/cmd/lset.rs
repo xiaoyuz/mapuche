@@ -19,11 +19,11 @@ pub struct Lset {
 }
 
 impl Lset {
-    pub fn new(key: &str, idx: i64, ele: Bytes) -> Lset {
+    pub fn new(key: impl ToString, idx: i64, element: impl ToString) -> Lset {
         Lset {
-            key: key.to_owned(),
+            key: key.to_string(),
             idx,
-            element: ele,
+            element: element.to_string().into(),
             valid: true,
         }
     }

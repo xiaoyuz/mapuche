@@ -16,6 +16,13 @@ pub struct Exists {
 }
 
 impl Exists {
+    pub fn new(keys: &[impl ToString]) -> Exists {
+        Exists {
+            keys: keys.iter().map(|it| it.to_string()).collect(),
+            valid: true,
+        }
+    }
+
     /// Get the keys
     pub fn keys(&self) -> &Vec<String> {
         &self.keys

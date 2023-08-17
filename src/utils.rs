@@ -69,6 +69,7 @@ pub fn ttl_from_timestamp(timestamp: i64) -> i64 {
     }
 }
 
+#[allow(dead_code)]
 pub async fn sleep(ms: u32) {
     tokio::time::sleep(Duration::from_millis(ms as u64)).await;
 }
@@ -77,6 +78,7 @@ pub fn count_unique_keys<T: std::hash::Hash + Eq>(keys: &[T]) -> usize {
     keys.iter().collect::<HashSet<&T>>().len()
 }
 
+#[allow(dead_code)]
 pub fn timestamp_local(io: &mut dyn io::Write) -> io::Result<()> {
     let now = chrono::Local::now().format(TIMESTAMP_FORMAT);
     write!(io, "{now}")

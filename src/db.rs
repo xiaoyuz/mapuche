@@ -1,10 +1,11 @@
+use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::sync::{atomic::AtomicU16, Arc};
 
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 use crate::{
-    config::{config_meta_key_number_or_default, set_global_config, Config},
+    config::config_meta_key_number_or_default,
     rocks::{client::RocksClient, encoding::KeyEncoder, new_client},
     Result,
 };
@@ -16,9 +17,8 @@ pub struct DBInner {
 }
 
 impl DBInner {
-    pub(crate) async fn new(config: Config) -> Result<Self> {
-        set_global_config(config);
-        let client = new_client()?;
+    pub(crate) async fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let client = new_client(path)?;
         let client = Arc::new(client);
         let key_encoder = KeyEncoder::new();
         let index_count = AtomicU16::new(SmallRng::from_entropy().gen_range(0..u16::MAX));

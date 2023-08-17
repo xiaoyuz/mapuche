@@ -16,7 +16,7 @@ pub struct Hkeys {
 }
 
 impl Hkeys {
-    pub fn new(key: &str) -> Hkeys {
+    pub fn new(key: impl ToString) -> Hkeys {
         Hkeys {
             key: key.to_string(),
             valid: true,

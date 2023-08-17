@@ -16,6 +16,13 @@ pub struct Del {
 }
 
 impl Del {
+    pub fn new(keys: &[impl ToString]) -> Del {
+        Del {
+            keys: keys.iter().map(|it| it.to_string()).collect(),
+            valid: true,
+        }
+    }
+
     /// Get the keys
     pub fn keys(&self) -> &Vec<String> {
         &self.keys

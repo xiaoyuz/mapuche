@@ -17,9 +17,9 @@ pub struct Pop {
 }
 
 impl Pop {
-    pub fn new(key: &str, count: i64) -> Pop {
+    pub fn new(key: impl ToString, count: i64) -> Pop {
         Pop {
-            key: key.to_owned(),
+            key: key.to_string(),
             count,
             valid: true,
         }

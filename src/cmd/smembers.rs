@@ -16,7 +16,7 @@ pub struct Smembers {
 }
 
 impl Smembers {
-    pub fn new(key: &str) -> Smembers {
+    pub fn new(key: impl ToString) -> Smembers {
         Smembers {
             key: key.to_string(),
             valid: true,

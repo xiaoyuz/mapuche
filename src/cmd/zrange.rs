@@ -20,7 +20,7 @@ pub struct Zrange {
 }
 
 impl Zrange {
-    pub fn new(key: &str, min: i64, max: i64, withscores: bool, reverse: bool) -> Zrange {
+    pub fn new(key: impl ToString, min: i64, max: i64, withscores: bool, reverse: bool) -> Zrange {
         Zrange {
             key: key.to_string(),
             min,

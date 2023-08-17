@@ -17,10 +17,10 @@ pub struct Hstrlen {
 }
 
 impl Hstrlen {
-    pub fn new(key: &str, field: &str) -> Hstrlen {
+    pub fn new(key: impl ToString, field: impl ToString) -> Hstrlen {
         Hstrlen {
-            field: field.to_owned(),
-            key: key.to_owned(),
+            field: field.to_string(),
+            key: key.to_string(),
             valid: true,
         }
     }
