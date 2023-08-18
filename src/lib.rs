@@ -51,6 +51,7 @@ impl Default for OpenOptions {
     }
 }
 
+#[derive(Clone)]
 pub struct DB {
     pub(crate) inner: Arc<DBInner>,
 }

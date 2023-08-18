@@ -70,7 +70,7 @@ impl<'a> ListCommand<'a> {
                     let (ttl, mut version, mut left, mut right) =
                         KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         left = INIT_INDEX;
                         right = INIT_INDEX;
                         version = get_version_for_new(
@@ -174,7 +174,7 @@ impl<'a> ListCommand<'a> {
                     let (ttl, version, mut left, mut right) =
                         KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(values);
                     }
 
@@ -286,7 +286,7 @@ impl<'a> ListCommand<'a> {
                     let (ttl, version, mut left, mut right) =
                         KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(());
                     }
 
@@ -383,7 +383,7 @@ impl<'a> ListCommand<'a> {
                     }
                     let (ttl, version, left, right) = KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(resp_array(vec![]));
                     }
 
@@ -443,7 +443,7 @@ impl<'a> ListCommand<'a> {
                     let (ttl, _version, left, right) =
                         KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(resp_int(0));
                     }
 
@@ -470,7 +470,7 @@ impl<'a> ListCommand<'a> {
                     }
                     let (ttl, version, left, right) = KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(resp_nil());
                     }
 
@@ -515,7 +515,7 @@ impl<'a> ListCommand<'a> {
                     }
                     let (ttl, version, left, right) = KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Err(REDIS_NO_SUCH_KEY_ERR);
                     }
 
@@ -571,7 +571,7 @@ impl<'a> ListCommand<'a> {
                     let (ttl, version, mut left, mut right) =
                         KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(0);
                     }
 
@@ -711,7 +711,7 @@ impl<'a> ListCommand<'a> {
                     }
                     let (ttl, version, left, right) = KeyDecoder::decode_key_list_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(0);
                     }
 
@@ -856,10 +856,10 @@ impl<'a> ListCommand<'a> {
 }
 
 impl TxnCommand for ListCommand<'_> {
-    fn txn_del(&self, txn: &RocksTransaction, client: &RocksClient, key: &str) -> RocksResult<()> {
+    fn txn_del(&self, txn: &RocksTransaction, key: &str) -> RocksResult<()> {
         let key = key.to_owned();
         let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
-        let cfs = ListCF::new(client);
+        let cfs = ListCF::new(&self.inner_db.client);
 
         match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
             Some(meta_value) => {
@@ -901,15 +901,10 @@ impl TxnCommand for ListCommand<'_> {
         }
     }
 
-    fn txn_expire_if_needed(
-        &self,
-        txn: &RocksTransaction,
-        client: &RocksClient,
-        key: &str,
-    ) -> RocksResult<i64> {
+    fn txn_expire_if_needed(&self, txn: &RocksTransaction, key: &str) -> RocksResult<i64> {
         let key = key.to_owned();
         let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
-        let cfs = ListCF::new(client);
+        let cfs = ListCF::new(&self.inner_db.client);
 
         match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
             Some(meta_value) => {
@@ -957,16 +952,15 @@ impl TxnCommand for ListCommand<'_> {
     fn txn_expire(
         &self,
         txn: &RocksTransaction,
-        client: &RocksClient,
         key: &str,
         timestamp: i64,
         meta_value: &Value,
     ) -> RocksResult<i64> {
-        let cfs = ListCF::new(client);
+        let cfs = ListCF::new(&self.inner_db.client);
         let meta_key = self.inner_db.key_encoder.encode_meta_key(key);
         let ttl = KeyDecoder::decode_key_ttl(meta_value);
         if key_is_expired(ttl) {
-            self.txn_expire_if_needed(txn, client, key)?;
+            self.txn_expire_if_needed(txn, key)?;
             return Ok(0);
         }
         let (_, version, left, right) = KeyDecoder::decode_key_list_meta(meta_value);
@@ -978,14 +972,8 @@ impl TxnCommand for ListCommand<'_> {
         Ok(1)
     }
 
-    fn txn_gc(
-        &self,
-        txn: &RocksTransaction,
-        client: &RocksClient,
-        key: &str,
-        version: u16,
-    ) -> RocksResult<()> {
-        let cfs = ListCF::new(client);
+    fn txn_gc(&self, txn: &RocksTransaction, key: &str, version: u16) -> RocksResult<()> {
+        let cfs = ListCF::new(&self.inner_db.client);
         // delete all data key of this key and version
         let bound_range = self
             .inner_db

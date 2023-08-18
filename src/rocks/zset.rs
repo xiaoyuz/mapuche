@@ -83,7 +83,7 @@ impl<'a> ZsetCommand<'a> {
 
                     let mut expired = false;
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         expired = true;
                         version = get_version_for_new(
                             txn,
@@ -330,7 +330,7 @@ impl<'a> ZsetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(resp_int(0));
                     }
 
@@ -359,7 +359,7 @@ impl<'a> ZsetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(resp_nil());
                     }
 
@@ -403,7 +403,7 @@ impl<'a> ZsetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(resp_int(0));
                     }
 
@@ -458,7 +458,7 @@ impl<'a> ZsetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(resp_array(resp));
                     }
 
@@ -547,7 +547,7 @@ impl<'a> ZsetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(resp_array(resp));
                     }
 
@@ -620,7 +620,7 @@ impl<'a> ZsetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(vec![]);
                     }
 
@@ -749,7 +749,7 @@ impl<'a> ZsetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(resp_nil());
                     }
 
@@ -817,7 +817,7 @@ impl<'a> ZsetCommand<'a> {
                     let (ttl, ver, _) = KeyDecoder::decode_key_meta(&meta_value);
                     version = ver;
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         expired = true;
                         version = get_version_for_new(
                             txn,
@@ -943,7 +943,7 @@ impl<'a> ZsetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(0);
                     }
 
@@ -1047,7 +1047,7 @@ impl<'a> ZsetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(0);
                     }
 
@@ -1154,7 +1154,7 @@ impl<'a> ZsetCommand<'a> {
 
                     let (ttl, version, _) = KeyDecoder::decode_key_meta(&meta_value);
                     if key_is_expired(ttl) {
-                        self.txn_expire_if_needed(txn, client, &key)?;
+                        self.txn_expire_if_needed(txn, &key)?;
                         return Ok(0);
                     }
 
@@ -1272,10 +1272,10 @@ impl<'a> ZsetCommand<'a> {
 }
 
 impl TxnCommand for ZsetCommand<'_> {
-    fn txn_del(&self, txn: &RocksTransaction, client: &RocksClient, key: &str) -> RocksResult<()> {
+    fn txn_del(&self, txn: &RocksTransaction, key: &str) -> RocksResult<()> {
         let key = key.to_owned();
         let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
-        let cfs = ZsetCF::new(client);
+        let cfs = ZsetCF::new(&self.inner_db.client);
 
         match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
             Some(meta_value) => {
@@ -1341,15 +1341,10 @@ impl TxnCommand for ZsetCommand<'_> {
         }
     }
 
-    fn txn_expire_if_needed(
-        &self,
-        txn: &RocksTransaction,
-        client: &RocksClient,
-        key: &str,
-    ) -> RocksResult<i64> {
+    fn txn_expire_if_needed(&self, txn: &RocksTransaction, key: &str) -> RocksResult<i64> {
         let key = key.to_owned();
         let meta_key = self.inner_db.key_encoder.encode_meta_key(&key);
-        let cfs = ZsetCF::new(client);
+        let cfs = ZsetCF::new(&self.inner_db.client);
 
         match txn.get(cfs.meta_cf.clone(), meta_key.clone())? {
             Some(meta_value) => {
@@ -1424,16 +1419,15 @@ impl TxnCommand for ZsetCommand<'_> {
     fn txn_expire(
         &self,
         txn: &RocksTransaction,
-        client: &RocksClient,
         key: &str,
         timestamp: i64,
         meta_value: &Value,
     ) -> RocksResult<i64> {
-        let cfs = ZsetCF::new(client);
+        let cfs = ZsetCF::new(&self.inner_db.client);
         let meta_key = self.inner_db.key_encoder.encode_meta_key(key);
         let ttl = KeyDecoder::decode_key_ttl(meta_value);
         if key_is_expired(ttl) {
-            self.txn_expire_if_needed(txn, client, key)?;
+            self.txn_expire_if_needed(txn, key)?;
             return Ok(0);
         }
         let version = KeyDecoder::decode_key_version(meta_value);
@@ -1445,14 +1439,8 @@ impl TxnCommand for ZsetCommand<'_> {
         Ok(1)
     }
 
-    fn txn_gc(
-        &self,
-        txn: &RocksTransaction,
-        client: &RocksClient,
-        key: &str,
-        version: u16,
-    ) -> RocksResult<()> {
-        let cfs = ZsetCF::new(client);
+    fn txn_gc(&self, txn: &RocksTransaction, key: &str, version: u16) -> RocksResult<()> {
+        let cfs = ZsetCF::new(&self.inner_db.client);
         // delete all sub meta key of this key and version
         let bound_range = self
             .inner_db

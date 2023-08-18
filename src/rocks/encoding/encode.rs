@@ -15,12 +15,10 @@ pub struct KeyEncoder {
     meta_key_number: u16,
 }
 
-pub const RAW_KEY_PREFIX: u8 = b'r';
 pub const TXN_KEY_PREFIX: u8 = b'x';
 
 pub const DATA_TYPE_USER: u8 = b'u';
 pub const DATA_TYPE_USER_END: u8 = b'v';
-pub const DATA_TYPE_TOPO: u8 = b't';
 pub const DATA_TYPE_GC: u8 = b'g';
 pub const DATA_TYPE_GC_VERSION: u8 = b'v';
 

@@ -1,41 +1,11 @@
-use std::{thread, time::Duration};
-
 use mapuche::{
-    cmd::{Command, Get, Lrange, Lrem, Push, Set, Zadd, Zcard, Zrange, Zrem},
+    cmd::{Command, Zadd, Zcard, Zrange, Zrem},
     DB,
 };
-use tokio::{join, task::spawn};
+use tokio::spawn;
 
-#[tokio::test]
-async fn db_conn() {
-    let db = DB::open("./mapuche_store").await.unwrap();
-    let conn = db.conn();
-    let set_cmd = Command::Set(Set::new("test1", "value", None, None));
-    let frame = conn.execute(set_cmd).await.unwrap();
-    println!("{:?}", frame);
-    let get_cmd = Command::Get(Get::new("test1"));
-    let frame = conn.execute(get_cmd).await.unwrap();
-    println!("{:?}", frame);
-
-    let push_cmd = Command::Lpush(Push::new("testlist", vec!["aaa", "bbb"].as_slice()));
-    let frame = conn.execute(push_cmd).await.unwrap();
-    println!("{:?}", frame);
-
-    let lrange_cmd = Command::Lrange(Lrange::new("testlist", 0, -1));
-    let frame = conn.execute(lrange_cmd).await.unwrap();
-    println!("{:?}", frame);
-
-    let lrem_cmd = Command::Lrem(Lrem::new("testlist", 1, "aaa"));
-    let frame = conn.execute(lrem_cmd).await.unwrap();
-    println!("{:?}", frame);
-
-    let lrange_cmd = Command::Lrange(Lrange::new("testlist", 0, -1));
-    let frame = conn.execute(lrange_cmd).await.unwrap();
-    println!("{:?}", frame);
-}
-
-#[tokio::test]
-async fn multi_thread() {
+#[tokio::main]
+async fn main() {
     let db = DB::open("./mapuche_store").await.unwrap();
 
     let db1 = db.clone();
@@ -131,21 +101,4 @@ async fn multi_thread() {
     let zrange_cmd = Command::Zrange(Zrange::new("testz", 0, -1, false, false));
     let frame = conn.execute(zrange_cmd).await.unwrap();
     println!("{:?}", frame);
-}
-
-#[tokio::test]
-async fn ttt() {
-    let task_a = spawn(print_char_periodically('A', Duration::from_millis(2)));
-    let task_b = spawn(print_char_periodically('B', Duration::from_millis(2)));
-    let task_c = spawn(print_char_periodically('C', Duration::from_millis(2)));
-
-    // 等待三个任务完成
-    let _ = join!(task_a, task_b, task_c);
-}
-
-async fn print_char_periodically(ch: char, interval: Duration) {
-    for _ in 0..5 {
-        println!("{}", ch);
-        thread::sleep(interval);
-    }
 }

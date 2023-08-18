@@ -36,31 +36,19 @@ pub type Result<T> = anyhow::Result<T, RError>;
 pub static mut INSTANCE_ID: u64 = 0;
 
 pub trait TxnCommand {
-    fn txn_del(&self, txn: &RocksTransaction, client: &RocksClient, key: &str) -> Result<()>;
+    fn txn_del(&self, txn: &RocksTransaction, key: &str) -> Result<()>;
 
-    fn txn_expire_if_needed(
-        &self,
-        txn: &RocksTransaction,
-        client: &RocksClient,
-        key: &str,
-    ) -> Result<i64>;
+    fn txn_expire_if_needed(&self, txn: &RocksTransaction, key: &str) -> Result<i64>;
 
     fn txn_expire(
         &self,
         txn: &RocksTransaction,
-        client: &RocksClient,
         key: &str,
         timestamp: i64,
         meta_value: &Value,
     ) -> Result<i64>;
 
-    fn txn_gc(
-        &self,
-        txn: &RocksTransaction,
-        client: &RocksClient,
-        key: &str,
-        version: u16,
-    ) -> Result<()>;
+    fn txn_gc(&self, txn: &RocksTransaction, key: &str, version: u16) -> Result<()>;
 }
 
 pub fn new_client<P: AsRef<Path>>(path: P) -> Result<RocksClient> {

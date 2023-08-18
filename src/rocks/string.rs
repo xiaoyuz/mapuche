@@ -294,7 +294,7 @@ impl<'a> StringCommand<'a> {
                             let ttl = KeyDecoder::decode_key_ttl(&meta_value);
                             // check key expired
                             if key_is_expired(ttl) {
-                                self.txn_expire_if_needed(txn, client, &ekey, &meta_value)?;
+                                self.txn_expire_if_needed(txn, &ekey, &meta_value)?;
                                 return Ok(0);
                             }
                             let value = KeyDecoder::decode_key_string_slice(&meta_value);
@@ -307,28 +307,24 @@ impl<'a> StringCommand<'a> {
                         }
                         DataType::Set => SetCommand::new(self.inner_db).txn_expire(
                             txn,
-                            client,
                             &key,
                             timestamp,
                             &meta_value,
                         ),
                         DataType::List => ListCommand::new(self.inner_db).txn_expire(
                             txn,
-                            client,
                             &key,
                             timestamp,
                             &meta_value,
                         ),
                         DataType::Hash => HashCommand::new(self.inner_db).txn_expire(
                             txn,
-                            client,
                             &key,
                             timestamp,
                             &meta_value,
                         ),
                         DataType::Zset => ZsetCommand::new(self.inner_db).txn_expire(
                             txn,
-                            client,
                             &key,
                             timestamp,
                             &meta_value,
@@ -357,23 +353,19 @@ impl<'a> StringCommand<'a> {
                 if key_is_expired(ttl) {
                     match dt {
                         DataType::String => {
-                            self.txn_expire_if_needed(txn, client, &ekey, &meta_value)?;
+                            self.txn_expire_if_needed(txn, &ekey, &meta_value)?;
                         }
                         DataType::Set => {
-                            SetCommand::new(self.inner_db)
-                                .txn_expire_if_needed(txn, client, &key)?;
+                            SetCommand::new(self.inner_db).txn_expire_if_needed(txn, &key)?;
                         }
                         DataType::List => {
-                            ListCommand::new(self.inner_db)
-                                .txn_expire_if_needed(txn, client, &key)?;
+                            ListCommand::new(self.inner_db).txn_expire_if_needed(txn, &key)?;
                         }
                         DataType::Hash => {
-                            HashCommand::new(self.inner_db)
-                                .txn_expire_if_needed(txn, client, &key)?;
+                            HashCommand::new(self.inner_db).txn_expire_if_needed(txn, &key)?;
                         }
                         DataType::Zset => {
-                            ZsetCommand::new(self.inner_db)
-                                .txn_expire_if_needed(txn, client, &key)?;
+                            ZsetCommand::new(self.inner_db).txn_expire_if_needed(txn, &key)?;
                         }
                         _ => {}
                     }
@@ -415,19 +407,19 @@ impl<'a> StringCommand<'a> {
                         resp += 1;
                     }
                     Some(DataType::Set) => {
-                        SetCommand::new(self.inner_db).txn_del(txn, client, &ekey_map[&ekey])?;
+                        SetCommand::new(self.inner_db).txn_del(txn, &ekey_map[&ekey])?;
                         resp += 1;
                     }
                     Some(DataType::List) => {
-                        ListCommand::new(self.inner_db).txn_del(txn, client, &ekey_map[&ekey])?;
+                        ListCommand::new(self.inner_db).txn_del(txn, &ekey_map[&ekey])?;
                         resp += 1;
                     }
                     Some(DataType::Hash) => {
-                        HashCommand::new(self.inner_db).txn_del(txn, client, &ekey_map[&ekey])?;
+                        HashCommand::new(self.inner_db).txn_del(txn, &ekey_map[&ekey])?;
                         resp += 1;
                     }
                     Some(DataType::Zset) => {
-                        ZsetCommand::new(self.inner_db).txn_del(txn, client, &ekey_map[&ekey])?;
+                        ZsetCommand::new(self.inner_db).txn_del(txn, &ekey_map[&ekey])?;
                         resp += 1;
                     }
                     _ => {}
@@ -567,11 +559,10 @@ impl<'a> StringCommand<'a> {
     fn txn_expire_if_needed(
         &self,
         txn: &RocksTransaction,
-        client: &RocksClient,
         ekey: &Key,
         meta_value: &Value,
     ) -> RocksResult<i64> {
-        let cfs = StringCF::new(client);
+        let cfs = StringCF::new(&self.inner_db.client);
         let ttl = KeyDecoder::decode_key_ttl(meta_value);
         if key_is_expired(ttl) {
             txn.del(cfs.meta_cf.clone(), ekey.to_owned())?;
